@@ -132,6 +132,6 @@ class DefinirServicioRequest(BaseModel):
     @classmethod
     def validate_valor(cls, v, info):
         # Si es cliente referido, el valor es obligatorio
-        if info.data.get('origen_cliente') == OrigenCliente.CLIENTE_REFERIDO and v is None:
+        if info.data.get('origen_cliente') == OrigenCliente.REFERIDO and v is None:
             raise ValueError('El valor_total_curso es obligatorio para clientes referidos')
         return v

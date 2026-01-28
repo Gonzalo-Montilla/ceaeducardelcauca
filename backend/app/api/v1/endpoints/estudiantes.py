@@ -272,7 +272,7 @@ def definir_servicio(
         estudiante.origen_cliente = servicio_data.origen_cliente
         
         # 4. Calcular o asignar valor total
-        if servicio_data.origen_cliente == OrigenCliente.CLIENTE_DIRECTO:
+        if servicio_data.origen_cliente == OrigenCliente.DIRECTO:
             # Cliente directo: usar precio fijo del sistema
             estudiante.valor_total_curso = calcular_precio(servicio_data.tipo_servicio)
         else:
@@ -303,8 +303,8 @@ def definir_servicio(
                 estudiante.datos_adicionales = {}
             estudiante.datos_adicionales["observaciones"] = servicio_data.observaciones
         
-        # 8. Cambiar estado a ACTIVO
-        estudiante.estado = EstadoEstudiante.ACTIVO
+        # 8. Cambiar estado a EN_FORMACION
+        estudiante.estado = EstadoEstudiante.EN_FORMACION
         
         db.commit()
         db.refresh(estudiante)

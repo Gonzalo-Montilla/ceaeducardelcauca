@@ -37,7 +37,7 @@ export const Layout = ({ children }: LayoutProps) => {
     { path: '/instructores', icon: UserCheck, label: 'Instructores' },
     { path: '/vehiculos', icon: Car, label: 'Vehículos' },
     { path: '/clases', icon: Calendar, label: 'Programar Clases' },
-    { path: '/pagos', icon: DollarSign, label: 'Caja / Pagos' },
+    { path: '/caja', icon: DollarSign, label: 'Caja / Pagos' },
     { path: '/reportes', icon: FileText, label: 'Reportes' },
   ];
 

@@ -104,4 +104,71 @@ export const estudiantesAPI = {
   },
 };
 
+// Caja endpoints
+export const cajaAPI = {
+  abrirCaja: async (data: { saldo_inicial: number; observaciones_apertura?: string | null }): Promise<any> => {
+    const response = await api.post('/caja/abrir', data);
+    return response.data;
+  },
+
+  getCajaActual: async (): Promise<any> => {
+    try {
+      const response = await api.get('/caja/actual');
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        return null;
+      }
+      throw error;
+    }
+  },
+
+  cerrarCaja: async (id: number, data: any): Promise<any> => {
+    const response = await api.put(`/caja/${id}/cerrar`, data);
+    return response.data;
+  },
+
+  buscarEstudiante: async (cedula: string): Promise<any> => {
+    const response = await api.get(`/caja/estudiante/${cedula}`);
+    return response.data;
+  },
+
+  registrarPago: async (data: {
+    estudiante_id: number;
+    monto: number;
+    metodo_pago: string;
+    concepto: string;
+    referencia_pago?: string | null;
+    observaciones?: string | null;
+  }): Promise<any> => {
+    const response = await api.post('/caja/pagos', data);
+    return response.data;
+  },
+
+  registrarEgreso: async (data: {
+    concepto: string;
+    categoria: string;
+    monto: number;
+    metodo_pago: string;
+    numero_factura?: string | null;
+    observaciones?: string | null;
+  }): Promise<any> => {
+    const response = await api.post('/caja/egresos', data);
+    return response.data;
+  },
+
+  getDashboard: async (): Promise<any> => {
+    const response = await api.get('/caja/dashboard');
+    return response.data;
+  },
+
+  getHistorial: async (fecha_inicio?: string, fecha_fin?: string): Promise<any> => {
+    const params = new URLSearchParams();
+    if (fecha_inicio) params.append('fecha_inicio', fecha_inicio);
+    if (fecha_fin) params.append('fecha_fin', fecha_fin);
+    const response = await api.get(`/caja/historial?${params.toString()}`);
+    return response.data;
+  },
+};
+
 export default api;

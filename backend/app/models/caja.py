@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Numeric, Text, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from datetime import datetime
+from decimal import Decimal
 import enum
 from app.core.database import Base
 
@@ -59,36 +60,40 @@ class Caja(Base):
     pagos = relationship("Pago", back_populates="caja")
     
     @property
-    def total_ingresos(self) -> float:
+    def total_ingresos(self) -> Decimal:
         """Total de ingresos (todos los métodos)"""
-        return float(
-            self.total_ingresos_efectivo +
-            self.total_ingresos_transferencia +
-            self.total_ingresos_tarjeta
+        return (
+            (self.total_ingresos_efectivo or Decimal('0')) +
+            (self.total_ingresos_transferencia or Decimal('0')) +
+            (self.total_ingresos_tarjeta or Decimal('0'))
         )
     
     @property
-    def total_egresos(self) -> float:
+    def total_egresos(self) -> Decimal:
         """Total de egresos (todos los métodos)"""
-        return float(
-            self.total_egresos_efectivo +
-            self.total_egresos_transferencia +
-            self.total_egresos_tarjeta
+        return (
+            (self.total_egresos_efectivo or Decimal('0')) +
+            (self.total_egresos_transferencia or Decimal('0')) +
+            (self.total_egresos_tarjeta or Decimal('0'))
         )
     
     @property
-    def saldo_final_teorico(self) -> float:
+    def saldo_final_teorico(self) -> Decimal:
         """Saldo final teórico en efectivo"""
-        return float(
-            self.saldo_inicial +
-            self.total_ingresos_efectivo -
-            self.total_egresos_efectivo
+        return (
+            (self.saldo_inicial or Decimal('0')) +
+            (self.total_ingresos_efectivo or Decimal('0')) -
+            (self.total_egresos_efectivo or Decimal('0'))
         )
     
     @property
-    def saldo_total(self) -> float:
-        """Saldo total considerando todos los métodos"""
-        return float(self.saldo_inicial + self.total_ingresos - self.total_egresos)
+    def saldo_efectivo_caja(self) -> Decimal:
+        """Saldo de efectivo en caja (lo que realmente hay físicamente)"""
+        return (
+            (self.saldo_inicial or Decimal('0')) +
+            (self.total_ingresos_efectivo or Decimal('0')) -
+            (self.total_egresos_efectivo or Decimal('0'))
+        )
     
     def __repr__(self):
         return f"<Caja {self.fecha_apertura.strftime('%Y-%m-%d')} - {self.estado}>"

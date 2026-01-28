@@ -6,28 +6,24 @@ import { Dashboard } from './pages/Dashboard';
 import { NuevoEstudiante } from './pages/NuevoEstudiante';
 import { Estudiantes } from './pages/Estudiantes';
 import { EstudianteDetalle } from './pages/EstudianteDetalle';
-
-const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading) {
-    return <div>Cargando...</div>;
-  }
-
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
-};
-
-const PublicRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading) {
-    return <div>Cargando...</div>;
-  }
-
-  return !isAuthenticated ? <>{children}</> : <Navigate to="/dashboard" />;
-};
+import { Caja } from './pages/Caja';
 
 function AppRoutes() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
+    if (isLoading) {
+      return <div>Cargando...</div>;
+    }
+    return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
+  };
+
+  const PublicRoute = ({ children }: { children: React.ReactNode }) => {
+    if (isLoading) {
+      return <div>Cargando...</div>;
+    }
+    return !isAuthenticated ? <>{children}</> : <Navigate to="/dashboard" />;
+  };
   return (
     <Routes>
       <Route
@@ -74,6 +70,16 @@ function AppRoutes() {
           <PrivateRoute>
             <Layout>
               <EstudianteDetalle />
+            </Layout>
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/caja"
+        element={
+          <PrivateRoute>
+            <Layout>
+              <Caja />
             </Layout>
           </PrivateRoute>
         }

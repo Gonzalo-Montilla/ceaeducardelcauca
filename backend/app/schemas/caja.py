@@ -38,13 +38,13 @@ class CajaResumen(BaseModel):
     usuario_apertura: str  # Nombre del usuario
     usuario_cierre: Optional[str]
     
-    # Montos
+    # Montos principales
     saldo_inicial: Decimal
-    total_ingresos: Decimal
-    total_egresos: Decimal
-    saldo_total: Decimal
+    total_ingresos: Decimal  # Suma de todos los métodos
+    total_egresos: Decimal   # Suma de todos los métodos
+    saldo_efectivo_caja: Decimal  # Solo efectivo (lo que hay en caja)
     
-    # Por método de pago
+    # Detalle por método de pago
     total_ingresos_efectivo: Decimal
     total_ingresos_transferencia: Decimal
     total_ingresos_tarjeta: Decimal
