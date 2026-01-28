@@ -33,7 +33,6 @@ export const Login = () => {
       <div className="login-card">
         <div className="login-header">
           <img src={logo} alt="CEA EDUCAR" className="login-logo" />
-          <h1>CEA EDUCAR</h1>
           <p>Sistema de Gestión</p>
         </div>
         
