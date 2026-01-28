@@ -119,3 +119,19 @@ class EstudianteListItem(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+class DefinirServicioRequest(BaseModel):
+    """Schema para definir el servicio de un estudiante"""
+    tipo_servicio: TipoServicio
+    origen_cliente: OrigenCliente
+    valor_total_curso: Optional[Decimal] = None  # Solo si es cliente referido
+    observaciones: Optional[str] = None
+    
+    @field_validator('valor_total_curso')
+    @classmethod
+    def validate_valor(cls, v, info):
+        # Si es cliente referido, el valor es obligatorio
+        if info.data.get('origen_cliente') == OrigenCliente.CLIENTE_REFERIDO and v is None:
+            raise ValueError('El valor_total_curso es obligatorio para clientes referidos')
+        return v

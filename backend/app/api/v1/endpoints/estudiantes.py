@@ -11,7 +11,7 @@ from app.models.usuario import Usuario, RolUsuario
 from app.models.estudiante import Estudiante, EstadoEstudiante, CategoriaLicencia, OrigenCliente, TipoServicio
 from app.models.pago import Pago, MetodoPago, EstadoPago
 from app.models.compromiso_pago import CompromisoPago, CuotaPago, FrecuenciaPago, EstadoCuota
-from app.schemas.estudiante import EstudianteCreate, EstudianteUpdate, EstudianteResponse, EstudianteListItem
+from app.schemas.estudiante import EstudianteCreate, EstudianteUpdate, EstudianteResponse, EstudianteListItem, DefinirServicioRequest
 from app.api.deps import get_current_active_user, get_admin_or_coordinador
 
 router = APIRouter()
@@ -229,6 +229,94 @@ def delete_estudiante(
     db.commit()
     
     return None
+
+
+@router.put("/{estudiante_id}/definir-servicio", response_model=EstudianteResponse)
+def definir_servicio(
+    estudiante_id: int,
+    servicio_data: DefinirServicioRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_admin_or_coordinador)
+):
+    """
+    Definir el servicio para un estudiante PROSPECTO:
+    - Asigna tipo de servicio y categoría
+    - Define origen del cliente (directo o referido)
+    - Calcula o asigna el valor total del curso
+    - Asigna horas teóricas y prácticas requeridas
+    - Cambia estado de PROSPECTO a ACTIVO
+    """
+    estudiante = db.query(Estudiante).filter(Estudiante.id == estudiante_id).first()
+    
+    if not estudiante:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Estudiante no encontrado"
+        )
+    
+    # Validar que sea un prospecto
+    if estudiante.estado != EstadoEstudiante.PROSPECTO:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Solo se puede definir servicio a estudiantes en estado PROSPECTO"
+        )
+    
+    try:
+        # 1. Asignar tipo de servicio
+        estudiante.tipo_servicio = servicio_data.tipo_servicio
+        
+        # 2. Determinar la categoría basada en el tipo de servicio
+        estudiante.categoria = obtener_categoria_licencia(servicio_data.tipo_servicio)
+        
+        # 3. Asignar origen del cliente
+        estudiante.origen_cliente = servicio_data.origen_cliente
+        
+        # 4. Calcular o asignar valor total
+        if servicio_data.origen_cliente == OrigenCliente.CLIENTE_DIRECTO:
+            # Cliente directo: usar precio fijo del sistema
+            estudiante.valor_total_curso = calcular_precio(servicio_data.tipo_servicio)
+        else:
+            # Cliente referido: usar valor manual proporcionado
+            estudiante.valor_total_curso = servicio_data.valor_total_curso
+        
+        # 5. Asignar horas teóricas y prácticas según la categoría
+        horas_map = {
+            CategoriaLicencia.A2: {"teoricas": 20, "practicas": 16},
+            CategoriaLicencia.B1: {"teoricas": 40, "practicas": 30},
+            CategoriaLicencia.C1: {"teoricas": 40, "practicas": 30},
+        }
+        
+        if estudiante.categoria in horas_map:
+            estudiante.horas_teoricas_requeridas = horas_map[estudiante.categoria]["teoricas"]
+            estudiante.horas_practicas_requeridas = horas_map[estudiante.categoria]["practicas"]
+        else:
+            # Para certificados y combos, usar valores por defecto
+            estudiante.horas_teoricas_requeridas = 0
+            estudiante.horas_practicas_requeridas = 0
+        
+        # 6. Inicializar saldo pendiente (igual al valor total)
+        estudiante.saldo_pendiente = estudiante.valor_total_curso
+        
+        # 7. Guardar observaciones si las hay
+        if servicio_data.observaciones:
+            if not estudiante.datos_adicionales:
+                estudiante.datos_adicionales = {}
+            estudiante.datos_adicionales["observaciones"] = servicio_data.observaciones
+        
+        # 8. Cambiar estado a ACTIVO
+        estudiante.estado = EstadoEstudiante.ACTIVO
+        
+        db.commit()
+        db.refresh(estudiante)
+        
+        return _build_estudiante_response(estudiante)
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al definir servicio: {str(e)}"
+        )
 
 
 def _build_estudiante_response(estudiante: Estudiante) -> EstudianteResponse:

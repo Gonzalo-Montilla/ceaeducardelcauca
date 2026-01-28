@@ -1,5 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { X, DollarSign, FileText, Save } from 'lucide-react';
+import { estudiantesAPI } from '../services/api';
 import '../styles/DefinirServicioModal.css';
 
 interface DefinirServicioModalProps {
@@ -92,18 +93,13 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
     setIsLoading(true);
 
     try {
-      // TODO: Llamar al endpoint para actualizar el estudiante con el servicio
-      console.log('Definiendo servicio:', {
-        estudiante_id: estudiante.id,
+      // Llamar al endpoint para definir el servicio
+      await estudiantesAPI.definirServicio(estudiante.id, {
         tipo_servicio: tipoServicio,
-        categoria,
         origen_cliente: origenCliente,
-        valor_total_curso: parseInt(valorTotal),
+        valor_total_curso: origenCliente === 'REFERIDO' ? parseInt(valorTotal) : null,
         observaciones: observaciones || null
       });
-
-      // Simular llamada API
-      await new Promise(resolve => setTimeout(resolve, 1000));
 
       alert('Servicio definido exitosamente');
       onSuccess();

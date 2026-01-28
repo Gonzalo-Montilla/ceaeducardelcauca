@@ -77,12 +77,12 @@ class Estudiante(Base):
     examen_medico_url = Column(Text)
     
     # Origen y referencia del cliente
-    origen_cliente = Column(SQLEnum(OrigenCliente), default=OrigenCliente.DIRECTO, nullable=False)
+    origen_cliente = Column(SQLEnum(OrigenCliente), nullable=True)  # Se define al asignar servicio
     referido_por = Column(String(255))  # Nombre del tramitador o guarda que lo refirió
     telefono_referidor = Column(String(20))  # Teléfono del referidor
     
     # Tipo de servicio y modalidad
-    tipo_servicio = Column(SQLEnum(TipoServicio), nullable=False)
+    tipo_servicio = Column(SQLEnum(TipoServicio), nullable=True)  # Se define al asignar servicio
     incluye_practica = Column(Integer, default=1, nullable=False)  # 1=Sí, 0=No (para certificados)
     contrato_pdf_url = Column(Text)  # URL del contrato generado
     
@@ -103,8 +103,8 @@ class Estudiante(Base):
     horas_practicas_requeridas = Column(Integer, default=20, nullable=False)
     
     # Información financiera
-    valor_total_curso = Column(Numeric(10, 2), nullable=False)
-    saldo_pendiente = Column(Numeric(10, 2), default=0)
+    valor_total_curso = Column(Numeric(10, 2), nullable=True)  # Se define al asignar servicio
+    saldo_pendiente = Column(Numeric(10, 2), default=0, nullable=True)
     
     # Integración SICOV
     sicov_pin = Column(String(50), unique=True, index=True)

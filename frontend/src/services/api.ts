@@ -97,6 +97,11 @@ export const estudiantesAPI = {
   delete: async (id: number): Promise<void> => {
     await api.delete(`/estudiantes/${id}`);
   },
+
+  definirServicio: async (id: number, data: any): Promise<Estudiante> => {
+    const response = await api.put<Estudiante>(`/estudiantes/${id}/definir-servicio`, data);
+    return response.data;
+  },
 };
 
 export default api;
