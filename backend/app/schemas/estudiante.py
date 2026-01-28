@@ -1,8 +1,11 @@
 from pydantic import BaseModel, EmailStr, field_validator
-from typing import Optional
+from typing import Optional, List, TYPE_CHECKING
 from datetime import date, datetime
 from decimal import Decimal
 from app.models.estudiante import CategoriaLicencia, EstadoEstudiante, OrigenCliente, TipoServicio
+
+if TYPE_CHECKING:
+    from app.schemas.caja import PagoResponse
 
 
 class EstudianteBase(BaseModel):
@@ -76,6 +79,9 @@ class EstudianteResponse(BaseModel):
     contacto_emergencia_telefono: Optional[str]
     foto_url: Optional[str]
     categoria: Optional[CategoriaLicencia]  # Opcional hasta definir servicio
+    origen_cliente: Optional[OrigenCliente]  # DIRECTO o REFERIDO
+    referido_por: Optional[str]  # Nombre de quien refirió
+    telefono_referidor: Optional[str]  # Teléfono del referidor
     estado: EstadoEstudiante
     fecha_inscripcion: datetime
     fecha_graduacion: Optional[datetime]
@@ -95,6 +101,7 @@ class EstudianteResponse(BaseModel):
     progreso_teorico: float = 0.0
     progreso_practico: float = 0.0
     esta_listo_para_examen: bool = False
+    historial_pagos: List = []  # List[PagoResponse] causaría circular import, se popula manualmente
 
     class Config:
         from_attributes = True
@@ -121,11 +128,21 @@ class EstudianteListItem(BaseModel):
         from_attributes = True
 
 
+class EstudiantesListResponse(BaseModel):
+    """Schema para respuesta paginada de estudiantes"""
+    items: List[EstudianteListItem]
+    total: int
+    skip: int
+    limit: int
+
+
 class DefinirServicioRequest(BaseModel):
     """Schema para definir el servicio de un estudiante"""
     tipo_servicio: TipoServicio
     origen_cliente: OrigenCliente
     valor_total_curso: Optional[Decimal] = None  # Solo si es cliente referido
+    referido_por: Optional[str] = None  # Nombre de quien refirió (obligatorio si es REFERIDO)
+    telefono_referidor: Optional[str] = None  # Teléfono del referidor
     observaciones: Optional[str] = None
     
     @field_validator('valor_total_curso')

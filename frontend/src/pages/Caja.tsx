@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, DollarSign, TrendingUp, TrendingDown, AlertCircle, Plus, X } from 'lucide-react';
+import { Search, DollarSign, TrendingUp, TrendingDown, AlertCircle, Plus, X, ChevronDown } from 'lucide-react';
 import { cajaAPI } from '../services/api';
 import '../styles/Caja.css';
 
@@ -18,6 +18,16 @@ interface CajaActual {
   total_egresos_efectivo: number;
   total_egresos_transferencia: number;
   total_egresos_tarjeta: number;
+  // Transferencias separadas
+  total_nequi: number;
+  total_daviplata: number;
+  total_transferencia_bancaria: number;
+  // Tarjetas separadas
+  total_tarjeta_debito: number;
+  total_tarjeta_credito: number;
+  // Créditos
+  total_credismart: number;
+  total_sistecredito: number;
   num_pagos: number;
   num_egresos: number;
 }
@@ -48,6 +58,12 @@ export const Caja = () => {
   const [hayCajaAbierta, setHayCajaAbierta] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   
+  // Estados para secciones colapsables (cerradas por defecto)
+  const [mostrarCajaFisica, setMostrarCajaFisica] = useState(false);
+  const [mostrarMetodosDigitales, setMostrarMetodosDigitales] = useState(false);
+  const [mostrarCreditos, setMostrarCreditos] = useState(false);
+  const [mostrarResumen, setMostrarResumen] = useState(false);
+  
   // Estados para abrir caja
   const [showAbrirCaja, setShowAbrirCaja] = useState(false);
   const [saldoInicial, setSaldoInicial] = useState('');
@@ -69,6 +85,12 @@ export const Caja = () => {
   const [categoriaEgreso, setCategoriaEgreso] = useState('OTROS');
   const [montoEgreso, setMontoEgreso] = useState('');
   const [metodoEgreso, setMetodoEgreso] = useState('EFECTIVO');
+  
+  // Estados para cierre de caja
+  const [showCerrarCaja, setShowCerrarCaja] = useState(false);
+  const [efectivoFisico, setEfectivoFisico] = useState('');
+  const [observacionesCierre, setObservacionesCierre] = useState('');
+  const [cerrandoCaja, setCerrandoCaja] = useState(false);
   
   useEffect(() => {
     cargarCajaActual();
@@ -125,34 +147,71 @@ export const Caja = () => {
   };
   
   const handleRegistrarPago = async () => {
-    if (!estudiante || !montoPago) {
-      alert('Complete todos los campos');
+    if (!estudiante) {
+      alert('Debe buscar un estudiante primero');
       return;
     }
     
-    if (parseFloat(montoPago) <= 0) {
+    // Calcular monto total
+    let montoTotal: number;
+    if (esPagoMixto) {
+      // Validar que haya al menos 2 métodos
+      const detallesConMonto = detallesPago.filter(d => parseFloat(d.monto) > 0);
+      if (detallesConMonto.length < 2) {
+        alert('Pago mixto debe tener al menos 2 métodos con monto');
+        return;
+      }
+      montoTotal = detallesPago.reduce((sum, d) => sum + (parseFloat(d.monto) || 0), 0);
+    } else {
+      if (!montoPago) {
+        alert('Ingrese el monto a pagar');
+        return;
+      }
+      montoTotal = parseFloat(montoPago);
+    }
+    
+    if (montoTotal <= 0) {
       alert('El monto debe ser mayor a cero');
       return;
     }
     
-    if (estudiante.saldo_pendiente && parseFloat(montoPago) > estudiante.saldo_pendiente) {
-      alert('El monto excede el saldo pendiente');
+    if (estudiante.saldo_pendiente && montoTotal > estudiante.saldo_pendiente) {
+      alert(`El monto (${formatCurrency(montoTotal)}) excede el saldo pendiente (${formatCurrency(estudiante.saldo_pendiente)})`);
       return;
     }
     
     try {
       setRegistrandoPago(true);
-      await cajaAPI.registrarPago({
-        estudiante_id: estudiante.id,
-        monto: parseFloat(montoPago),
-        metodo_pago: metodoPago,
-        concepto: 'Abono al curso',
-        referencia_pago: null,
-        observaciones: null
-      });
+      
+      if (esPagoMixto) {
+        // Pago mixto
+        await cajaAPI.registrarPago({
+          estudiante_id: estudiante.id,
+          monto: montoTotal,
+          concepto: 'Abono al curso',
+          es_pago_mixto: true,
+          detalles_pago: detallesPago
+            .filter(d => parseFloat(d.monto) > 0)
+            .map(d => ({
+              metodo_pago: d.metodo,
+              monto: parseFloat(d.monto)
+            }))
+        });
+      } else {
+        // Pago simple
+        await cajaAPI.registrarPago({
+          estudiante_id: estudiante.id,
+          monto: montoTotal,
+          metodo_pago: detallesPago[0].metodo,
+          concepto: 'Abono al curso',
+          es_pago_mixto: false
+        });
+      }
       
       alert('Pago registrado exitosamente');
       setMontoPago('');
+      setEsPagoMixto(false);
+      setDetallesPago([{metodo: 'EFECTIVO', monto: ''}]);
       setCedula('');
       setEstudiante(null);
       await cargarCajaActual();
@@ -186,6 +245,39 @@ export const Caja = () => {
       await cargarCajaActual();
     } catch (error: any) {
       alert(error.response?.data?.detail || 'Error al registrar egreso');
+    }
+  };
+  
+  const handleCerrarCaja = async () => {
+    if (!efectivoFisico) {
+      alert('Ingrese el efectivo físico contado');
+      return;
+    }
+    
+    if (!cajaActual) return;
+    
+    const confirmacion = window.confirm(
+      '¿Está seguro de cerrar la caja? Esta acción no se puede deshacer.'
+    );
+    
+    if (!confirmacion) return;
+    
+    try {
+      setCerrandoCaja(true);
+      await cajaAPI.cerrarCaja(cajaActual.id, {
+        efectivo_fisico: parseFloat(efectivoFisico),
+        observaciones_cierre: observacionesCierre || null
+      });
+      
+      alert('Caja cerrada exitosamente');
+      setShowCerrarCaja(false);
+      setEfectivoFisico('');
+      setObservacionesCierre('');
+      await cargarCajaActual();
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Error al cerrar caja');
+    } finally {
+      setCerrandoCaja(false);
     }
   };
   
@@ -266,59 +358,250 @@ export const Caja = () => {
         <h1>Caja y Pagos</h1>
       </div>
       
-      {/* Resumen de Caja */}
-      <div className="caja-resumen-grid">
-        <div className="stat-card highlight">
-          <div className="stat-content">
-            <p className="stat-label">Efectivo en Caja</p>
-            <p className="stat-value-large">{formatCurrency(cajaActual?.saldo_efectivo_caja)}</p>
-            <p className="stat-sublabel">Base: {formatCurrency(cajaActual?.saldo_inicial)}</p>
-          </div>
-        </div>
+      {/* =========================== CAJA FÍSICA =========================== */}
+      <div className="seccion-caja-fisica">
+        <h3 
+          className="section-title-main collapsable" 
+          onClick={() => setMostrarCajaFisica(!mostrarCajaFisica)}
+        >
+          💵 Caja Física (Dinero Real en Mano)
+          <ChevronDown 
+            size={24} 
+            className={`chevron-icon ${mostrarCajaFisica ? '' : 'rotated'}`}
+          />
+        </h3>
         
-        <div className="stat-card">
-          <div className="stat-icon" style={{ backgroundColor: '#dcfce7' }}>
-            <DollarSign size={24} color="#16a34a" />
+        {mostrarCajaFisica && (
+        <div className="caja-resumen-grid-main">
+          <div className="stat-card">
+            <div className="stat-icon" style={{ backgroundColor: '#e0f2fe' }}>
+              <DollarSign size={24} color="#0284c7" />
+            </div>
+            <div className="stat-content">
+              <p className="stat-label">Saldo Inicial</p>
+              <p className="stat-value">{formatCurrency(cajaActual?.saldo_inicial)}</p>
+              <p className="stat-sublabel">Base de apertura</p>
+            </div>
           </div>
-          <div className="stat-content">
-            <p className="stat-label">Efectivo</p>
-            <p className="stat-value success">+{formatCurrency(cajaActual?.total_ingresos_efectivo)}</p>
-            <p className="stat-sublabel">-{formatCurrency(cajaActual?.total_egresos_efectivo)}</p>
+          
+          <div className="stat-card">
+            <div className="stat-icon" style={{ backgroundColor: '#dcfce7' }}>
+              <TrendingUp size={24} color="#16a34a" />
+            </div>
+            <div className="stat-content">
+              <p className="stat-label">+ Efectivo Recibido</p>
+              <p className="stat-value success">{formatCurrency(cajaActual?.total_ingresos_efectivo)}</p>
+              <p className="stat-sublabel">Pagos en efectivo</p>
+            </div>
+          </div>
+          
+          <div className="stat-card">
+            <div className="stat-icon" style={{ backgroundColor: '#fee2e2' }}>
+              <TrendingDown size={24} color="#dc2626" />
+            </div>
+            <div className="stat-content">
+              <p className="stat-label">- Egresos en Efectivo</p>
+              <p className="stat-value danger">{formatCurrency(cajaActual?.total_egresos_efectivo)}</p>
+              <p className="stat-sublabel">{cajaActual?.num_egresos || 0} gastos</p>
+            </div>
+          </div>
+          
+          <div className="stat-card highlight">
+            <div className="stat-content">
+              <p className="stat-label">=EFECTIVO EN CAJA</p>
+              <p className="stat-value-large">{formatCurrency(cajaActual?.saldo_efectivo_caja)}</p>
+              <p className="stat-sublabel">Dinero físico actual</p>
+            </div>
           </div>
         </div>
-        
-        <div className="stat-card">
-          <div className="stat-icon" style={{ backgroundColor: '#e0f2fe' }}>
-            <TrendingUp size={24} color="#0284c7" />
-          </div>
-          <div className="stat-content">
-            <p className="stat-label">Transferencias</p>
-            <p className="stat-value">+{formatCurrency(cajaActual?.total_ingresos_transferencia)}</p>
-            <p className="stat-sublabel">-{formatCurrency(cajaActual?.total_egresos_transferencia)}</p>
-          </div>
-        </div>
-        
-        <div className="stat-card">
-          <div className="stat-icon" style={{ backgroundColor: '#fef3c7' }}>
-            <TrendingUp size={24} color="#d97706" />
-          </div>
-          <div className="stat-content">
-            <p className="stat-label">Tarjetas</p>
-            <p className="stat-value">+{formatCurrency(cajaActual?.total_ingresos_tarjeta)}</p>
-            <p className="stat-sublabel">-{formatCurrency(cajaActual?.total_egresos_tarjeta)}</p>
-          </div>
-        </div>
+        )}
       </div>
       
-      <div className="stats-row">
-        <div className="stat-small">
-          <span className="stat-small-label">Total Ingresos ({cajaActual?.num_pagos || 0} pagos)</span>
-          <span className="stat-small-value success">{formatCurrency(cajaActual?.total_ingresos)}</span>
+      {/* =========================== MÉTODOS DIGITALES (FUERA DE CAJA) =========================== */}
+      <div className="metodos-digitales-section">
+        <h3 
+          className="section-title-main collapsable" 
+          onClick={() => setMostrarMetodosDigitales(!mostrarMetodosDigitales)}
+        >
+          💳 Métodos Digitales (No en Caja Física)
+          <ChevronDown 
+            size={24} 
+            className={`chevron-icon ${mostrarMetodosDigitales ? '' : 'rotated'}`}
+          />
+        </h3>
+        
+        {mostrarMetodosDigitales && (
+        <>
+        <p className="section-subtitle-white">Dinero recibido pero NO está en caja física - Solo para control y registro</p>
+        
+        {/* Transferencias */}
+        <div className="metodo-grupo">
+          <h4 className="metodo-grupo-titulo">Transferencias Electrónicas</h4>
+          <div className="metodos-grid">
+            <div className="metodo-card transferencia">
+              <div className="metodo-header">
+                <span className="metodo-icon">📱</span>
+                <span className="metodo-nombre">Nequi</span>
+              </div>
+              <p className="metodo-monto">{formatCurrency(cajaActual?.total_nequi || 0)}</p>
+            </div>
+            
+            <div className="metodo-card transferencia">
+              <div className="metodo-header">
+                <span className="metodo-icon">📱</span>
+                <span className="metodo-nombre">Daviplata</span>
+              </div>
+              <p className="metodo-monto">{formatCurrency(cajaActual?.total_daviplata || 0)}</p>
+            </div>
+            
+            <div className="metodo-card transferencia">
+              <div className="metodo-header">
+                <span className="metodo-icon">🏦</span>
+                <span className="metodo-nombre">Transf. Bancaria</span>
+              </div>
+              <p className="metodo-monto">{formatCurrency(cajaActual?.total_transferencia_bancaria || 0)}</p>
+            </div>
+            
+            <div className="metodo-card-total transferencia">
+              <p className="metodo-total-label">TOTAL TRANSFERENCIAS</p>
+              <p className="metodo-total-monto">{formatCurrency(cajaActual?.total_ingresos_transferencia)}</p>
+            </div>
+          </div>
         </div>
-        <div className="stat-small">
-          <span className="stat-small-label">Total Egresos ({cajaActual?.num_egresos || 0} gastos)</span>
-          <span className="stat-small-value danger">{formatCurrency(cajaActual?.total_egresos)}</span>
+        
+        {/* Tarjetas */}
+        <div className="metodo-grupo">
+          <h4 className="metodo-grupo-titulo">Tarjetas</h4>
+          <div className="metodos-grid">
+            <div className="metodo-card tarjetas">
+              <div className="metodo-header">
+                <span className="metodo-icon">💳</span>
+                <span className="metodo-nombre">Débito</span>
+              </div>
+              <p className="metodo-monto">{formatCurrency(cajaActual?.total_tarjeta_debito || 0)}</p>
+            </div>
+            
+            <div className="metodo-card tarjetas">
+              <div className="metodo-header">
+                <span className="metodo-icon">💳</span>
+                <span className="metodo-nombre">Crédito</span>
+              </div>
+              <p className="metodo-monto">{formatCurrency(cajaActual?.total_tarjeta_credito || 0)}</p>
+            </div>
+            
+            <div className="metodo-card-total tarjetas">
+              <p className="metodo-total-label">TOTAL TARJETAS</p>
+              <p className="metodo-total-monto">{formatCurrency(cajaActual?.total_ingresos_tarjeta)}</p>
+            </div>
+          </div>
         </div>
+        </>
+        )}
+      </div>
+      
+      {/* =========================== CRÉDITOS FINANCIERAS (FUERA DE CAJA) =========================== */}
+      <div className="creditos-section">
+        <h3 
+          className="section-title-main collapsable" 
+          onClick={() => setMostrarCreditos(!mostrarCreditos)}
+        >
+          🏦 Créditos Financieras (No en Caja)
+          <ChevronDown 
+            size={24} 
+            className={`chevron-icon ${mostrarCreditos ? '' : 'rotated'}`}
+          />
+        </h3>
+        
+        {mostrarCreditos && (
+        <>
+        <p className="section-subtitle">Pagos diferidos - La financiera pagará después. NO entra a caja física.</p>
+        <div className="metodos-grid">
+          <div className="metodo-card credismart">
+            <div className="metodo-header">
+              <span className="metodo-icon">💵</span>
+              <span className="metodo-nombre">CrediSmart</span>
+            </div>
+            <p className="metodo-monto">{formatCurrency(cajaActual?.total_credismart)}</p>
+            <p className="metodo-detalle">Pendiente de pago por financiera</p>
+          </div>
+          
+          <div className="metodo-card sistecredito">
+            <div className="metodo-header">
+              <span className="metodo-icon">💵</span>
+              <span className="metodo-nombre">Sistecredito</span>
+            </div>
+            <p className="metodo-monto">{formatCurrency(cajaActual?.total_sistecredito)}</p>
+            <p className="metodo-detalle">Pendiente de pago por financiera</p>
+          </div>
+        </div>
+        </>
+        )}
+      </div>
+      
+      {/* =========================== RESUMEN GENERAL DEL DÍA =========================== */}
+      <div className="resumen-general">
+        <h3 
+          className="section-title-main collapsable" 
+          onClick={() => setMostrarResumen(!mostrarResumen)}
+        >
+          📊 Resumen General del Día
+          <ChevronDown 
+            size={24} 
+            className={`chevron-icon ${mostrarResumen ? '' : 'rotated'}`}
+          />
+        </h3>
+        
+        {mostrarResumen && (
+        <div className="stats-row">
+          <div className="stat-summary efectivo">
+            <div className="stat-summary-icon">💵</div>
+            <div className="stat-summary-content">
+              <span className="stat-summary-label">Efectivo en Caja</span>
+              <span className="stat-summary-value success">{formatCurrency(cajaActual?.saldo_efectivo_caja)}</span>
+              <span className="stat-summary-detalle">Dinero físico que debe haber al contar</span>
+            </div>
+          </div>
+          
+          <div className="stat-summary digital">
+            <div className="stat-summary-icon">💳</div>
+            <div className="stat-summary-content">
+              <span className="stat-summary-label">Métodos Digitales</span>
+              <span className="stat-summary-value">{formatCurrency(
+                Number(cajaActual?.total_ingresos_transferencia || 0) + 
+                Number(cajaActual?.total_ingresos_tarjeta || 0)
+              )}</span>
+              <span className="stat-summary-detalle">Transferencias + Tarjetas (no en caja)</span>
+            </div>
+          </div>
+          
+          <div className="stat-summary creditos">
+            <div className="stat-summary-icon">🏦</div>
+            <div className="stat-summary-content">
+              <span className="stat-summary-label">Créditos</span>
+              <span className="stat-summary-value">{formatCurrency(
+                Number(cajaActual?.total_credismart || 0) + 
+                Number(cajaActual?.total_sistecredito || 0)
+              )}</span>
+              <span className="stat-summary-detalle">Por cobrar a financieras (no en caja)</span>
+            </div>
+          </div>
+          
+          <div className="stat-summary total">
+            <div className="stat-summary-icon">✅</div>
+            <div className="stat-summary-content">
+              <span className="stat-summary-label">TOTAL RECAUDADO</span>
+              <span className="stat-summary-value-large">{formatCurrency(
+                Number(cajaActual?.total_ingresos_efectivo || 0) + 
+                Number(cajaActual?.total_ingresos_transferencia || 0) + 
+                Number(cajaActual?.total_ingresos_tarjeta || 0) + 
+                Number(cajaActual?.total_credismart || 0) + 
+                Number(cajaActual?.total_sistecredito || 0)
+              )}</span>
+              <span className="stat-summary-detalle">Todos los ingresos del día ({cajaActual?.num_pagos || 0} pagos)</span>
+            </div>
+          </div>
+        </div>
+        )}
       </div>
       
       {/* Acciones rápidas */}
@@ -326,6 +609,10 @@ export const Caja = () => {
         <button onClick={() => setShowEgreso(true)} className="btn-action">
           <Plus size={20} />
           Registrar Egreso
+        </button>
+        <button onClick={() => setShowCerrarCaja(true)} className="btn-action btn-danger">
+          <X size={20} />
+          Cerrar Caja
         </button>
       </div>
       
@@ -394,26 +681,127 @@ export const Caja = () => {
               
               <div className="pago-form">
                 <h4>Registrar Pago</h4>
+                
+                {/* Toggle para pago mixto */}
                 <div className="form-group">
-                  <label>Monto a Pagar</label>
-                  <input
-                    type="number"
-                    value={montoPago}
-                    onChange={(e) => setMontoPago(e.target.value)}
-                    placeholder="0"
-                    className="form-input"
-                  />
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={esPagoMixto}
+                      onChange={(e) => {
+                        setEsPagoMixto(e.target.checked);
+                        if (e.target.checked) {
+                          setDetallesPago([{metodo: 'EFECTIVO', monto: ''}, {metodo: 'NEQUI', monto: ''}]);
+                        } else {
+                          setDetallesPago([{metodo: 'EFECTIVO', monto: montoPago}]);
+                        }
+                      }}
+                    />
+                    <span>Pago Mixto (varios métodos)</span>
+                  </label>
                 </div>
-                <div className="form-group">
-                  <label>Método de Pago</label>
-                  <select value={metodoPago} onChange={(e) => setMetodoPago(e.target.value)} className="form-select">
-                    <option value="EFECTIVO">Efectivo</option>
-                    <option value="TRANSFERENCIA">Transferencia</option>
-                    <option value="TARJETA">Tarjeta</option>
-                    <option value="NEQUI">Nequi</option>
-                    <option value="DAVIPLATA">Daviplata</option>
-                  </select>
-                </div>
+                
+                {!esPagoMixto ? (
+                  // PAGO SIMPLE
+                  <>
+                    <div className="form-group">
+                      <label>Monto a Pagar</label>
+                      <input
+                        type="number"
+                        value={montoPago}
+                        onChange={(e) => setMontoPago(e.target.value)}
+                        placeholder="0"
+                        className="form-input"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Método de Pago</label>
+                      <select 
+                        value={detallesPago[0].metodo} 
+                        onChange={(e) => setDetallesPago([{metodo: e.target.value, monto: montoPago}])} 
+                        className="form-select"
+                      >
+                        <option value="EFECTIVO">Efectivo</option>
+                        <option value="NEQUI">Nequi</option>
+                        <option value="DAVIPLATA">Daviplata</option>
+                        <option value="TRANSFERENCIA_BANCARIA">Transferencia Bancaria</option>
+                        <option value="TARJETA_DEBITO">Tarjeta Débito</option>
+                        <option value="TARJETA_CREDITO">Tarjeta Crédito</option>
+                        <option value="CREDISMART">CrediSmart</option>
+                        <option value="SISTECREDITO">Sistecredito</option>
+                      </select>
+                    </div>
+                  </>
+                ) : (
+                  // PAGO MIXTO
+                  <div className="pago-mixto-container">
+                    {detallesPago.map((detalle, index) => (
+                      <div key={index} className="detalle-pago-row">
+                        <div className="form-group" style={{flex: 1}}>
+                          <label>Método {index + 1}</label>
+                          <select
+                            value={detalle.metodo}
+                            onChange={(e) => {
+                              const newDetalles = [...detallesPago];
+                              newDetalles[index].metodo = e.target.value;
+                              setDetallesPago(newDetalles);
+                            }}
+                            className="form-select"
+                          >
+                            <option value="EFECTIVO">Efectivo</option>
+                            <option value="NEQUI">Nequi</option>
+                            <option value="DAVIPLATA">Daviplata</option>
+                            <option value="TRANSFERENCIA_BANCARIA">Transferencia</option>
+                            <option value="TARJETA_DEBITO">T. Débito</option>
+                            <option value="TARJETA_CREDITO">T. Crédito</option>
+                            <option value="CREDISMART">CrediSmart</option>
+                            <option value="SISTECREDITO">Sistecredito</option>
+                          </select>
+                        </div>
+                        <div className="form-group" style={{flex: 1}}>
+                          <label>Monto</label>
+                          <input
+                            type="number"
+                            value={detalle.monto}
+                            onChange={(e) => {
+                              const newDetalles = [...detallesPago];
+                              newDetalles[index].monto = e.target.value;
+                              setDetallesPago(newDetalles);
+                            }}
+                            placeholder="0"
+                            className="form-input"
+                          />
+                        </div>
+                        {detallesPago.length > 1 && (
+                          <button
+                            onClick={() => {
+                              setDetallesPago(detallesPago.filter((_, i) => i !== index));
+                            }}
+                            className="btn-icon-danger"
+                            style={{marginTop: '24px'}}
+                          >
+                            <X size={20} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    
+                    <button
+                      onClick={() => {
+                        setDetallesPago([...detallesPago, {metodo: 'EFECTIVO', monto: ''}]);
+                      }}
+                      className="btn-secondary-small"
+                    >
+                      <Plus size={16} />
+                      Agregar Método
+                    </button>
+                    
+                    <div className="total-mixto">
+                      <strong>Total: {formatCurrency(detallesPago.reduce((sum, d) => sum + (parseFloat(d.monto) || 0), 0))}</strong>
+                    </div>
+                  </div>
+                )}
+                
                 <button onClick={handleRegistrarPago} disabled={registrandoPago} className="btn-primary-full">
                   {registrandoPago ? 'Registrando...' : 'Registrar Pago'}
                 </button>
@@ -471,8 +859,11 @@ export const Caja = () => {
                 <label>Método de Pago</label>
                 <select value={metodoEgreso} onChange={(e) => setMetodoEgreso(e.target.value)} className="form-select">
                   <option value="EFECTIVO">Efectivo</option>
-                  <option value="TRANSFERENCIA">Transferencia</option>
-                  <option value="TARJETA">Tarjeta</option>
+                  <option value="NEQUI">Nequi</option>
+                  <option value="DAVIPLATA">Daviplata</option>
+                  <option value="TRANSFERENCIA_BANCARIA">Transferencia Bancaria</option>
+                  <option value="TARJETA_DEBITO">Tarjeta Débito</option>
+                  <option value="TARJETA_CREDITO">Tarjeta Crédito</option>
                 </select>
               </div>
             </div>
@@ -482,6 +873,193 @@ export const Caja = () => {
               </button>
               <button onClick={handleRegistrarEgreso} className="btn-primary">
                 Registrar Egreso
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Modal Cerrar Caja - Arqueo */}
+      {showCerrarCaja && cajaActual && (
+        <div className="modal-overlay" onClick={() => setShowCerrarCaja(false)}>
+          <div className="modal-box modal-large" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>📋 Arqueo y Cierre de Caja</h3>
+              <button onClick={() => setShowCerrarCaja(false)} className="btn-icon">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="modal-body">
+              {/* Resumen de Transacciones */}
+              <div className="arqueo-transacciones">
+                <h4>📊 Resumen de Transacciones del Día</h4>
+                <div className="transacciones-grid">
+                  <div className="transaccion-grupo">
+                    <h5>📈 Ingresos por Método</h5>
+                    <div className="transaccion-detalle">
+                      <span>Efectivo:</span>
+                      <strong className="success">{formatCurrency(cajaActual.total_ingresos_efectivo)}</strong>
+                    </div>
+                    <div className="transaccion-detalle">
+                      <span>Nequi:</span>
+                      <strong className="success">{formatCurrency(cajaActual.total_nequi || 0)}</strong>
+                    </div>
+                    <div className="transaccion-detalle">
+                      <span>Daviplata:</span>
+                      <strong className="success">{formatCurrency(cajaActual.total_daviplata || 0)}</strong>
+                    </div>
+                    <div className="transaccion-detalle">
+                      <span>Transferencia Bancaria:</span>
+                      <strong className="success">{formatCurrency(cajaActual.total_transferencia_bancaria || 0)}</strong>
+                    </div>
+                    <div className="transaccion-detalle">
+                      <span>Tarjeta Débito:</span>
+                      <strong className="success">{formatCurrency(cajaActual.total_tarjeta_debito || 0)}</strong>
+                    </div>
+                    <div className="transaccion-detalle">
+                      <span>Tarjeta Crédito:</span>
+                      <strong className="success">{formatCurrency(cajaActual.total_tarjeta_credito || 0)}</strong>
+                    </div>
+                    <div className="transaccion-detalle">
+                      <span>CrediSmart:</span>
+                      <strong className="success">{formatCurrency(cajaActual.total_credismart || 0)}</strong>
+                    </div>
+                    <div className="transaccion-detalle">
+                      <span>Sistecredito:</span>
+                      <strong className="success">{formatCurrency(cajaActual.total_sistecredito || 0)}</strong>
+                    </div>
+                    <div className="transaccion-total">
+                      <span>TOTAL INGRESOS:</span>
+                      <strong>{formatCurrency(
+                        Number(cajaActual.total_ingresos_efectivo || 0) + 
+                        Number(cajaActual.total_ingresos_transferencia || 0) + 
+                        Number(cajaActual.total_ingresos_tarjeta || 0) + 
+                        Number(cajaActual.total_credismart || 0) + 
+                        Number(cajaActual.total_sistecredito || 0)
+                      )}</strong>
+                    </div>
+                  </div>
+                  
+                  <div className="transaccion-grupo">
+                    <h5>📉 Egresos por Método</h5>
+                    <div className="transaccion-detalle">
+                      <span>Efectivo:</span>
+                      <strong className="danger">{formatCurrency(cajaActual.total_egresos_efectivo)}</strong>
+                    </div>
+                    <div className="transaccion-detalle">
+                      <span>Transferencias:</span>
+                      <strong className="danger">{formatCurrency(cajaActual.total_egresos_transferencia)}</strong>
+                    </div>
+                    <div className="transaccion-detalle">
+                      <span>Tarjetas:</span>
+                      <strong className="danger">{formatCurrency(cajaActual.total_egresos_tarjeta)}</strong>
+                    </div>
+                    <div className="transaccion-total">
+                      <span>TOTAL EGRESOS:</span>
+                      <strong>{formatCurrency(
+                        Number(cajaActual.total_egresos_efectivo || 0) + 
+                        Number(cajaActual.total_egresos_transferencia || 0) + 
+                        Number(cajaActual.total_egresos_tarjeta || 0)
+                      )}</strong>
+                    </div>
+                  </div>
+                  
+                  <div className="transaccion-grupo resumen">
+                    <h5>📝 Resumen General</h5>
+                    <div className="transaccion-detalle">
+                      <span>Total Pagos Recibidos:</span>
+                      <strong>{cajaActual.num_pagos || 0}</strong>
+                    </div>
+                    <div className="transaccion-detalle">
+                      <span>Total Egresos Realizados:</span>
+                      <strong>{cajaActual.num_egresos || 0}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Resumen de Caja (Arqueo) */}
+              <div className="arqueo-resumen">
+                <h4>💵 Arqueo de Efectivo</h4>
+                <div className="arqueo-grid">
+                  <div className="arqueo-item">
+                    <span className="arqueo-label">Saldo Inicial:</span>
+                    <span className="arqueo-value">{formatCurrency(cajaActual.saldo_inicial)}</span>
+                  </div>
+                  <div className="arqueo-item">
+                    <span className="arqueo-label">+ Efectivo Recibido:</span>
+                    <span className="arqueo-value success">{formatCurrency(cajaActual.total_ingresos_efectivo)}</span>
+                  </div>
+                  <div className="arqueo-item">
+                    <span className="arqueo-label">- Egresos en Efectivo:</span>
+                    <span className="arqueo-value danger">{formatCurrency(cajaActual.total_egresos_efectivo)}</span>
+                  </div>
+                  <div className="arqueo-item highlight">
+                    <span className="arqueo-label">=EFECTIVO TEÓRICO:</span>
+                    <span className="arqueo-value-large">{formatCurrency(cajaActual.saldo_efectivo_caja)}</span>
+                  </div>
+                </div>
+                <p className="arqueo-nota">
+                  💵 El efectivo teórico es lo que DEBE haber en caja según el sistema
+                </p>
+              </div>
+              
+              {/* Conteo Físico */}
+              <div className="arqueo-conteo">
+                <h4>👆 Conteo Físico de Efectivo</h4>
+                <div className="form-group">
+                  <label>Efectivo Físico Contado *</label>
+                  <input
+                    type="number"
+                    value={efectivoFisico}
+                    onChange={(e) => setEfectivoFisico(e.target.value)}
+                    placeholder="Ingrese el dinero que realmente hay en caja"
+                    className="form-input form-input-large"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              
+              {/* Diferencia */}
+              {efectivoFisico && (
+                <div className="arqueo-diferencia">
+                  <div className={`diferencia-card ${
+                    parseFloat(efectivoFisico) - cajaActual.saldo_efectivo_caja === 0 ? 'exacto' :
+                    parseFloat(efectivoFisico) - cajaActual.saldo_efectivo_caja > 0 ? 'sobrante' : 'faltante'
+                  }`}>
+                    <h4>
+                      {parseFloat(efectivoFisico) - cajaActual.saldo_efectivo_caja === 0 ? '✅ Caja Cuadrada' :
+                       parseFloat(efectivoFisico) - cajaActual.saldo_efectivo_caja > 0 ? '🔼 Sobrante' : '🔽 Faltante'}
+                    </h4>
+                    <p className="diferencia-monto">
+                      {formatCurrency(Math.abs(parseFloat(efectivoFisico) - cajaActual.saldo_efectivo_caja))}
+                    </p>
+                    <p className="diferencia-detalle">
+                      Efectivo Físico: {formatCurrency(parseFloat(efectivoFisico))} | 
+                      Efectivo Teórico: {formatCurrency(cajaActual.saldo_efectivo_caja)}
+                    </p>
+                  </div>
+                </div>
+              )}
+              
+              {/* Observaciones */}
+              <div className="form-group">
+                <label>Observaciones del Cierre (opcional)</label>
+                <textarea
+                  value={observacionesCierre}
+                  onChange={(e) => setObservacionesCierre(e.target.value)}
+                  placeholder="Notas sobre el cierre, explicación de diferencias, etc."
+                  className="form-textarea"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button onClick={() => setShowCerrarCaja(false)} className="btn-secondary" disabled={cerrandoCaja}>
+                Cancelar
+              </button>
+              <button onClick={handleCerrarCaja} className="btn-danger" disabled={cerrandoCaja || !efectivoFisico}>
+                {cerrandoCaja ? 'Cerrando...' : 'Cerrar Caja'}
               </button>
             </div>
           </div>

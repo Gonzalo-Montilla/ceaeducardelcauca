@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { estudiantesAPI } from '../services/api';
-import { Search, UserPlus, Eye, Settings } from 'lucide-react';
+import { Search, UserPlus, Eye, Settings, ChevronDown } from 'lucide-react';
 import { DefinirServicioModal } from '../components/DefinirServicioModal';
 import '../styles/Estudiantes.css';
 
@@ -23,50 +23,50 @@ interface Estudiante {
 export const Estudiantes = () => {
   const navigate = useNavigate();
   const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
-  const [estudiantesFiltrados, setEstudiantesFiltrados] = useState<Estudiante[]>([]);
   const [busqueda, setBusqueda] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [estudianteSeleccionado, setEstudianteSeleccionado] = useState<Estudiante | null>(null);
   const [mostrarModal, setMostrarModal] = useState(false);
+  
+  // Paginación
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [totalEstudiantes, setTotalEstudiantes] = useState(0);
+  const estudiantesPorPagina = 12;
+  
+  // Control de tarjetas expandidas
+  const [tarjetasExpandidas, setTarjetasExpandidas] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     cargarEstudiantes();
-  }, []);
-
-  useEffect(() => {
-    filtrarEstudiantes();
-  }, [busqueda, estudiantes]);
+  }, [paginaActual]);
 
   const cargarEstudiantes = async () => {
     try {
       setIsLoading(true);
-      const data = await estudiantesAPI.getAll();
-      setEstudiantes(data);
-      setEstudiantesFiltrados(data);
+      const skip = (paginaActual - 1) * estudiantesPorPagina;
+      const response = await estudiantesAPI.getAll({ skip, limit: estudiantesPorPagina });
+      
+      // La API ahora devuelve {items, total, skip, limit}
+      setEstudiantes(response.items || []);
+      setTotalEstudiantes(response.total || 0);
     } catch (err) {
       console.error('Error al cargar estudiantes:', err);
       setError('Error al cargar la lista de estudiantes');
+      setEstudiantes([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const filtrarEstudiantes = () => {
-    if (!busqueda.trim()) {
-      setEstudiantesFiltrados(estudiantes);
-      return;
-    }
-
-    const busquedaLower = busqueda.toLowerCase();
-    const filtrados = estudiantes.filter(est => 
-      est.cedula.includes(busqueda) ||
-      est.nombre_completo.toLowerCase().includes(busquedaLower) ||
-      est.email.toLowerCase().includes(busquedaLower) ||
-      est.matricula_numero?.toLowerCase().includes(busquedaLower)
-    );
-    setEstudiantesFiltrados(filtrados);
-  };
+  const estudiantesFiltrados = busqueda.trim() 
+    ? estudiantes.filter(est => 
+        est.cedula.includes(busqueda) ||
+        est.nombre_completo.toLowerCase().includes(busqueda.toLowerCase()) ||
+        est.email.toLowerCase().includes(busqueda.toLowerCase()) ||
+        est.matricula_numero?.toLowerCase().includes(busqueda.toLowerCase())
+      )
+    : estudiantes;
 
   const formatearFecha = (fecha: string) => {
     return new Date(fecha).toLocaleDateString('es-CO', {
@@ -110,6 +110,27 @@ export const Estudiantes = () => {
 
   const handleModalSuccess = () => {
     cargarEstudiantes(); // Recargar la lista
+  };
+
+  const totalPaginas = Math.ceil(totalEstudiantes / estudiantesPorPagina);
+
+  const cambiarPagina = (nuevaPagina: number) => {
+    if (nuevaPagina >= 1 && nuevaPagina <= totalPaginas) {
+      setPaginaActual(nuevaPagina);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+  
+  const toggleTarjeta = (estudianteId: number) => {
+    setTarjetasExpandidas(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(estudianteId)) {
+        newSet.delete(estudianteId);
+      } else {
+        newSet.add(estudianteId);
+      }
+      return newSet;
+    });
   };
 
   return (
@@ -168,9 +189,16 @@ export const Estudiantes = () => {
               )}
             </div>
           ) : (
-            estudiantesFiltrados.map((estudiante) => (
-              <div key={estudiante.id} className="estudiante-card">
-                <div className="card-header">
+            estudiantesFiltrados.map((estudiante) => {
+              const isExpanded = tarjetasExpandidas.has(estudiante.id);
+              
+              return (
+              <div key={estudiante.id} className={`estudiante-card ${isExpanded ? 'expanded' : 'collapsed'}`}>
+                {/* Header clickeable */}
+                <div 
+                  className="card-header clickeable" 
+                  onClick={() => toggleTarjeta(estudiante.id)}
+                >
                   <div className="estudiante-foto">
                     {estudiante.foto_url ? (
                       <img src={estudiante.foto_url} alt={estudiante.nombre_completo} />
@@ -187,8 +215,15 @@ export const Estudiantes = () => {
                       <p className="matricula">Mat: {estudiante.matricula_numero}</p>
                     )}
                   </div>
+                  <ChevronDown 
+                    size={24} 
+                    className={`chevron-toggle ${isExpanded ? '' : 'rotated'}`}
+                  />
                 </div>
 
+                {/* Contenido colapsable */}
+                {isExpanded && (
+                <>
                 <div className="card-body">
                   <div className="info-row">
                     <span className="label">Email:</span>
@@ -240,9 +275,38 @@ export const Estudiantes = () => {
                     </button>
                   </div>
                 </div>
+                </>
+                )}
               </div>
-            ))
+              );
+            })
           )}
+        </div>
+      )}
+
+      {/* Paginación */}
+      {!isLoading && totalPaginas > 1 && (
+        <div className="pagination">
+          <button 
+            onClick={() => cambiarPagina(paginaActual - 1)}
+            disabled={paginaActual === 1}
+            className="pagination-btn"
+          >
+            « Anterior
+          </button>
+          
+          <div className="pagination-info">
+            <span>Página {paginaActual} de {totalPaginas}</span>
+            <span className="total-registros">({totalEstudiantes} estudiantes)</span>
+          </div>
+          
+          <button 
+            onClick={() => cambiarPagina(paginaActual + 1)}
+            disabled={paginaActual === totalPaginas}
+            className="pagination-btn"
+          >
+            Siguiente »
+          </button>
         </div>
       )}
 

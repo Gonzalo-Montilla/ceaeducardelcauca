@@ -13,6 +13,8 @@ class MetodoPago(str, enum.Enum):
     TRANSFERENCIA_BANCARIA = "TRANSFERENCIA_BANCARIA"
     TARJETA_DEBITO = "TARJETA_DEBITO"
     TARJETA_CREDITO = "TARJETA_CREDITO"
+    CREDISMART = "CREDISMART"  # Crédito - NO entra a caja
+    SISTECREDITO = "SISTECREDITO"  # Crédito - NO entra a caja
 
 
 class EstadoPago(str, enum.Enum):
@@ -34,7 +36,7 @@ class Pago(Base):
     # Información del pago
     concepto = Column(String(255), nullable=False)  # "Matrícula", "Cuota 1/3", etc.
     monto = Column(Numeric(10, 2), nullable=False)
-    metodo_pago = Column(SQLEnum(MetodoPago), nullable=False)  # Método principal (para pagos simples)
+    metodo_pago = Column(SQLEnum(MetodoPago), nullable=True)  # NULL para pagos mixtos, valor para pagos simples
     es_pago_mixto = Column(Integer, default=0, nullable=False)  # 1=Mixto, 0=Simple
     estado = Column(SQLEnum(EstadoPago), default=EstadoPago.COMPLETADO, nullable=False)
     

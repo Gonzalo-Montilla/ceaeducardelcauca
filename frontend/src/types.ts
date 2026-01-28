@@ -34,8 +34,13 @@ export enum TipoServicio {
 
 export enum MetodoPago {
   EFECTIVO = "EFECTIVO",
-  TRANSFERENCIA = "TRANSFERENCIA",
-  TARJETA = "TARJETA"
+  NEQUI = "NEQUI",
+  DAVIPLATA = "DAVIPLATA",
+  TRANSFERENCIA_BANCARIA = "TRANSFERENCIA_BANCARIA",
+  TARJETA_DEBITO = "TARJETA_DEBITO",
+  TARJETA_CREDITO = "TARJETA_CREDITO",
+  CREDISMART = "CREDISMART",
+  SISTECREDITO = "SISTECREDITO"
 }
 
 export enum EstadoPago {
@@ -112,4 +117,47 @@ export interface AuthContextType {
   logout: () => void;
   isAuthenticated: boolean;
   isLoading: boolean;
+}
+
+// Interfaces para Pagos
+export interface DetallePago {
+  metodo_pago: MetodoPago;
+  monto: number;
+  referencia?: string;
+}
+
+export interface PagoCreate {
+  estudiante_id: number;
+  monto: number;
+  metodo_pago?: MetodoPago;  // Solo para pagos simples
+  concepto?: string;
+  referencia_pago?: string;
+  observaciones?: string;
+  es_pago_mixto: boolean;
+  detalles_pago?: DetallePago[];  // Para pagos mixtos
+}
+
+export interface DetallePagoResponse {
+  id: number;
+  metodo_pago: MetodoPago;
+  monto: number;
+  referencia?: string;
+}
+
+export interface PagoResponse {
+  id: number;
+  estudiante_id: number;
+  caja_id?: number;
+  concepto: string;
+  monto: number;
+  metodo_pago?: MetodoPago;  // null si es pago mixto
+  estado: string;
+  referencia_pago?: string;
+  fecha_pago: string;
+  observaciones?: string;
+  es_pago_mixto: boolean;
+  detalles_pago: DetallePagoResponse[];
+  estudiante_nombre: string;
+  estudiante_matricula: string;
+  usuario_nombre?: string;
 }

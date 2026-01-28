@@ -283,6 +283,26 @@
   color: #475569;
 }
 
+.badge-directo {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-referido {
+  background-color: #fef3c7;
+  color: #92400e;
+  max-width: 100%;
+}
+
+.telefono-ref {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.origen-badge-container {
+  margin: 8px 0;
+}
+
 /* Estados de carga */
 .loading-container,
 .error-container {
@@ -297,6 +317,126 @@
 .error-container p {
   font-size: 18px;
   color: #64748b;
+}
+
+/* Historial de Pagos */
+.historial-pagos-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 2px solid #e2e8f0;
+}
+
+.historial-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 16px;
+}
+
+.historial-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.pago-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  transition: all 0.2s;
+}
+
+.pago-item:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.pago-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.pago-fecha {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.pago-monto {
+  font-size: 15px;
+  font-weight: 700;
+  color: #10b981;
+}
+
+.pago-metodo-simple {
+  margin-top: 4px;
+}
+
+.badge-metodo {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pago-mixto-desglose {
+  margin-top: 8px;
+  padding: 8px;
+  background: white;
+  border-radius: 6px;
+}
+
+.mixto-label {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.detalle-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.detalle-item:last-child {
+  border-bottom: none;
+}
+
+.detalle-metodo {
+  flex: 0 0 120px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.detalle-monto {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 700;
+  color: #10b981;
+}
+
+.detalle-ref {
+  font-size: 11px;
+  color: #94a3b8;
+  font-style: italic;
 }
 
 /* Responsive */

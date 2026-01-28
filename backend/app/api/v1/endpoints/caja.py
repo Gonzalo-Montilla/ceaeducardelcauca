@@ -9,7 +9,7 @@ from app.core.database import get_db
 from app.api.deps import get_current_active_user, get_admin_or_coordinador
 from app.models.usuario import Usuario
 from app.models.caja import Caja, MovimientoCaja, EstadoCaja, TipoMovimiento
-from app.models.pago import Pago, MetodoPago, EstadoPago
+from app.models.pago import Pago, DetallePago, MetodoPago, EstadoPago
 from app.models.estudiante import Estudiante
 from app.schemas.caja import (
     CajaApertura, CajaCierre, CajaResumen, CajaDetalle,
@@ -140,6 +140,10 @@ def get_dashboard(
             Pago.caja_id == caja_actual.id
         ).count()
         
+        # Créditos (NO cuentan en caja)
+        dashboard.total_credismart_hoy = Decimal(str(caja_actual.total_credismart))
+        dashboard.total_sistecredito_hoy = Decimal(str(caja_actual.total_sistecredito))
+        
         # Últimos 5 pagos
         ultimos_pagos = db.query(Pago).filter(
             Pago.caja_id == caja_actual.id
@@ -249,7 +253,8 @@ def registrar_pago(
             caja_id=caja_abierta.id,
             concepto=pago_data.concepto,
             monto=pago_data.monto,
-            metodo_pago=pago_data.metodo_pago,
+            metodo_pago=pago_data.metodo_pago,  # None si es mixto
+            es_pago_mixto=1 if pago_data.es_pago_mixto else 0,
             estado=EstadoPago.COMPLETADO,
             referencia_pago=pago_data.referencia_pago,
             observaciones=pago_data.observaciones,
@@ -258,26 +263,43 @@ def registrar_pago(
         )
         
         db.add(nuevo_pago)
+        db.flush()  # Para obtener el ID del pago
+        
+        # Si es pago mixto, crear detalles y actualizar caja por cada método
+        if pago_data.es_pago_mixto:
+            for detalle in pago_data.detalles_pago:
+                # Crear detalle
+                nuevo_detalle = DetallePago(
+                    pago_id=nuevo_pago.id,
+                    metodo_pago=detalle.metodo_pago,
+                    monto=detalle.monto,
+                    referencia=detalle.referencia
+                )
+                db.add(nuevo_detalle)
+                
+                # Actualizar totales de caja según método
+                _actualizar_caja_por_metodo(caja_abierta, detalle.metodo_pago, detalle.monto)
+        else:
+            # Pago simple - actualizar caja según método único
+            _actualizar_caja_por_metodo(caja_abierta, pago_data.metodo_pago, pago_data.monto)
         
         # Actualizar saldo del estudiante
         if estudiante.saldo_pendiente:
             estudiante.saldo_pendiente -= pago_data.monto
         
-        # Actualizar totales de la caja según método de pago
-        if pago_data.metodo_pago == MetodoPago.EFECTIVO:
-            caja_abierta.total_ingresos_efectivo += pago_data.monto
-        elif pago_data.metodo_pago in [MetodoPago.TRANSFERENCIA, MetodoPago.NEQUI, MetodoPago.DAVIPLATA]:
-            caja_abierta.total_ingresos_transferencia += pago_data.monto
-        else:  # TARJETA
-            caja_abierta.total_ingresos_tarjeta += pago_data.monto
-        
         db.commit()
         db.refresh(nuevo_pago)
+        
+        # Cargar explícitamente las relaciones necesarias
+        db.refresh(nuevo_pago, ['detalles_pago', 'estudiante', 'usuario'])
         
         return _build_pago_response(nuevo_pago)
         
     except Exception as e:
         db.rollback()
+        import traceback
+        print(f"ERROR en registrar_pago: {str(e)}")
+        print(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al registrar pago: {str(e)}"
@@ -346,9 +368,9 @@ def registrar_egreso(
         # Actualizar totales de la caja según método de pago
         if egreso_data.metodo_pago == MetodoPago.EFECTIVO:
             caja_abierta.total_egresos_efectivo += egreso_data.monto
-        elif egreso_data.metodo_pago in [MetodoPago.TRANSFERENCIA, MetodoPago.NEQUI, MetodoPago.DAVIPLATA]:
+        elif egreso_data.metodo_pago in [MetodoPago.TRANSFERENCIA_BANCARIA, MetodoPago.NEQUI, MetodoPago.DAVIPLATA]:
             caja_abierta.total_egresos_transferencia += egreso_data.monto
-        else:  # TARJETA
+        elif egreso_data.metodo_pago in [MetodoPago.TARJETA_DEBITO, MetodoPago.TARJETA_CREDITO]:
             caja_abierta.total_egresos_tarjeta += egreso_data.monto
         
         db.commit()
@@ -365,6 +387,33 @@ def registrar_egreso(
 
 
 # ==================== HELPER FUNCTIONS ====================
+
+def _actualizar_caja_por_metodo(caja: Caja, metodo: MetodoPago, monto: Decimal) -> None:
+    """Actualizar totales de caja según método de pago"""
+    if metodo == MetodoPago.EFECTIVO:
+        caja.total_ingresos_efectivo += monto
+    # Transferencias - cada una por separado
+    elif metodo == MetodoPago.NEQUI:
+        caja.total_nequi += monto
+        caja.total_ingresos_transferencia += monto  # Legacy
+    elif metodo == MetodoPago.DAVIPLATA:
+        caja.total_daviplata += monto
+        caja.total_ingresos_transferencia += monto  # Legacy
+    elif metodo == MetodoPago.TRANSFERENCIA_BANCARIA:
+        caja.total_transferencia_bancaria += monto
+        caja.total_ingresos_transferencia += monto  # Legacy
+    # Tarjetas - cada una por separado
+    elif metodo == MetodoPago.TARJETA_DEBITO:
+        caja.total_tarjeta_debito += monto
+        caja.total_ingresos_tarjeta += monto  # Legacy
+    elif metodo == MetodoPago.TARJETA_CREDITO:
+        caja.total_tarjeta_credito += monto
+        caja.total_ingresos_tarjeta += monto  # Legacy
+    # Créditos - se trackean pero NO entran a caja (plata diferida de financieras)
+    elif metodo == MetodoPago.CREDISMART:
+        caja.total_credismart += monto
+    elif metodo == MetodoPago.SISTECREDITO:
+        caja.total_sistecredito += monto
 
 def _build_caja_resumen(caja: Caja, db: Session) -> CajaResumen:
     """Construir resumen de caja"""
@@ -393,6 +442,16 @@ def _build_caja_resumen(caja: Caja, db: Session) -> CajaResumen:
         total_egresos_efectivo=caja.total_egresos_efectivo,
         total_egresos_transferencia=caja.total_egresos_transferencia,
         total_egresos_tarjeta=caja.total_egresos_tarjeta,
+        # Transferencias separadas
+        total_nequi=caja.total_nequi or Decimal('0'),
+        total_daviplata=caja.total_daviplata or Decimal('0'),
+        total_transferencia_bancaria=caja.total_transferencia_bancaria or Decimal('0'),
+        # Tarjetas separadas
+        total_tarjeta_debito=caja.total_tarjeta_debito or Decimal('0'),
+        total_tarjeta_credito=caja.total_tarjeta_credito or Decimal('0'),
+        # Créditos
+        total_credismart=caja.total_credismart,
+        total_sistecredito=caja.total_sistecredito,
         efectivo_teorico=caja.efectivo_teorico,
         efectivo_fisico=caja.efectivo_fisico,
         diferencia=caja.diferencia,
@@ -415,17 +474,35 @@ def _build_caja_detalle(caja: Caja, db: Session) -> CajaDetalle:
 
 def _build_pago_response(pago: Pago) -> PagoResponse:
     """Construir respuesta de pago"""
+    # Importar dentro de la función para evitar imports circulares
+    from app.schemas.caja import DetallePagoResponse
+    
+    # Construir detalles si es pago mixto
+    detalles = []
+    if pago.es_pago_mixto:
+        detalles = [
+            DetallePagoResponse(
+                id=d.id,
+                metodo_pago=d.metodo_pago,
+                monto=d.monto,
+                referencia=d.referencia
+            )
+            for d in pago.detalles_pago
+        ]
+    
     return PagoResponse(
         id=pago.id,
         estudiante_id=pago.estudiante_id,
         caja_id=pago.caja_id,
         concepto=pago.concepto,
         monto=pago.monto,
-        metodo_pago=pago.metodo_pago.value,
+        metodo_pago=pago.metodo_pago if pago.metodo_pago else None,
         estado=pago.estado.value,
         referencia_pago=pago.referencia_pago,
         fecha_pago=pago.fecha_pago,
         observaciones=pago.observaciones,
+        es_pago_mixto=bool(pago.es_pago_mixto),
+        detalles_pago=detalles,
         estudiante_nombre=pago.estudiante.usuario.nombre_completo,
         estudiante_matricula=pago.estudiante.matricula_numero,
         usuario_nombre=pago.usuario.nombre_completo if pago.usuario else None
@@ -489,6 +566,9 @@ def _build_estudiante_financiero(estudiante: Estudiante, db: Session) -> Estudia
     # Último pago
     ultimo_pago = pagos[0] if pagos else None
     
+    # Construir historial de pagos con detalles
+    historial_pagos = [_build_pago_response(p) for p in pagos]
+    
     return EstudianteFinanciero(
         id=estudiante.id,
         nombre_completo=estudiante.usuario.nombre_completo,
@@ -508,5 +588,6 @@ def _build_estudiante_financiero(estudiante: Estudiante, db: Session) -> Estudia
         estado_financiero=estado_financiero,
         num_pagos=num_pagos,
         ultimo_pago_fecha=ultimo_pago.fecha_pago if ultimo_pago else None,
-        ultimo_pago_monto=ultimo_pago.monto if ultimo_pago else None
+        ultimo_pago_monto=ultimo_pago.monto if ultimo_pago else None,
+        historial_pagos=historial_pagos
     )

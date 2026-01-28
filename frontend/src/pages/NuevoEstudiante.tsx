@@ -177,7 +177,18 @@ export const NuevoEstudiante = () => {
       
     } catch (err: any) {
       console.error('Error al registrar estudiante:', err);
-      setError(err.response?.data?.detail || 'Error al registrar estudiante');
+      
+      // Manejar errores de validación (422)
+      if (err.response?.status === 422 && Array.isArray(err.response?.data?.detail)) {
+        const errores = err.response.data.detail;
+        const mensajesError = errores.map((e: any) => {
+          const campo = e.loc ? e.loc.join('.') : 'desconocido';
+          return `${campo}: ${e.msg}`;
+        }).join(', ');
+        setError(`Errores de validación: ${mensajesError}`);
+      } else {
+        setError(err.response?.data?.detail || 'Error al registrar estudiante');
+      }
     } finally {
       setIsLoading(false);
     }

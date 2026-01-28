@@ -34,10 +34,10 @@ export const Layout = ({ children }: LayoutProps) => {
     { path: '/dashboard', icon: Home, label: 'Dashboard' },
     { path: '/nuevo-estudiante', icon: UserPlus, label: 'Nuevo Estudiante' },
     { path: '/estudiantes', icon: Users, label: 'Estudiantes' },
+    { path: '/caja', icon: DollarSign, label: 'Caja / Pagos' },
     { path: '/instructores', icon: UserCheck, label: 'Instructores' },
     { path: '/vehiculos', icon: Car, label: 'Vehículos' },
     { path: '/clases', icon: Calendar, label: 'Programar Clases' },
-    { path: '/caja', icon: DollarSign, label: 'Caja / Pagos' },
     { path: '/reportes', icon: FileText, label: 'Reportes' },
   ];
 

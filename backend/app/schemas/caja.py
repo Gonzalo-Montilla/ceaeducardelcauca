@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional
 from datetime import datetime
 from decimal import Decimal
@@ -51,6 +51,19 @@ class CajaResumen(BaseModel):
     total_egresos_efectivo: Decimal
     total_egresos_transferencia: Decimal
     total_egresos_tarjeta: Decimal
+    
+    # Transferencias separadas
+    total_nequi: Decimal = Decimal('0')
+    total_daviplata: Decimal = Decimal('0')
+    total_transferencia_bancaria: Decimal = Decimal('0')
+    
+    # Tarjetas separadas
+    total_tarjeta_debito: Decimal = Decimal('0')
+    total_tarjeta_credito: Decimal = Decimal('0')
+    
+    # Créditos - NO cuentan en caja (pagos diferidos de financieras)
+    total_credismart: Decimal = Decimal('0')
+    total_sistecredito: Decimal = Decimal('0')
     
     # Arqueo (solo si está cerrada)
     efectivo_teorico: Optional[Decimal]
@@ -124,14 +137,11 @@ class MovimientoCajaResponse(BaseModel):
 
 # ==================== PAGO SCHEMAS (actualizados) ====================
 
-class PagoCreate(BaseModel):
-    """Schema para registrar un pago de estudiante"""
-    estudiante_id: int
-    monto: Decimal
+class DetallePagoCreate(BaseModel):
+    """Schema para un detalle de pago mixto"""
     metodo_pago: MetodoPago
-    concepto: Optional[str] = "Abono al curso"
-    referencia_pago: Optional[str] = None
-    observaciones: Optional[str] = None
+    monto: Decimal
+    referencia: Optional[str] = None
     
     @field_validator('monto')
     @classmethod
@@ -141,6 +151,57 @@ class PagoCreate(BaseModel):
         return v
 
 
+class DetallePagoResponse(BaseModel):
+    """Schema para respuesta de detalle de pago"""
+    id: int
+    metodo_pago: MetodoPago
+    monto: Decimal
+    referencia: Optional[str]
+    
+    class Config:
+        from_attributes = True
+
+
+class PagoCreate(BaseModel):
+    """Schema para registrar un pago de estudiante"""
+    estudiante_id: int
+    monto: Decimal
+    metodo_pago: Optional[MetodoPago] = None  # Para pagos simples
+    concepto: Optional[str] = "Abono al curso"
+    referencia_pago: Optional[str] = None
+    observaciones: Optional[str] = None
+    
+    # Pago mixto (opcional)
+    es_pago_mixto: bool = False
+    detalles_pago: Optional[list[DetallePagoCreate]] = None
+    
+    @field_validator('monto')
+    @classmethod
+    def validate_monto(cls, v):
+        if v <= 0:
+            raise ValueError('El monto debe ser mayor a cero')
+        return v
+    
+    @model_validator(mode='after')
+    def validate_pago(self):
+        """Validación completa del pago"""
+        # Si es pago mixto, debe tener detalles
+        if self.es_pago_mixto:
+            if not self.detalles_pago or len(self.detalles_pago) < 2:
+                raise ValueError('Pago mixto debe tener al menos 2 métodos de pago')
+            
+            # Validar que la suma de detalles = monto total
+            suma_detalles = sum(d.monto for d in self.detalles_pago)
+            if suma_detalles != self.monto:
+                raise ValueError(f'La suma de detalles ({suma_detalles}) no coincide con el monto total ({self.monto})')
+        else:
+            # Si no es mixto, debe tener metodo_pago
+            if not self.metodo_pago:
+                raise ValueError('Debe especificar metodo_pago para pagos simples')
+        
+        return self
+
+
 class PagoResponse(BaseModel):
     """Schema para respuesta de pago"""
     id: int
@@ -148,11 +209,15 @@ class PagoResponse(BaseModel):
     caja_id: Optional[int]
     concepto: str
     monto: Decimal
-    metodo_pago: MetodoPago
+    metodo_pago: Optional[MetodoPago]  # None si es pago mixto
     estado: str
     referencia_pago: Optional[str]
     fecha_pago: datetime
     observaciones: Optional[str]
+    
+    # Pago mixto
+    es_pago_mixto: bool = False
+    detalles_pago: list[DetallePagoResponse] = []
     
     # Datos del estudiante
     estudiante_nombre: str
@@ -196,6 +261,7 @@ class EstudianteFinanciero(BaseModel):
     num_pagos: int = 0
     ultimo_pago_fecha: Optional[datetime]
     ultimo_pago_monto: Optional[Decimal]
+    historial_pagos: list[PagoResponse] = []  # Lista completa de pagos
     
     class Config:
         from_attributes = True
@@ -239,6 +305,10 @@ class DashboardCaja(BaseModel):
     total_ingresos_hoy: Decimal = Decimal('0')
     total_egresos_hoy: Decimal = Decimal('0')
     num_pagos_hoy: int = 0
+    
+    # Créditos (NO cuentan en caja, solo tracking)
+    total_credismart_hoy: Decimal = Decimal('0')
+    total_sistecredito_hoy: Decimal = Decimal('0')
     
     # Alertas
     estudiantes_proximos_vencer: int = 0  # < 7 días

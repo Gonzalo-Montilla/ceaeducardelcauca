@@ -33,11 +33,26 @@ class Caja(Base):
     # Montos
     saldo_inicial = Column(Numeric(12, 2), default=0, nullable=False)  # Base en efectivo
     total_ingresos_efectivo = Column(Numeric(12, 2), default=0, nullable=False)
+    
+    # Transferencias (separadas)
+    total_nequi = Column(Numeric(12, 2), default=0, nullable=False)
+    total_daviplata = Column(Numeric(12, 2), default=0, nullable=False)
+    total_transferencia_bancaria = Column(Numeric(12, 2), default=0, nullable=False)
+    
+    # Tarjetas (separadas)
+    total_tarjeta_debito = Column(Numeric(12, 2), default=0, nullable=False)
+    total_tarjeta_credito = Column(Numeric(12, 2), default=0, nullable=False)
+    
+    # Legacy (para compatibilidad - calculados)
     total_ingresos_transferencia = Column(Numeric(12, 2), default=0, nullable=False)
     total_ingresos_tarjeta = Column(Numeric(12, 2), default=0, nullable=False)
     total_egresos_efectivo = Column(Numeric(12, 2), default=0, nullable=False)
     total_egresos_transferencia = Column(Numeric(12, 2), default=0, nullable=False)
     total_egresos_tarjeta = Column(Numeric(12, 2), default=0, nullable=False)
+    
+    # Créditos - NO cuentan como efectivo en caja
+    total_credismart = Column(Numeric(12, 2), default=0, nullable=False)
+    total_sistecredito = Column(Numeric(12, 2), default=0, nullable=False)
     
     # Arqueo (cierre de caja)
     efectivo_teorico = Column(Numeric(12, 2))  # Lo que debería haber según sistema

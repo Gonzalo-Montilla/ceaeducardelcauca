@@ -11,7 +11,7 @@ from app.models.usuario import Usuario, RolUsuario
 from app.models.estudiante import Estudiante, EstadoEstudiante, CategoriaLicencia, OrigenCliente, TipoServicio
 from app.models.pago import Pago, MetodoPago, EstadoPago
 from app.models.compromiso_pago import CompromisoPago, CuotaPago, FrecuenciaPago, EstadoCuota
-from app.schemas.estudiante import EstudianteCreate, EstudianteUpdate, EstudianteResponse, EstudianteListItem, DefinirServicioRequest
+from app.schemas.estudiante import EstudianteCreate, EstudianteUpdate, EstudianteResponse, EstudianteListItem, EstudiantesListResponse, DefinirServicioRequest
 from app.api.deps import get_current_active_user, get_admin_or_coordinador
 
 router = APIRouter()
@@ -88,7 +88,7 @@ def create_estudiante(
         db.commit()
         db.refresh(nuevo_estudiante)
         
-        return _build_estudiante_response(nuevo_estudiante)
+        return _build_estudiante_response(nuevo_estudiante, db)
         
     except Exception as e:
         db.rollback()
@@ -98,7 +98,7 @@ def create_estudiante(
         )
 
 
-@router.get("", response_model=List[EstudianteListItem])
+@router.get("", response_model=EstudiantesListResponse)
 def list_estudiantes(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
@@ -131,12 +131,18 @@ def list_estudiantes(
     if estado:
         query = query.filter(Estudiante.estado == estado)
     
+    # Ordenar por fecha de inscripción descendente (más reciente primero)
+    query = query.order_by(Estudiante.fecha_inscripcion.desc())
+    
+    # Obtener total de registros (antes de aplicar paginación)
+    total = query.count()
+    
     estudiantes = query.offset(skip).limit(limit).all()
     
     # Construir respuesta con datos del usuario
-    result = []
+    items = []
     for est in estudiantes:
-        result.append(EstudianteListItem(
+        items.append(EstudianteListItem(
             id=est.id,
             usuario_id=est.usuario_id,
             nombre_completo=est.usuario.nombre_completo,
@@ -153,7 +159,12 @@ def list_estudiantes(
             saldo_pendiente=est.saldo_pendiente
         ))
     
-    return result
+    return EstudiantesListResponse(
+        items=items,
+        total=total,
+        skip=skip,
+        limit=limit
+    )
 
 
 @router.get("/{estudiante_id}", response_model=EstudianteResponse)
@@ -173,7 +184,7 @@ def get_estudiante(
             detail="Estudiante no encontrado"
         )
     
-    return _build_estudiante_response(estudiante)
+    return _build_estudiante_response(estudiante, db)
 
 
 @router.put("/{estudiante_id}", response_model=EstudianteResponse)
@@ -202,7 +213,7 @@ def update_estudiante(
     db.commit()
     db.refresh(estudiante)
     
-    return _build_estudiante_response(estudiante)
+    return _build_estudiante_response(estudiante, db)
 
 
 @router.delete("/{estudiante_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -271,6 +282,11 @@ def definir_servicio(
         # 3. Asignar origen del cliente
         estudiante.origen_cliente = servicio_data.origen_cliente
         
+        # 3.1 Si es referido, guardar datos del referidor
+        if servicio_data.origen_cliente == OrigenCliente.REFERIDO:
+            estudiante.referido_por = servicio_data.referido_por
+            estudiante.telefono_referidor = servicio_data.telefono_referidor
+        
         # 4. Calcular o asignar valor total
         if servicio_data.origen_cliente == OrigenCliente.DIRECTO:
             # Cliente directo: usar precio fijo del sistema
@@ -309,7 +325,7 @@ def definir_servicio(
         db.commit()
         db.refresh(estudiante)
         
-        return _build_estudiante_response(estudiante)
+        return _build_estudiante_response(estudiante, db)
         
     except Exception as e:
         db.rollback()
@@ -319,8 +335,24 @@ def definir_servicio(
         )
 
 
-def _build_estudiante_response(estudiante: Estudiante) -> EstudianteResponse:
+def _build_estudiante_response(estudiante: Estudiante, db: Session = None) -> EstudianteResponse:
     """Helper para construir la respuesta con datos del usuario"""
+    # Obtener historial de pagos si hay DB session
+    historial_pagos = []
+    if db:
+        from app.models.pago import Pago, EstadoPago
+        from app.api.v1.endpoints.caja import _build_pago_response
+        from sqlalchemy import and_
+        
+        pagos = db.query(Pago).filter(
+            and_(
+                Pago.estudiante_id == estudiante.id,
+                Pago.estado == EstadoPago.COMPLETADO
+            )
+        ).order_by(Pago.fecha_pago.desc()).all()
+        
+        historial_pagos = [_build_pago_response(p) for p in pagos]
+    
     return EstudianteResponse(
         id=estudiante.id,
         usuario_id=estudiante.usuario_id,
@@ -341,6 +373,9 @@ def _build_estudiante_response(estudiante: Estudiante) -> EstudianteResponse:
         contacto_emergencia_telefono=estudiante.contacto_emergencia_telefono,
         foto_url=estudiante.foto_url,
         categoria=estudiante.categoria,
+        origen_cliente=estudiante.origen_cliente,
+        referido_por=estudiante.referido_por,
+        telefono_referidor=estudiante.telefono_referidor,
         estado=estudiante.estado,
         fecha_inscripcion=estudiante.fecha_inscripcion,
         fecha_graduacion=estudiante.fecha_graduacion,
@@ -359,5 +394,6 @@ def _build_estudiante_response(estudiante: Estudiante) -> EstudianteResponse:
         telefono=estudiante.usuario.telefono,
         progreso_teorico=estudiante.progreso_teorico,
         progreso_practico=estudiante.progreso_practico,
-        esta_listo_para_examen=estudiante.esta_listo_para_examen
+        esta_listo_para_examen=estudiante.esta_listo_para_examen,
+        historial_pagos=historial_pagos
     )

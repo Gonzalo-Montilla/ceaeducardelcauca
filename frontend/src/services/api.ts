@@ -79,8 +79,13 @@ export const estudiantesAPI = {
     return response.data;
   },
 
-  getAll: async (): Promise<Estudiante[]> => {
-    const response = await api.get<Estudiante[]>('/estudiantes/');
+  getAll: async (params?: { skip?: number; limit?: number }): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString());
+    if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
+    
+    const url = queryParams.toString() ? `/estudiantes/?${queryParams.toString()}` : '/estudiantes/';
+    const response = await api.get(url);
     return response.data;
   },
 

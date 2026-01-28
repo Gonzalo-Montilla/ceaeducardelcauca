@@ -20,6 +20,8 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
   const [categoria, setCategoria] = useState('');
   const [origenCliente, setOrigenCliente] = useState('DIRECTO');
   const [valorTotal, setValorTotal] = useState('');
+  const [referidoPor, setReferidoPor] = useState('');
+  const [telefonoReferidor, setTelefonoReferidor] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -90,6 +92,12 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
       return;
     }
 
+    // Validar campos de referidor si es cliente referido
+    if (origenCliente === 'REFERIDO' && !referidoPor.trim()) {
+      setError('Por favor ingrese el nombre de quien refirió al cliente');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -98,6 +106,8 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
         tipo_servicio: tipoServicio,
         origen_cliente: origenCliente,
         valor_total_curso: origenCliente === 'REFERIDO' ? parseInt(valorTotal) : null,
+        referido_por: origenCliente === 'REFERIDO' ? referidoPor : null,
+        telefono_referidor: origenCliente === 'REFERIDO' ? telefonoReferidor : null,
         observaciones: observaciones || null
       });
 
@@ -188,6 +198,33 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
               </label>
             </div>
           </div>
+
+          {/* Campos de referidor - solo visible si es REFERIDO */}
+          {origenCliente === 'REFERIDO' && (
+            <div className="referidor-fields">
+              <div className="form-group">
+                <label>Referido por *</label>
+                <input
+                  type="text"
+                  value={referidoPor}
+                  onChange={(e) => setReferidoPor(e.target.value.toUpperCase())}
+                  className="form-input"
+                  placeholder="NOMBRE DE QUIEN REFIRIÓ"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Teléfono del Referidor</label>
+                <input
+                  type="tel"
+                  value={telefonoReferidor}
+                  onChange={(e) => setTelefonoReferidor(e.target.value)}
+                  className="form-input"
+                  placeholder="Número de contacto (opcional)"
+                />
+              </div>
+            </div>
+          )}
 
           <div className="form-group">
             <label>Categoría de Licencia</label>

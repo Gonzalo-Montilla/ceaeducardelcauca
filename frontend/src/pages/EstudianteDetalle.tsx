@@ -18,6 +18,23 @@ import {
 } from 'lucide-react';
 import '../styles/EstudianteDetalle.css';
 
+interface DetallePagoItem {
+  id: number;
+  metodo_pago: string;
+  monto: number;
+  referencia?: string;
+}
+
+interface PagoHistorial {
+  id: number;
+  monto: number;
+  metodo_pago?: string;
+  fecha_pago: string;
+  concepto: string;
+  es_pago_mixto: boolean;
+  detalles_pago: DetallePagoItem[];
+}
+
 interface Estudiante {
   id: number;
   usuario_id: number;
@@ -44,6 +61,8 @@ interface Estudiante {
   categoria?: string;
   tipo_servicio?: string;
   origen_cliente?: string;
+  referido_por?: string;
+  telefono_referidor?: string;
   estado: string;
   fecha_inscripcion: string;
   valor_total_curso?: number;
@@ -54,6 +73,7 @@ interface Estudiante {
   horas_teoricas_requeridas: number;
   horas_practicas_completadas: number;
   horas_practicas_requeridas: number;
+  historial_pagos?: PagoHistorial[];
 }
 
 export const EstudianteDetalle = () => {
@@ -165,6 +185,25 @@ export const EstudianteDetalle = () => {
           {estudiante.matricula_numero && (
             <p className="matricula">Matrícula: {estudiante.matricula_numero}</p>
           )}
+          
+          {/* Badge de origen del cliente */}
+          {estudiante.origen_cliente && (
+            <div className="origen-badge-container">
+              {estudiante.origen_cliente === 'DIRECTO' ? (
+                <span className="badge badge-directo">
+                  Cliente Directo
+                </span>
+              ) : (
+                <span className="badge badge-referido">
+                  Referido por: {estudiante.referido_por || 'N/A'}
+                  {estudiante.telefono_referidor && (
+                    <span className="telefono-ref"> • {estudiante.telefono_referidor}</span>
+                  )}
+                </span>
+              )}
+            </div>
+          )}
+          
           <span className={`badge ${getEstadoBadgeClass(estudiante.estado)}`}>
             {estudiante.estado.replace('_', ' ')}
           </span>
@@ -272,6 +311,52 @@ export const EstudianteDetalle = () => {
                 <span className="value">{formatearMoneda((estudiante.valor_total_curso || 0) - (estudiante.saldo_pendiente || 0))}</span>
               </div>
             </div>
+            
+            {/* Historial de Pagos */}
+            {estudiante.historial_pagos && estudiante.historial_pagos.length > 0 && (
+              <div className="historial-pagos-section">
+                <h3 className="historial-title">Historial de Pagos</h3>
+                <div className="historial-lista">
+                  {estudiante.historial_pagos.map((pago) => (
+                    <div key={pago.id} className="pago-item">
+                      <div className="pago-header">
+                        <span className="pago-fecha">
+                          <Calendar size={14} />
+                          {new Date(pago.fecha_pago).toLocaleDateString('es-CO', { 
+                            day: '2-digit', 
+                            month: '2-digit', 
+                            year: 'numeric' 
+                          })}
+                        </span>
+                        <span className="pago-monto">{formatearMoneda(pago.monto)}</span>
+                      </div>
+                      
+                      {!pago.es_pago_mixto ? (
+                        // Pago Simple
+                        <div className="pago-metodo-simple">
+                          <span className="badge-metodo">{pago.metodo_pago}</span>
+                        </div>
+                      ) : (
+                        // Pago Mixto
+                        <div className="pago-mixto-desglose">
+                          <span className="mixto-label">Pago Mixto:</span>
+                          {pago.detalles_pago.map((detalle, idx) => (
+                            <div key={idx} className="detalle-item">
+                              <span className="detalle-metodo">{detalle.metodo_pago}</span>
+                              <span className="detalle-monto">{formatearMoneda(detalle.monto)}</span>
+                              {detalle.referencia && (
+                                <span className="detalle-ref">Ref: {detalle.referencia}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
             <button className="btn-pago">
               <DollarSign size={18} /> Registrar Pago
             </button>
