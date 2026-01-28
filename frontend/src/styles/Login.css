@@ -12,19 +12,19 @@
   border-radius: 16px;
   box-shadow: var(--shadow-lg);
   width: 100%;
-  max-width: 420px;
+  max-width: 480px;
   padding: 40px;
 }
 
 .login-header {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 
 .login-logo {
-  width: 360px;
+  width: 380px;
   height: auto;
-  margin-bottom: 24px;
+  margin-bottom: -45px;
   display: block;
   margin-left: auto;
   margin-right: auto;
@@ -32,9 +32,9 @@
 
 .login-header p {
   color: var(--text-secondary);
-  font-size: 18px;
-  font-weight: 500;
-  margin-top: 8px;
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0;
 }
 
 .login-form {

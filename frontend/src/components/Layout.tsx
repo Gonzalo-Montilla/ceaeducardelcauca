@@ -47,14 +47,9 @@ export const Layout = ({ children }: LayoutProps) => {
 
   return (
     <div className="layout-container">
-      <aside 
-        className={`sidebar ${sidebarExpanded ? 'expanded' : 'collapsed'}`}
-        onMouseEnter={() => setSidebarExpanded(true)}
-        onMouseLeave={() => setSidebarExpanded(false)}
-      >
+      <aside className="sidebar expanded">
         <div className="sidebar-logo">
           <img src={logo} alt="CEA EDUCAR" className="sidebar-logo-img" />
-          {sidebarExpanded && <span className="logo-text">CEA EDUCAR</span>}
         </div>
         
         <nav className="nav-menu">
@@ -71,7 +66,7 @@ export const Layout = ({ children }: LayoutProps) => {
                 }}
               >
                 <span className="nav-icon"><Icon size={22} /></span>
-                {sidebarExpanded && <span className="nav-text">{item.label}</span>}
+                <span className="nav-text">{item.label}</span>
               </a>
             );
           })}
