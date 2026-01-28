@@ -13,6 +13,7 @@ import {
   GraduationCap,
   MoreVertical
 } from 'lucide-react';
+import logo from '../assets/cea_educar_final.png';
 import '../styles/Layout.css';
 
 interface LayoutProps {
@@ -52,7 +53,7 @@ export const Layout = ({ children }: LayoutProps) => {
         onMouseLeave={() => setSidebarExpanded(false)}
       >
         <div className="sidebar-logo">
-          <span className="logo-icon"><GraduationCap size={28} /></span>
+          <img src={logo} alt="CEA EDUCAR" className="sidebar-logo-img" />
           {sidebarExpanded && <span className="logo-text">CEA EDUCAR</span>}
         </div>
         

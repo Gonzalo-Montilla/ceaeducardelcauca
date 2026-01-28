@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import logo from '../assets/cea_educar_final.png';
 import '../styles/Login.css';
 
 export const Login = () => {
@@ -31,6 +32,7 @@ export const Login = () => {
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
+          <img src={logo} alt="CEA EDUCAR" className="login-logo" />
           <h1>CEA EDUCAR</h1>
           <p>Sistema de Gestión</p>
         </div>
