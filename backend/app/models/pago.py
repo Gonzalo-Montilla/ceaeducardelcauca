@@ -30,6 +30,7 @@ class Pago(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     estudiante_id = Column(Integer, ForeignKey("estudiantes.id"), nullable=False)
+    caja_id = Column(Integer, ForeignKey("cajas.id"), nullable=True)  # Caja donde se registró
     
     # Información del pago
     concepto = Column(String(255), nullable=False)  # "Matrícula", "Cuota 1/3", etc.
@@ -58,6 +59,8 @@ class Pago(Base):
     
     # Relaciones
     estudiante = relationship("Estudiante", back_populates="pagos")
+    caja = relationship("Caja", back_populates="pagos")
+    usuario = relationship("Usuario", foreign_keys=[created_by_user_id])
     
     def __repr__(self):
         return f"<Pago {self.concepto} - ${self.monto} - {self.metodo_pago}>"

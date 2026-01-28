@@ -1,0 +1,145 @@
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Numeric, Text, Enum as SQLEnum
+from sqlalchemy.orm import relationship
+from datetime import datetime
+import enum
+from app.core.database import Base
+
+
+class EstadoCaja(str, enum.Enum):
+    """Estados de la caja"""
+    ABIERTA = "ABIERTA"
+    CERRADA = "CERRADA"
+
+
+class TipoMovimiento(str, enum.Enum):
+    """Tipos de movimiento en caja"""
+    INGRESO = "INGRESO"
+    EGRESO = "EGRESO"
+
+
+class Caja(Base):
+    """Modelo de Caja diaria"""
+    __tablename__ = "cajas"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Control de apertura/cierre
+    fecha_apertura = Column(DateTime, default=datetime.utcnow, nullable=False)
+    fecha_cierre = Column(DateTime)
+    usuario_apertura_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    usuario_cierre_id = Column(Integer, ForeignKey("usuarios.id"))
+    
+    # Montos
+    saldo_inicial = Column(Numeric(12, 2), default=0, nullable=False)  # Base en efectivo
+    total_ingresos_efectivo = Column(Numeric(12, 2), default=0, nullable=False)
+    total_ingresos_transferencia = Column(Numeric(12, 2), default=0, nullable=False)
+    total_ingresos_tarjeta = Column(Numeric(12, 2), default=0, nullable=False)
+    total_egresos_efectivo = Column(Numeric(12, 2), default=0, nullable=False)
+    total_egresos_transferencia = Column(Numeric(12, 2), default=0, nullable=False)
+    total_egresos_tarjeta = Column(Numeric(12, 2), default=0, nullable=False)
+    
+    # Arqueo (cierre de caja)
+    efectivo_teorico = Column(Numeric(12, 2))  # Lo que debería haber según sistema
+    efectivo_fisico = Column(Numeric(12, 2))  # Lo que realmente hay al contar
+    diferencia = Column(Numeric(12, 2))  # efectivo_fisico - efectivo_teorico
+    
+    # Estado y observaciones
+    estado = Column(SQLEnum(EstadoCaja), default=EstadoCaja.ABIERTA, nullable=False)
+    observaciones_apertura = Column(Text)
+    observaciones_cierre = Column(Text)
+    
+    # Auditoría
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relaciones
+    usuario_apertura = relationship("Usuario", foreign_keys=[usuario_apertura_id])
+    usuario_cierre = relationship("Usuario", foreign_keys=[usuario_cierre_id])
+    movimientos = relationship("MovimientoCaja", back_populates="caja")
+    pagos = relationship("Pago", back_populates="caja")
+    
+    @property
+    def total_ingresos(self) -> float:
+        """Total de ingresos (todos los métodos)"""
+        return float(
+            self.total_ingresos_efectivo +
+            self.total_ingresos_transferencia +
+            self.total_ingresos_tarjeta
+        )
+    
+    @property
+    def total_egresos(self) -> float:
+        """Total de egresos (todos los métodos)"""
+        return float(
+            self.total_egresos_efectivo +
+            self.total_egresos_transferencia +
+            self.total_egresos_tarjeta
+        )
+    
+    @property
+    def saldo_final_teorico(self) -> float:
+        """Saldo final teórico en efectivo"""
+        return float(
+            self.saldo_inicial +
+            self.total_ingresos_efectivo -
+            self.total_egresos_efectivo
+        )
+    
+    @property
+    def saldo_total(self) -> float:
+        """Saldo total considerando todos los métodos"""
+        return float(self.saldo_inicial + self.total_ingresos - self.total_egresos)
+    
+    def __repr__(self):
+        return f"<Caja {self.fecha_apertura.strftime('%Y-%m-%d')} - {self.estado}>"
+
+
+class ConceptoEgreso(str, enum.Enum):
+    """Conceptos comunes de egresos"""
+    COMBUSTIBLE = "COMBUSTIBLE"
+    MANTENIMIENTO_VEHICULO = "MANTENIMIENTO_VEHICULO"
+    SERVICIOS_PUBLICOS = "SERVICIOS_PUBLICOS"
+    NOMINA = "NOMINA"
+    PAPELERIA = "PAPELERIA"
+    ASEO = "ASEO"
+    ALQUILER = "ALQUILER"
+    SEGUROS = "SEGUROS"
+    IMPUESTOS = "IMPUESTOS"
+    PUBLICIDAD = "PUBLICIDAD"
+    OTROS = "OTROS"
+
+
+class MovimientoCaja(Base):
+    """Modelo de Movimientos de Caja (principalmente egresos)"""
+    __tablename__ = "movimientos_caja"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    caja_id = Column(Integer, ForeignKey("cajas.id"), nullable=False)
+    
+    # Tipo y concepto
+    tipo = Column(SQLEnum(TipoMovimiento), nullable=False)
+    concepto = Column(String(255), nullable=False)  # Descripción libre
+    categoria = Column(SQLEnum(ConceptoEgreso))  # Para egresos, categorización
+    
+    # Monto y método
+    monto = Column(Numeric(10, 2), nullable=False)
+    metodo_pago = Column(String(50), nullable=False)  # Almacenado como string
+    
+    # Documentación
+    comprobante_url = Column(Text)  # Foto/escaneo del comprobante
+    numero_factura = Column(String(100))
+    
+    # Control
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    fecha = Column(DateTime, default=datetime.utcnow, nullable=False)
+    observaciones = Column(Text)
+    
+    # Auditoría
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relaciones
+    caja = relationship("Caja", back_populates="movimientos")
+    usuario = relationship("Usuario")
+    
+    def __repr__(self):
+        return f"<MovimientoCaja {self.tipo} - {self.concepto} - ${self.monto}>"

@@ -3,11 +3,13 @@ from app.models.estudiante import Estudiante, CategoriaLicencia, EstadoEstudiant
 from app.models.pago import Pago, MetodoPago, EstadoPago
 from app.models.compromiso_pago import CompromisoPago, CuotaPago, FrecuenciaPago, EstadoCuota
 from app.models.clase import Clase, Instructor, Vehiculo, Evaluacion
+from app.models.caja import Caja, MovimientoCaja, EstadoCaja, TipoMovimiento, ConceptoEgreso
 
 __all__ = [
     "Usuario", "RolUsuario",
     "Estudiante", "CategoriaLicencia", "EstadoEstudiante", "OrigenCliente", "TipoServicio",
     "Pago", "MetodoPago", "EstadoPago",
     "CompromisoPago", "CuotaPago", "FrecuenciaPago", "EstadoCuota",
-    "Clase", "Instructor", "Vehiculo", "Evaluacion"
+    "Clase", "Instructor", "Vehiculo", "Evaluacion",
+    "Caja", "MovimientoCaja", "EstadoCaja", "TipoMovimiento", "ConceptoEgreso"
 ]
