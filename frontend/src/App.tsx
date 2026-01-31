@@ -9,6 +9,8 @@ import { EstudianteDetalle } from './pages/EstudianteDetalle';
 import { Caja } from './pages/Caja';
 import { HistorialCajas } from './pages/HistorialCajas';
 import { Reportes } from './pages/Reportes';
+import { Instructores } from './pages/Instructores';
+import { InstructorDetalle } from './pages/InstructorDetalle';
 
 function AppRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -102,6 +104,26 @@ function AppRoutes() {
           <PrivateRoute>
             <Layout>
               <Reportes />
+            </Layout>
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/instructores"
+        element={
+          <PrivateRoute>
+            <Layout>
+              <Instructores />
+            </Layout>
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/instructores/:id"
+        element={
+          <PrivateRoute>
+            <Layout>
+              <InstructorDetalle />
             </Layout>
           </PrivateRoute>
         }

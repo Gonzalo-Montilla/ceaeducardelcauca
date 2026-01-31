@@ -176,4 +176,43 @@ export const cajaAPI = {
   },
 };
 
+// Instructores endpoints
+export const instructoresAPI = {
+  getAll: async (params?: { skip?: number; limit?: number; estado?: string; busqueda?: string }): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString());
+    if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
+    if (params?.estado) queryParams.append('estado', params.estado);
+    if (params?.busqueda) queryParams.append('busqueda', params.busqueda);
+    
+    const url = queryParams.toString() ? `/instructores/?${queryParams.toString()}` : '/instructores/';
+    const response = await api.get(url);
+    return response.data;
+  },
+
+  getById: async (id: number): Promise<any> => {
+    const response = await api.get(`/instructores/${id}`);
+    return response.data;
+  },
+
+  create: async (data: any): Promise<any> => {
+    const response = await api.post('/instructores/', data);
+    return response.data;
+  },
+
+  update: async (id: number, data: any): Promise<any> => {
+    const response = await api.put(`/instructores/${id}`, data);
+    return response.data;
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await api.delete(`/instructores/${id}`);
+  },
+
+  getEstadisticas: async (id: number): Promise<any> => {
+    const response = await api.get(`/instructores/${id}/estadisticas`);
+    return response.data;
+  },
+};
+
 export default api;

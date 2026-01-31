@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum as SQLEnum, Date, Text, Numeric
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -46,6 +46,22 @@ class Clase(Base):
         return f"<Clase {self.tipo} - {self.fecha_programada}>"
 
 
+class EstadoInstructor(str, enum.Enum):
+    """Estado del instructor"""
+    ACTIVO = "ACTIVO"
+    LICENCIA_MEDICA = "LICENCIA_MEDICA"
+    VACACIONES = "VACACIONES"
+    INACTIVO = "INACTIVO"
+
+
+class EstadoDocumentacion(str, enum.Enum):
+    """Estado de la documentación del instructor"""
+    COMPLETO = "COMPLETO"
+    INCOMPLETO = "INCOMPLETO"
+    VENCIDO = "VENCIDO"
+    PROXIMO_VENCER = "PROXIMO_VENCER"  # 30 días o menos
+
+
 class Instructor(Base):
     """Modelo de Instructor"""
     __tablename__ = "instructores"
@@ -56,11 +72,36 @@ class Instructor(Base):
     # Información específica
     licencia_numero = Column(String(50), unique=True)
     categorias_enseña = Column(String(100))  # Ej: "A2,B1,C1"
+    foto_url = Column(Text)
+    especialidad = Column(String(200))  # Ej: "Experto en motos", "Clases nocturnas"
+    estado = Column(SQLEnum(EstadoInstructor), default=EstadoInstructor.ACTIVO, nullable=False)
+    fecha_contratacion = Column(Date)
+    certificaciones = Column(Text)  # Certificados SENA, etc.
+    tipo_contrato = Column(String(50))  # POR_HORAS, FIJO, INDEPENDIENTE
+    calificacion_promedio = Column(Numeric(3, 2), default=0.0)  # 0.00 a 5.00
+    
+    # Vigencias de documentos
+    licencia_vigencia_desde = Column(Date)
+    licencia_vigencia_hasta = Column(Date)
+    certificado_vigencia_desde = Column(Date)
+    certificado_vigencia_hasta = Column(Date)
+    examen_medico_fecha = Column(Date)  # Último examen médico
+    
+    # Documentos en PDF
+    cedula_pdf_url = Column(Text)
+    licencia_pdf_url = Column(Text)
+    certificado_pdf_url = Column(Text)
+    
+    # Información adicional
+    numero_runt = Column(String(50))  # RUNT - Registro Único Nacional de Tránsito
+    estado_documentacion = Column(SQLEnum(EstadoDocumentacion), default=EstadoDocumentacion.INCOMPLETO)
     
     # Auditoría
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relaciones
+    usuario = relationship("Usuario", backref="instructor")
     clases = relationship("Clase", back_populates="instructor")
     
     def __repr__(self):
