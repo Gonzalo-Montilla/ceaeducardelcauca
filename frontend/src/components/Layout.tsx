@@ -11,7 +11,8 @@ import {
   DollarSign,
   FileText,
   GraduationCap,
-  MoreVertical
+  MoreVertical,
+  History
 } from 'lucide-react';
 import logo from '../assets/cea_educar_final.png';
 import '../styles/Layout.css';
@@ -35,10 +36,11 @@ export const Layout = ({ children }: LayoutProps) => {
     { path: '/nuevo-estudiante', icon: UserPlus, label: 'Nuevo Estudiante' },
     { path: '/estudiantes', icon: Users, label: 'Estudiantes' },
     { path: '/caja', icon: DollarSign, label: 'Caja / Pagos' },
+    { path: '/historial-cajas', icon: History, label: 'Historial de Cajas' },
+    { path: '/reportes', icon: FileText, label: 'Reportes' },
     { path: '/instructores', icon: UserCheck, label: 'Instructores' },
     { path: '/vehiculos', icon: Car, label: 'Vehículos' },
     { path: '/clases', icon: Calendar, label: 'Programar Clases' },
-    { path: '/reportes', icon: FileText, label: 'Reportes' },
   ];
 
   const isActive = (path: string) => {

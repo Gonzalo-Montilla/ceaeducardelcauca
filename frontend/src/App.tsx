@@ -7,6 +7,8 @@ import { NuevoEstudiante } from './pages/NuevoEstudiante';
 import { Estudiantes } from './pages/Estudiantes';
 import { EstudianteDetalle } from './pages/EstudianteDetalle';
 import { Caja } from './pages/Caja';
+import { HistorialCajas } from './pages/HistorialCajas';
+import { Reportes } from './pages/Reportes';
 
 function AppRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -80,6 +82,26 @@ function AppRoutes() {
           <PrivateRoute>
             <Layout>
               <Caja />
+            </Layout>
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/historial-cajas"
+        element={
+          <PrivateRoute>
+            <Layout>
+              <HistorialCajas />
+            </Layout>
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/reportes"
+        element={
+          <PrivateRoute>
+            <Layout>
+              <Reportes />
             </Layout>
           </PrivateRoute>
         }

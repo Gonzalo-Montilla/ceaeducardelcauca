@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, estudiantes, caja
+from app.api.v1.endpoints import auth, estudiantes, caja, reportes
 
 api_router = APIRouter()
 
@@ -7,6 +7,7 @@ api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["Autenticación"])
 api_router.include_router(estudiantes.router, prefix="/estudiantes", tags=["Estudiantes"])
 api_router.include_router(caja.router, prefix="/caja", tags=["Caja y Pagos"])
+api_router.include_router(reportes.router, prefix="/reportes", tags=["Reportes"])
 
 # Aquí se agregarán más routers cuando se creen los módulos
 # api_router.include_router(registro.router, prefix="/registro", tags=["Registro"])

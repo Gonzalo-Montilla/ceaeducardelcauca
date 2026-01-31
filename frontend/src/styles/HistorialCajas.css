@@ -1,0 +1,607 @@
+/* ==================== CONTENEDOR PRINCIPAL ==================== */
+.historial-cajas-container {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* ==================== HEADER ==================== */
+.historial-header {
+  margin-bottom: 2rem;
+}
+
+.header-title-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.header-title-section svg {
+  color: var(--primary-color);
+}
+
+.historial-header h1 {
+  font-size: 2rem;
+  color: var(--text-dark);
+  margin: 0;
+}
+
+.header-subtitle {
+  color: var(--text-muted);
+  margin: 0;
+  font-size: 1rem;
+}
+
+/* ==================== FILTROS ==================== */
+.filtros-section {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.filtro-grupo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.filtro-grupo label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-dark);
+}
+
+.input-fecha {
+  padding: 0.625rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 0.875rem;
+  min-width: 180px;
+}
+
+.input-fecha:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.btn-filtrar,
+.btn-limpiar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-filtrar {
+  background: var(--primary-color);
+  color: white;
+}
+
+.btn-filtrar:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.btn-limpiar {
+  background: var(--gray-100);
+  color: var(--text-dark);
+}
+
+.btn-limpiar:hover {
+  background: var(--gray-200);
+}
+
+/* ==================== TABLA ==================== */
+.tabla-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.tabla-historial {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.tabla-historial thead {
+  background: var(--primary-color);
+  color: white;
+}
+
+.tabla-historial th {
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tabla-historial tbody tr {
+  border-bottom: 1px solid var(--border-color);
+  transition: background 0.2s;
+}
+
+.tabla-historial tbody tr:hover {
+  background: var(--gray-50);
+}
+
+.tabla-historial td {
+  padding: 1rem;
+  white-space: nowrap;
+}
+
+.monto-positivo {
+  color: var(--success-color);
+  font-weight: 600;
+}
+
+.monto-efectivo {
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.diferencia {
+  font-weight: 600;
+}
+
+.diferencia.exacta {
+  color: var(--success-color);
+}
+
+.diferencia.sobrante {
+  color: var(--info-color);
+}
+
+.diferencia.faltante {
+  color: var(--danger-color);
+}
+
+/* ==================== BADGES ==================== */
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge-cerrada {
+  background: var(--success-light);
+  color: var(--success-dark);
+}
+
+.badge-abierta {
+  background: var(--warning-light);
+  color: var(--warning-dark);
+}
+
+/* ==================== BOTONES TABLA ==================== */
+.btn-ver-detalle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-ver-detalle:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
+/* ==================== LOADING & EMPTY ==================== */
+.loading-container,
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  color: var(--text-muted);
+}
+
+.empty-state svg {
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+/* ==================== MODAL ==================== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 2rem;
+}
+
+.modal-content-historial {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 900px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header-historial {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 10;
+}
+
+.modal-header-historial h2 {
+  margin: 0;
+  color: var(--text-dark);
+  font-size: 1.5rem;
+}
+
+.btn-cerrar-modal {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.btn-cerrar-modal:hover {
+  background: var(--gray-100);
+  color: var(--text-dark);
+}
+
+.modal-body-historial {
+  padding: 1.5rem;
+}
+
+/* ==================== SECCIONES DEL MODAL ==================== */
+.seccion-detalle {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: var(--gray-50);
+  border-radius: 8px;
+}
+
+.seccion-detalle h3 {
+  margin: 0 0 1rem 0;
+  color: var(--text-dark);
+  font-size: 1.125rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Sección colapsable */
+.seccion-colapsable h3 {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s;
+}
+
+.seccion-colapsable h3:hover {
+  color: var(--primary-color);
+}
+
+.titulo-colapsable {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ==================== INFO GRID ==================== */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.info-label {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.info-value {
+  font-size: 1rem;
+  color: var(--text-dark);
+  font-weight: 600;
+}
+
+.info-value.destacado {
+  color: var(--primary-color);
+  font-size: 1.125rem;
+}
+
+/* ==================== TRANSACCIONES GRID ==================== */
+.transacciones-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.metodo-grupo {
+  background: white;
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.metodo-grupo h4 {
+  margin: 0 0 0.75rem 0;
+  color: var(--text-dark);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  border-bottom: 2px solid var(--primary-color);
+  padding-bottom: 0.5rem;
+}
+
+.metodo-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  font-size: 0.875rem;
+}
+
+.metodo-item span:first-child {
+  color: var(--text-muted);
+}
+
+.metodo-item .monto {
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.metodo-item .monto.negativo {
+  color: var(--danger-color);
+}
+
+/* ==================== ARQUEO ==================== */
+.seccion-arqueo {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.seccion-arqueo h3 {
+  color: white;
+}
+
+.arqueo-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.arqueo-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+}
+
+.arqueo-item.full-width {
+  grid-column: 1 / -1;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.arqueo-label {
+  font-size: 0.875rem;
+  opacity: 0.9;
+}
+
+.arqueo-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.arqueo-value.destacado {
+  font-size: 1.5rem;
+}
+
+.diferencia-valor {
+  font-size: 1.5rem !important;
+}
+
+.diferencia-valor.exacta {
+  color: #4ade80;
+}
+
+.diferencia-valor.sobrante {
+  color: #60a5fa;
+}
+
+.diferencia-valor.faltante {
+  color: #f87171;
+}
+
+/* ==================== TOTALES ==================== */
+.seccion-totales {
+  background: white;
+  border: 2px solid var(--primary-color);
+}
+
+.total-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.total-item:last-child {
+  border-bottom: none;
+}
+
+.total-item span:first-child {
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.total-valor {
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.total-valor.positivo {
+  color: var(--success-color);
+}
+
+.total-valor.negativo {
+  color: var(--danger-color);
+}
+
+.destacado-total {
+  background: var(--primary-light);
+  padding: 1rem !important;
+  margin: -1.5rem -1.5rem 0 -1.5rem;
+  border-radius: 0 0 8px 8px;
+}
+
+.destacado-total span {
+  color: var(--primary-color);
+}
+
+/* ==================== OBSERVACIONES ==================== */
+.observacion-item {
+  margin-bottom: 1rem;
+}
+
+.observacion-item:last-child {
+  margin-bottom: 0;
+}
+
+.observacion-item strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--text-dark);
+}
+
+.observacion-item p {
+  margin: 0;
+  padding: 0.75rem;
+  background: white;
+  border-left: 3px solid var(--primary-color);
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+/* ==================== ACCIONES MODAL ==================== */
+.acciones-modal {
+  display: flex;
+  justify-content: center;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.btn-pdf {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--danger-color);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-pdf:hover:not(:disabled) {
+  background: var(--danger-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+}
+
+.btn-pdf:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ==================== RESPONSIVE ==================== */
+@media (max-width: 1200px) {
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .transacciones-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .historial-cajas-container {
+    padding: 1rem;
+  }
+
+  .filtros-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .input-fecha {
+    min-width: 100%;
+  }
+
+  .tabla-container {
+    overflow-x: auto;
+  }
+
+  .modal-content-historial {
+    width: 95%;
+    max-height: 95vh;
+  }
+
+  .arqueo-grid {
+    grid-template-columns: 1fr;
+  }
+}

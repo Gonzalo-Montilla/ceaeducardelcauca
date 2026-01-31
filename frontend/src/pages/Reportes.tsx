@@ -1,0 +1,347 @@
+import { useState, useEffect } from 'react';
+import {
+  BarChart3, DollarSign, Users, TrendingUp, AlertCircle,
+  Calendar, CreditCard, PieChart, Download
+} from 'lucide-react';
+import axios from 'axios';
+import {
+  LineChart, Line, BarChart, Bar, PieChart as RePieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} from 'recharts';
+import { KPICard } from '../components/reportes/KPICard';
+import { FiltrosPeriodo } from '../components/reportes/FiltrosPeriodo';
+import { RankingReferidos } from '../components/reportes/RankingReferidos';
+import { TablaEstudiantesRegistrados } from '../components/reportes/TablaEstudiantesRegistrados';
+import { TablaEstudiantesPagos } from '../components/reportes/TablaEstudiantesPagos';
+import '../styles/Reportes.css';
+
+interface DashboardData {
+  kpis: any;
+  grafico_ingresos: any;
+  grafico_metodos_pago: any;
+  grafico_estudiantes: any;
+  grafico_egresos: any;
+  ranking_referidos: any[];
+  lista_estudiantes_registrados: any[];
+  lista_estudiantes_pagos: any[];
+}
+
+export const Reportes = () => {
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // El componente FiltrosPeriodo cargará automáticamente con "hoy"
+
+  const cargarDashboard = async (fechaInicio: string, fechaFin: string, comparar: boolean) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const token = localStorage.getItem('access_token');
+      
+      const params: any = { comparar_periodo_anterior: comparar };
+      if (fechaInicio) {
+        const inicio = new Date(fechaInicio);
+        inicio.setHours(0, 0, 0, 0);
+        params.fecha_inicio = inicio.toISOString();
+      }
+      if (fechaFin) {
+        const fin = new Date(fechaFin);
+        fin.setHours(23, 59, 59, 999);
+        params.fecha_fin = fin.toISOString();
+      }
+
+      const response = await axios.get(
+        `${import.meta.env.VITE_API_URL}/api/v1/reportes/dashboard`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params
+        }
+      );
+
+      setDashboard(response.data);
+    } catch (err) {
+      console.error('Error al cargar dashboard:', err);
+      setError('Error al cargar los reportes');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatearMoneda = (valor: number) => {
+    return new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      minimumFractionDigits: 0
+    }).format(valor);
+  };
+
+  const formatearPorcentaje = (valor: number) => {
+    return `${valor.toFixed(1)}%`;
+  };
+
+  if (error) {
+    return (
+      <div className="reportes-container">
+        <div className="error-estado">
+          <AlertCircle size={48} />
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Mostrar mensaje de carga inicial
+  if (!dashboard && !error) {
+    return (
+      <div className="reportes-container">
+        {/* Header */}
+        <div className="reportes-header">
+          <div className="header-titulo">
+            <BarChart3 size={32} />
+            <div>
+              <h1>Reportes Gerenciales</h1>
+              <p>Dashboard ejecutivo con métricas clave del negocio</p>
+            </div>
+          </div>
+        </div>
+        
+        {/* Filtros */}
+        <FiltrosPeriodo onAplicarFiltros={cargarDashboard} cargando={loading} />
+        
+        {loading && (
+          <div className="loading-estado">
+            <div className="spinner"></div>
+            <p>Cargando reportes...</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const { kpis, grafico_ingresos, grafico_metodos_pago, grafico_estudiantes, grafico_egresos, ranking_referidos, lista_estudiantes_registrados, lista_estudiantes_pagos } = dashboard!;
+
+  // Preparar datos para gráfico de línea (ingresos)
+  const datosIngresosLinea = grafico_ingresos.datos.map((d: any) => ({
+    mes: d.fecha,
+    ingresos: parseFloat(d.valor)
+  }));
+
+  // Preparar datos para gráfico de barras (métodos de pago)
+  const datosMetodosPago = grafico_metodos_pago.datos.map((d: any) => ({
+    nombre: d.nombre,
+    valor: parseFloat(d.valor),
+    porcentaje: d.porcentaje
+  }));
+
+  // Preparar datos para gráfico de dona (estudiantes)
+  const datosEstudiantes = grafico_estudiantes.datos.map((d: any) => ({
+    nombre: d.nombre,
+    valor: parseFloat(d.valor),
+    color: d.color
+  }));
+
+  // Preparar datos para gráfico de barras horizontales (egresos)
+  const datosEgresos = grafico_egresos.datos.map((d: any) => ({
+    categoria: d.nombre,
+    monto: parseFloat(d.valor)
+  }));
+
+  const COLORES_METODOS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+
+  return (
+    <div className="reportes-container">
+      {/* Header */}
+      <div className="reportes-header">
+        <div className="header-titulo">
+          <BarChart3 size={32} />
+          <div>
+            <h1>Reportes Gerenciales</h1>
+            <p>Dashboard ejecutivo con métricas clave del negocio</p>
+          </div>
+        </div>
+        <button className="btn-exportar" disabled>
+          <Download size={18} />
+          Exportar PDF
+        </button>
+      </div>
+
+      {/* Filtros */}
+      <FiltrosPeriodo onAplicarFiltros={cargarDashboard} cargando={loading} />
+
+      {/* KPIs Grid */}
+      <div className="kpis-grid">
+        <KPICard
+          titulo="Ingresos Totales"
+          valor={formatearMoneda(parseFloat(kpis.ingresos_totales.valor_actual))}
+          icono={<DollarSign size={24} />}
+          cambio={kpis.ingresos_totales.cambio_porcentual}
+          tendencia={kpis.ingresos_totales.tendencia}
+          colorIcono="#10b981"
+        />
+        <KPICard
+          titulo="Egresos Totales"
+          valor={formatearMoneda(parseFloat(kpis.egresos_totales.valor_actual))}
+          icono={<TrendingUp size={24} />}
+          cambio={kpis.egresos_totales.cambio_porcentual}
+          tendencia={kpis.egresos_totales.tendencia}
+          colorIcono="#ef4444"
+        />
+        <KPICard
+          titulo="Saldo Pendiente"
+          valor={formatearMoneda(parseFloat(kpis.saldo_pendiente))}
+          icono={<CreditCard size={24} />}
+          colorIcono="#f59e0b"
+        />
+        <KPICard
+          titulo="Margen Operativo"
+          valor={formatearPorcentaje(kpis.margen_operativo)}
+          icono={<PieChart size={24} />}
+          colorIcono="#8b5cf6"
+        />
+        <KPICard
+          titulo="Estudiantes Activos"
+          valor={kpis.total_estudiantes_activos}
+          icono={<Users size={24} />}
+          colorIcono="#2563eb"
+        />
+        <KPICard
+          titulo="Nuevas Matrículas"
+          valor={kpis.nuevas_matriculas_mes}
+          icono={<Calendar size={24} />}
+          colorIcono="#06b6d4"
+        />
+        <KPICard
+          titulo="Ticket Promedio"
+          valor={formatearMoneda(parseFloat(kpis.ticket_promedio))}
+          icono={<DollarSign size={24} />}
+          colorIcono="#10b981"
+        />
+        <KPICard
+          titulo="Tasa de Cobranza"
+          valor={formatearPorcentaje(kpis.tasa_cobranza)}
+          icono={<TrendingUp size={24} />}
+          colorIcono="#22c55e"
+        />
+      </div>
+
+      {/* Gráficos Grid */}
+      <div className="graficos-grid">
+        {/* Gráfico de línea: Evolución de ingresos */}
+        <div className="grafico-card grafico-grande">
+          <div className="grafico-header">
+            <h3>Evolución de Ingresos</h3>
+            <div className="grafico-stats">
+              <span>Total: {formatearMoneda(parseFloat(grafico_ingresos.total_periodo))}</span>
+              <span>Promedio: {formatearMoneda(parseFloat(grafico_ingresos.promedio_mensual))}</span>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={datosIngresosLinea}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis dataKey="mes" stroke="#6b7280" style={{ fontSize: '12px' }} />
+              <YAxis stroke="#6b7280" style={{ fontSize: '12px' }} />
+              <Tooltip
+                contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                formatter={(value: any) => formatearMoneda(value)}
+              />
+              <Legend />
+              <Line
+                type="monotone"
+                dataKey="ingresos"
+                stroke="#2563eb"
+                strokeWidth={3}
+                dot={{ fill: '#2563eb', r: 4 }}
+                activeDot={{ r: 6 }}
+                name="Ingresos"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Gráfico de barras: Métodos de pago */}
+        <div className="grafico-card">
+          <div className="grafico-header">
+            <h3>Ingresos por Método de Pago</h3>
+            <span className="grafico-subtitle">Método preferido: {grafico_metodos_pago.metodo_preferido}</span>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={datosMetodosPago}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis dataKey="nombre" stroke="#6b7280" style={{ fontSize: '11px' }} angle={-45} textAnchor="end" height={100} />
+              <YAxis stroke="#6b7280" style={{ fontSize: '12px' }} />
+              <Tooltip
+                contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                formatter={(value: any) => formatearMoneda(value)}
+              />
+              <Bar dataKey="valor" name="Monto">
+                {datosMetodosPago.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORES_METODOS[index % COLORES_METODOS.length]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Gráfico de dona: Estudiantes por categoría */}
+        <div className="grafico-card">
+          <div className="grafico-header">
+            <h3>Estudiantes por Categoría</h3>
+            <span className="grafico-subtitle">Total: {grafico_estudiantes.total}</span>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <RePieChart>
+              <Pie
+                data={datosEstudiantes}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ nombre, porcentaje }) => `${nombre}: ${porcentaje ? porcentaje.toFixed(1) : '0.0'}%`}
+                outerRadius={100}
+                fill="#8884d8"
+                dataKey="valor"
+              >
+                {datosEstudiantes.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip formatter={(value: any) => `${value} estudiantes`} />
+            </RePieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Gráfico de barras: Top egresos */}
+        <div className="grafico-card grafico-grande">
+          <div className="grafico-header">
+            <h3>Top 5 Categorías de Egresos</h3>
+            <div className="grafico-stats">
+              <span>Total: {formatearMoneda(parseFloat(grafico_egresos.total))}</span>
+              <span>Mayor: {grafico_egresos.categoria_mayor}</span>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={datosEgresos} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis type="number" stroke="#6b7280" style={{ fontSize: '12px' }} />
+              <YAxis dataKey="categoria" type="category" stroke="#6b7280" style={{ fontSize: '12px' }} width={150} />
+              <Tooltip
+                contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                formatter={(value: any) => formatearMoneda(value)}
+              />
+              <Bar dataKey="monto" fill="#ef4444" name="Monto" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Ranking de Referidos */}
+      <RankingReferidos referidos={ranking_referidos || []} />
+
+      {/* Tablas de Estudiantes */}
+      <div className="tablas-estudiantes-grid">
+        <TablaEstudiantesRegistrados estudiantes={lista_estudiantes_registrados || []} />
+        <TablaEstudiantesPagos pagos={lista_estudiantes_pagos || []} />
+      </div>
+    </div>
+  );
+};

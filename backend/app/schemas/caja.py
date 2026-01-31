@@ -43,6 +43,7 @@ class CajaResumen(BaseModel):
     total_ingresos: Decimal  # Suma de todos los métodos
     total_egresos: Decimal   # Suma de todos los métodos
     saldo_efectivo_caja: Decimal  # Solo efectivo (lo que hay en caja)
+    saldo_final_teorico: Decimal  # Saldo teórico de efectivo
     
     # Detalle por método de pago
     total_ingresos_efectivo: Decimal

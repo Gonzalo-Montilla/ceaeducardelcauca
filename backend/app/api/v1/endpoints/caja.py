@@ -195,8 +195,11 @@ def get_historial_cajas(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_active_user)
 ):
-    """Obtener historial de cajas con filtros"""
-    query = db.query(Caja).order_by(Caja.fecha_apertura.desc())
+    """Obtener historial de cajas cerradas con filtros"""
+    # Solo cajas cerradas
+    query = db.query(Caja).filter(
+        Caja.estado == EstadoCaja.CERRADA
+    ).order_by(Caja.fecha_apertura.desc())
     
     if fecha_inicio:
         query = query.filter(Caja.fecha_apertura >= fecha_inicio)
@@ -436,6 +439,7 @@ def _build_caja_resumen(caja: Caja, db: Session) -> CajaResumen:
         total_ingresos=caja.total_ingresos,
         total_egresos=caja.total_egresos,
         saldo_efectivo_caja=caja.saldo_efectivo_caja,
+        saldo_final_teorico=caja.saldo_final_teorico,
         total_ingresos_efectivo=caja.total_ingresos_efectivo,
         total_ingresos_transferencia=caja.total_ingresos_transferencia,
         total_ingresos_tarjeta=caja.total_ingresos_tarjeta,
