@@ -171,6 +171,13 @@
   color: #10b981;
 }
 
+.help-text {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+
 .radio-group {
   display: flex;
   flex-direction: column;

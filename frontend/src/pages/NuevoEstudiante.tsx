@@ -10,6 +10,9 @@ export const NuevoEstudiante = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const MAX_IMAGE_SIZE_MB = 2;
+  const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
+  const MAX_BASE64_LENGTH = 3_000_000;
 
   // Datos personales
   const [nombreCompleto, setNombreCompleto] = useState('');
@@ -50,11 +53,19 @@ export const NuevoEstudiante = () => {
       setError('Por favor selecciona un archivo de imagen válido');
       return;
     }
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      setError(`La imagen no debe superar ${MAX_IMAGE_SIZE_MB}MB`);
+      return;
+    }
     
     // Convertir a base64
     const reader = new FileReader();
     reader.onloadend = () => {
       const base64String = reader.result as string;
+      if (base64String.length > MAX_BASE64_LENGTH) {
+        setError('La imagen es demasiado grande. Usa una más liviana.');
+        return;
+      }
       console.log('Foto cargada, tamaño:', base64String.length, 'caracteres');
       setFotoCapturada(base64String);
     };
@@ -99,7 +110,11 @@ export const NuevoEstudiante = () => {
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.drawImage(video, 0, 0);
-        const imagenBase64 = canvas.toDataURL('image/jpeg', 0.85);
+        const imagenBase64 = canvas.toDataURL('image/jpeg', 0.75);
+        if (imagenBase64.length > MAX_BASE64_LENGTH) {
+          setError('La imagen es demasiado grande. Intenta nuevamente.');
+          return;
+        }
         setFotoCapturada(imagenBase64);
         detenerWebcam();
       }
@@ -122,6 +137,14 @@ export const NuevoEstudiante = () => {
     }
   };
 
+  const soloDigitos = (value: string) => value.replace(/\D/g, '');
+
+  useEffect(() => {
+    return () => {
+      detenerWebcam();
+    };
+  }, []);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
@@ -132,17 +155,46 @@ export const NuevoEstudiante = () => {
       return;
     }
     
+    const cedulaLimpia = soloDigitos(cedula);
+    const telefonoLimpio = soloDigitos(telefono);
+    const telefonoEmergenciaLimpio = soloDigitos(contactoEmergenciaTelefono);
+
+    if (cedula && cedula !== cedulaLimpia) {
+      setError('La cédula solo debe contener números');
+      return;
+    }
+    if (cedulaLimpia.length < 5 || cedulaLimpia.length > 20) {
+      setError('La cédula debe tener entre 5 y 20 dígitos');
+      return;
+    }
+    if (telefono && telefono !== telefonoLimpio) {
+      setError('El teléfono solo debe contener números');
+      return;
+    }
+    if (telefonoLimpio.length < 7 || telefonoLimpio.length > 15) {
+      setError('El teléfono debe tener entre 7 y 15 dígitos');
+      return;
+    }
+    if (contactoEmergenciaTelefono && contactoEmergenciaTelefono !== telefonoEmergenciaLimpio) {
+      setError('El teléfono de emergencia solo debe contener números');
+      return;
+    }
+    if (fotoCapturada.length > MAX_BASE64_LENGTH) {
+      setError('La imagen es demasiado grande. Usa una más liviana.');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
       // Preparar datos para enviar
       const estudianteData = {
         // Datos de usuario
-        email: email,
+        email: email.trim(),
         password: cedula, // Usar cédula como contraseña inicial
-        nombre_completo: nombreCompleto,
-        cedula: cedula,
-        telefono: telefono,
+        nombre_completo: nombreCompleto.trim(),
+        cedula: cedulaLimpia,
+        telefono: telefonoLimpio,
         
         // Datos personales
         fecha_nacimiento: fechaNacimiento,
@@ -159,8 +211,8 @@ export const NuevoEstudiante = () => {
         necesidades_especiales: necesidadesEspeciales || null,
         
         // Contacto de emergencia
-        contacto_emergencia_nombre: contactoEmergenciaNombre || null,
-        contacto_emergencia_telefono: contactoEmergenciaTelefono || null,
+        contacto_emergencia_nombre: contactoEmergenciaNombre.trim() || null,
+        contacto_emergencia_telefono: telefonoEmergenciaLimpio || null,
         
         // Foto en base64
         foto_base64: fotoCapturada
@@ -295,9 +347,11 @@ export const NuevoEstudiante = () => {
                 id="cedula"
                 type="text"
                 value={cedula}
-                onChange={(e) => setCedula(e.target.value.toUpperCase())}
+                onChange={(e) => setCedula(soloDigitos(e.target.value))}
                 required
-                style={{ textTransform: 'uppercase' }}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={20}
               />
             </div>
 
@@ -318,7 +372,7 @@ export const NuevoEstudiante = () => {
                 id="email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value.trim())}
                 required
               />
             </div>
@@ -329,9 +383,11 @@ export const NuevoEstudiante = () => {
                 id="telefono"
                 type="tel"
                 value={telefono}
-                onChange={(e) => setTelefono(e.target.value.toUpperCase())}
+                onChange={(e) => setTelefono(soloDigitos(e.target.value))}
                 required
-                style={{ textTransform: 'uppercase' }}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={15}
               />
             </div>
 
@@ -506,8 +562,10 @@ export const NuevoEstudiante = () => {
                 id="contactoEmergenciaTelefono"
                 type="tel"
                 value={contactoEmergenciaTelefono}
-                onChange={(e) => setContactoEmergenciaTelefono(e.target.value.toUpperCase())}
-                style={{ textTransform: 'uppercase' }}
+                onChange={(e) => setContactoEmergenciaTelefono(soloDigitos(e.target.value))}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={15}
               />
             </div>
           </div>
@@ -520,7 +578,33 @@ export const NuevoEstudiante = () => {
           <button
             type="button"
             className="btn-secondary"
-            onClick={() => navigate('/dashboard')}
+            onClick={() => {
+              const hayCambios = Boolean(
+                nombreCompleto ||
+                cedula ||
+                fechaNacimiento ||
+                email ||
+                telefono ||
+                direccion ||
+                ciudad ||
+                barrio ||
+                tipoSangre ||
+                eps ||
+                ocupacion ||
+                estadoCivil ||
+                nivelEducativo ||
+                estrato ||
+                nivelSisben ||
+                necesidadesEspeciales ||
+                contactoEmergenciaNombre ||
+                contactoEmergenciaTelefono ||
+                fotoCapturada
+              );
+              if (hayCambios && !confirm('Hay cambios sin guardar. ¿Deseas salir?')) {
+                return;
+              }
+              navigate('/dashboard');
+            }}
             disabled={isLoading}
           >
             Cancelar

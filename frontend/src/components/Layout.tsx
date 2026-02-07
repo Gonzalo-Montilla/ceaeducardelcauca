@@ -12,8 +12,10 @@ import {
   FileText,
   GraduationCap,
   MoreVertical,
-  History
+  History,
+  Shield
 } from 'lucide-react';
+import { RolUsuario } from '../types';
 import logo from '../assets/cea_educar_final.png';
 import '../styles/Layout.css';
 
@@ -31,17 +33,26 @@ export const Layout = ({ children }: LayoutProps) => {
     navigate('/login');
   };
 
+  const adminRoles = [RolUsuario.ADMIN, RolUsuario.COORDINADOR, RolUsuario.GERENTE];
   const menuItems = [
-    { path: '/dashboard', icon: Home, label: 'Dashboard' },
-    { path: '/nuevo-estudiante', icon: UserPlus, label: 'Nuevo Estudiante' },
-    { path: '/estudiantes', icon: Users, label: 'Estudiantes' },
-    { path: '/caja', icon: DollarSign, label: 'Caja / Pagos' },
-    { path: '/historial-cajas', icon: History, label: 'Historial de Cajas' },
-    { path: '/reportes', icon: FileText, label: 'Reportes' },
-    { path: '/instructores', icon: UserCheck, label: 'Instructores' },
-    { path: '/vehiculos', icon: Car, label: 'Vehículos' },
-    { path: '/clases', icon: Calendar, label: 'Programar Clases' },
+    { path: '/dashboard', icon: Home, label: 'Dashboard', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO] },
+    { path: '/nuevo-estudiante', icon: UserPlus, label: 'Nuevo Estudiante', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO] },
+    { path: '/estudiantes', icon: Users, label: 'Estudiantes', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO] },
+    { path: '/caja', icon: DollarSign, label: 'Caja / Pagos', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO] },
+    { path: '/historial-cajas', icon: History, label: 'Historial de Cajas', roles: adminRoles },
+    { path: '/reportes', icon: FileText, label: 'Reportes', roles: [RolUsuario.GERENTE] },
+    { path: '/tarifas', icon: GraduationCap, label: 'Tarifas', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE] },
+    { path: '/usuarios', icon: Shield, label: 'Usuarios', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE] },
+    { path: '/instructores', icon: UserCheck, label: 'Instructores', roles: adminRoles },
+    { path: '/vehiculos', icon: Car, label: 'Vehículos', roles: adminRoles },
+    { path: '/clases', icon: Calendar, label: 'Programar Clases', roles: [RolUsuario.INSTRUCTOR, RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR] },
   ];
+
+  const allowedItems = menuItems.filter((item) => {
+    if (!item.roles) return true;
+    if (!user?.rol) return false;
+    return item.roles.includes(user.rol as RolUsuario);
+  });
 
   const isActive = (path: string) => {
     return window.location.pathname === path;
@@ -55,7 +66,7 @@ export const Layout = ({ children }: LayoutProps) => {
         </div>
         
         <nav className="nav-menu">
-          {menuItems.map((item) => {
+          {allowedItems.map((item) => {
             const Icon = item.icon;
             return (
               <a

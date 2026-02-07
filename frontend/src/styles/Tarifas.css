@@ -1,0 +1,38 @@
+.tarifas-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tarifas-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tarifas-table table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.tarifas-table th,
+.tarifas-table td {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.btn-icon {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  padding: 6px;
+  border-radius: 6px;
+  margin-right: 6px;
+  cursor: pointer;
+}
+
+.btn-icon.danger {
+  background: #fee2e2;
+  border-color: #fecaca;
+}

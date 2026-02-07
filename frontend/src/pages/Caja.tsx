@@ -91,6 +91,8 @@ export const Caja = () => {
   const [efectivoFisico, setEfectivoFisico] = useState('');
   const [observacionesCierre, setObservacionesCierre] = useState('');
   const [cerrandoCaja, setCerrandoCaja] = useState(false);
+
+  const soloDigitos = (value: string) => value.replace(/\D/g, '');
   
   useEffect(() => {
     cargarCajaActual();
@@ -115,6 +117,10 @@ export const Caja = () => {
   
   const handleAbrirCaja = async () => {
     try {
+      if (!saldoInicial || parseFloat(saldoInicial) < 0) {
+        alert('El saldo inicial debe ser mayor o igual a cero');
+        return;
+      }
       await cajaAPI.abrirCaja({
         saldo_inicial: parseFloat(saldoInicial),
         observaciones_apertura: null
@@ -129,14 +135,15 @@ export const Caja = () => {
   };
   
   const handleBuscarEstudiante = async () => {
-    if (!cedula.trim()) {
+    const cedulaLimpia = soloDigitos(cedula);
+    if (!cedulaLimpia) {
       alert('Ingrese la cédula del estudiante');
       return;
     }
     
     try {
       setBuscando(true);
-      const response = await cajaAPI.buscarEstudiante(cedula);
+      const response = await cajaAPI.buscarEstudiante(cedulaLimpia);
       setEstudiante(response);
     } catch (error: any) {
       alert(error.response?.data?.detail || 'Estudiante no encontrado');
@@ -163,7 +170,7 @@ export const Caja = () => {
       }
       montoTotal = detallesPago.reduce((sum, d) => sum + (parseFloat(d.monto) || 0), 0);
     } else {
-      if (!montoPago) {
+      if (!montoPago || isNaN(parseFloat(montoPago))) {
         alert('Ingrese el monto a pagar');
         return;
       }
@@ -225,6 +232,10 @@ export const Caja = () => {
   const handleRegistrarEgreso = async () => {
     if (!conceptoEgreso.trim() || !montoEgreso) {
       alert('Complete todos los campos');
+      return;
+    }
+    if (parseFloat(montoEgreso) <= 0) {
+      alert('El monto debe ser mayor a cero');
       return;
     }
     
@@ -334,6 +345,8 @@ export const Caja = () => {
                     onChange={(e) => setSaldoInicial(e.target.value)}
                     placeholder="0"
                     className="form-input"
+              min="0"
+              step="100"
                   />
                 </div>
               </div>
@@ -626,9 +639,11 @@ export const Caja = () => {
               type="text"
               placeholder="Buscar por cédula..."
               value={cedula}
-              onChange={(e) => setCedula(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleBuscarEstudiante()}
+              onChange={(e) => setCedula(soloDigitos(e.target.value))}
+              onKeyDown={(e) => e.key === 'Enter' && handleBuscarEstudiante()}
               className="search-input"
+              inputMode="numeric"
+              pattern="[0-9]*"
             />
             <button onClick={handleBuscarEstudiante} disabled={buscando} className="btn-search">
               <Search size={20} />
@@ -712,6 +727,8 @@ export const Caja = () => {
                         onChange={(e) => setMontoPago(e.target.value)}
                         placeholder="0"
                         className="form-input"
+                        min="0"
+                        step="100"
                       />
                     </div>
                     <div className="form-group">
@@ -770,6 +787,8 @@ export const Caja = () => {
                             }}
                             placeholder="0"
                             className="form-input"
+                            min="0"
+                            step="100"
                           />
                         </div>
                         {detallesPago.length > 1 && (
@@ -853,6 +872,8 @@ export const Caja = () => {
                   onChange={(e) => setMontoEgreso(e.target.value)}
                   placeholder="0"
                   className="form-input"
+                  min="0"
+                  step="100"
                 />
               </div>
               <div className="form-group">
@@ -1016,6 +1037,8 @@ export const Caja = () => {
                     placeholder="Ingrese el dinero que realmente hay en caja"
                     className="form-input form-input-large"
                     autoFocus
+                    min="0"
+                    step="100"
                   />
                 </div>
               </div>

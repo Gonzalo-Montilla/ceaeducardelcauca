@@ -4,9 +4,10 @@ from sqlalchemy import and_, func
 from typing import List, Optional
 from datetime import datetime, timedelta
 from decimal import Decimal
+import logging
 
 from app.core.database import get_db
-from app.api.deps import get_current_active_user, get_admin_or_coordinador
+from app.api.deps import get_current_active_user, get_admin_or_coordinador_or_cajero
 from app.models.usuario import Usuario
 from app.models.caja import Caja, MovimientoCaja, EstadoCaja, TipoMovimiento
 from app.models.pago import Pago, DetallePago, MetodoPago, EstadoPago
@@ -19,6 +20,7 @@ from app.schemas.caja import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ==================== CAJA ENDPOINTS ====================
@@ -27,7 +29,7 @@ router = APIRouter()
 def abrir_caja(
     caja_data: CajaApertura,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_admin_or_coordinador)
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
 ):
     """
     Abrir una nueva caja.
@@ -36,7 +38,7 @@ def abrir_caja(
     # Verificar si ya hay una caja abierta
     caja_abierta = db.query(Caja).filter(
         Caja.estado == EstadoCaja.ABIERTA
-    ).first()
+    ).with_for_update().first()
     
     if caja_abierta:
         raise HTTPException(
@@ -78,13 +80,13 @@ def cerrar_caja(
     caja_id: int,
     cierre_data: CajaCierre,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_admin_or_coordinador)
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
 ):
     """
     Cerrar la caja realizando el arqueo.
     Calcula la diferencia entre efectivo teórico y físico.
     """
-    caja = db.query(Caja).filter(Caja.id == caja_id).first()
+    caja = db.query(Caja).filter(Caja.id == caja_id).with_for_update().first()
     
     if not caja:
         raise HTTPException(
@@ -218,14 +220,14 @@ def get_historial_cajas(
 def registrar_pago(
     pago_data: PagoCreate,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_admin_or_coordinador)
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
 ):
     """
     Registrar un pago de estudiante.
     El pago se asocia a la caja abierta y actualiza el saldo del estudiante.
     """
     # Verificar que hay una caja abierta
-    caja_abierta = db.query(Caja).filter(Caja.estado == EstadoCaja.ABIERTA).first()
+    caja_abierta = db.query(Caja).filter(Caja.estado == EstadoCaja.ABIERTA).with_for_update().first()
     
     if not caja_abierta:
         raise HTTPException(
@@ -234,7 +236,7 @@ def registrar_pago(
         )
     
     # Verificar que el estudiante existe
-    estudiante = db.query(Estudiante).filter(Estudiante.id == pago_data.estudiante_id).first()
+    estudiante = db.query(Estudiante).filter(Estudiante.id == pago_data.estudiante_id).with_for_update().first()
     
     if not estudiante:
         raise HTTPException(
@@ -243,10 +245,15 @@ def registrar_pago(
         )
     
     # Verificar que el monto no exceda el saldo pendiente
-    if estudiante.saldo_pendiente and pago_data.monto > estudiante.saldo_pendiente:
+    if estudiante.saldo_pendiente is not None and pago_data.monto > estudiante.saldo_pendiente:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"El monto excede el saldo pendiente (${estudiante.saldo_pendiente})"
+        )
+    if estudiante.saldo_pendiente is not None and estudiante.saldo_pendiente <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El estudiante no tiene saldo pendiente"
         )
     
     try:
@@ -300,12 +307,10 @@ def registrar_pago(
         
     except Exception as e:
         db.rollback()
-        import traceback
-        print(f"ERROR en registrar_pago: {str(e)}")
-        print(traceback.format_exc())
+        logger.exception("Error al registrar pago")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al registrar pago: {str(e)}"
+            detail="Error al registrar pago"
         )
 
 
@@ -337,13 +342,13 @@ def buscar_estudiante_financiero(
 def registrar_egreso(
     egreso_data: MovimientoCajaCreate,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_admin_or_coordinador)
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
 ):
     """
     Registrar un egreso (gasto) en la caja abierta
     """
     # Verificar que hay una caja abierta
-    caja_abierta = db.query(Caja).filter(Caja.estado == EstadoCaja.ABIERTA).first()
+    caja_abierta = db.query(Caja).filter(Caja.estado == EstadoCaja.ABIERTA).with_for_update().first()
     
     if not caja_abierta:
         raise HTTPException(
@@ -383,9 +388,10 @@ def registrar_egreso(
         
     except Exception as e:
         db.rollback()
+        logger.exception("Error al registrar egreso")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al registrar egreso: {str(e)}"
+            detail="Error al registrar egreso"
         )
 
 

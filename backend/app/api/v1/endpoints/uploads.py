@@ -1,7 +1,7 @@
 """
 Endpoint para manejo de uploads de archivos (fotos y documentos PDF)
 """
-from fastapi import APIRouter, UploadFile, File, HTTPException, status, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, status, Depends, Body
 from sqlalchemy.orm import Session
 from typing import Optional
 import base64
@@ -27,8 +27,8 @@ DOCUMENTS_DIR.mkdir(exist_ok=True)
 
 @router.post("/instructor/foto")
 async def upload_instructor_foto(
-    foto_base64: str,
-    instructor_id: int,
+    foto_base64: str = Body(...),
+    instructor_id: int = Body(...),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_active_user)
 ):
@@ -55,6 +55,65 @@ async def upload_instructor_foto(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al procesar foto: {str(e)}"
+        )
+
+
+@router.post("/vehiculo/foto")
+async def upload_vehiculo_foto(
+    foto_base64: str = Body(...),
+    vehiculo_id: Optional[int] = Body(None),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_active_user)
+):
+    """
+    Subir foto de vehiculo en base64
+    Retorna la URL donde se guardo la foto
+    """
+    try:
+        if not foto_base64.startswith('data:image'):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Formato de imagen invalido"
+            )
+
+        return {
+            "foto_url": foto_base64,
+            "message": "Foto procesada correctamente"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al procesar foto: {str(e)}"
+        )
+
+
+@router.post("/vehiculo/recibo-combustible")
+async def upload_recibo_combustible(
+    archivo: UploadFile = File(...),
+    vehiculo_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_active_user)
+):
+    """
+    Subir recibo de combustible (imagen o PDF)
+    """
+    try:
+        contenido = await archivo.read()
+        mime = archivo.content_type or "application/octet-stream"
+        data_base64 = base64.b64encode(contenido).decode('utf-8')
+        data_uri = f"data:{mime};base64,{data_base64}"
+
+        return {
+            "recibo_url": data_uri,
+            "nombre_archivo": archivo.filename,
+            "message": "Recibo procesado correctamente"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al procesar recibo: {str(e)}"
         )
 
 

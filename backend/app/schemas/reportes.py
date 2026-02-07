@@ -181,6 +181,24 @@ class DashboardEjecutivo(BaseModel):
         from_attributes = True
 
 
+# ==================== ALERTAS OPERATIVAS ====================
+
+class AlertasOperativas(BaseModel):
+    caja_abierta: bool
+    caja_id: Optional[int] = None
+    caja_abierta_horas: Optional[float] = None
+    pagos_vencidos_cantidad: int
+    pagos_vencidos_total: Decimal
+    compromisos_por_vencer_cantidad: int
+    compromisos_por_vencer_total: Decimal
+    pin_por_vencer_cantidad: int
+    fallas_abiertas_cantidad: int
+    estudiantes_listos_examen_cantidad: int
+
+    class Config:
+        from_attributes = True
+
+
 # ==================== REPORTE FINANCIERO ====================
 
 class AnalisisIngresos(BaseModel):

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { instructoresAPI } from '../services/api';
 import { 
@@ -30,11 +30,13 @@ export const Instructores = () => {
   const navigate = useNavigate();
   const [instructores, setInstructores] = useState<Instructor[]>([]);
   const [busqueda, setBusqueda] = useState('');
+  const [busquedaDebounced, setBusquedaDebounced] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [instructorEditar, setInstructorEditar] = useState<Instructor | null>(null);
+  const prevBusquedaRef = useRef('');
   
   // Paginación
   const [paginaActual, setPaginaActual] = useState(1);
@@ -42,8 +44,22 @@ export const Instructores = () => {
   const instructoresPorPagina = 12;
 
   useEffect(() => {
+    const handler = setTimeout(() => {
+      setBusquedaDebounced(busqueda.trim());
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [busqueda]);
+
+  useEffect(() => {
+    if (prevBusquedaRef.current !== busquedaDebounced) {
+      prevBusquedaRef.current = busquedaDebounced;
+      if (paginaActual !== 1) {
+        setPaginaActual(1);
+        return;
+      }
+    }
     cargarInstructores();
-  }, [paginaActual, estadoFiltro]);
+  }, [paginaActual, estadoFiltro, busquedaDebounced]);
 
   const cargarInstructores = async () => {
     try {
@@ -53,7 +69,7 @@ export const Instructores = () => {
         skip, 
         limit: instructoresPorPagina,
         estado: estadoFiltro || undefined,
-        busqueda: busqueda || undefined
+        busqueda: busquedaDebounced || undefined
       });
       
       setInstructores(response.items || []);
@@ -65,11 +81,6 @@ export const Instructores = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleBuscar = () => {
-    setPaginaActual(1);
-    cargarInstructores();
   };
 
   const handleLimpiarFiltros = () => {
@@ -160,7 +171,7 @@ export const Instructores = () => {
               placeholder="Nombre, cédula o licencia..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleBuscar()}
+              onKeyDown={(e) => e.key === 'Enter' && setBusquedaDebounced(busqueda.trim())}
             />
           </div>
 
@@ -180,7 +191,7 @@ export const Instructores = () => {
 
           <div className="form-group">
             <label>&nbsp;</label>
-            <button onClick={handleBuscar} className="btn-primary" style={{width: '100%'}}>
+            <button onClick={() => setBusquedaDebounced(busqueda.trim())} className="btn-primary" style={{width: '100%'}}>
               <Search size={16} />
               Buscar
             </button>

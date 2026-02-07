@@ -1,0 +1,399 @@
+import { useEffect, useRef, useState } from 'react';
+import { Car, Plus, Search, X, Pencil, Trash2, Eye } from 'lucide-react';
+import { uploadsAPI, vehiculosAPI } from '../services/api';
+import '../styles/Vehiculos.css';
+import { useNavigate } from 'react-router-dom';
+
+interface Vehiculo {
+  id: number;
+  placa: string;
+  tipo?: string;
+  marca?: string;
+  modelo?: string;
+  año?: number;
+  color?: string;
+  cilindraje?: string;
+  vin?: string;
+  foto_url?: string;
+  kilometraje_actual?: number;
+  is_active: boolean;
+}
+
+const tiposVehiculo = ['MOTO', 'AUTO', 'CAMION', 'BUS', 'OTRO'];
+
+export const Vehiculos = () => {
+  const navigate = useNavigate();
+  const [vehiculos, setVehiculos] = useState<Vehiculo[]>([]);
+  const [busqueda, setBusqueda] = useState('');
+  const [busquedaDebounced, setBusquedaDebounced] = useState('');
+  const [filtroActivo, setFiltroActivo] = useState<'todos' | 'activos' | 'inactivos'>('activos');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [totalVehiculos, setTotalVehiculos] = useState(0);
+  const vehiculosPorPagina = 12;
+  const prevBusquedaRef = useRef('');
+
+  const [mostrarModal, setMostrarModal] = useState(false);
+  const [vehiculoEditar, setVehiculoEditar] = useState<Vehiculo | null>(null);
+
+  const [placa, setPlaca] = useState('');
+  const [tipo, setTipo] = useState('');
+  const [marca, setMarca] = useState('');
+  const [modelo, setModelo] = useState('');
+  const [anio, setAnio] = useState('');
+  const [activo, setActivo] = useState(true);
+  const [color, setColor] = useState('');
+  const [cilindraje, setCilindraje] = useState('');
+  const [vin, setVin] = useState('');
+  const [kilometrajeActual, setKilometrajeActual] = useState('');
+  const [fotoUrl, setFotoUrl] = useState('');
+  const [fotoArchivo, setFotoArchivo] = useState<File | null>(null);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setBusquedaDebounced(busqueda.trim());
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [busqueda]);
+
+  useEffect(() => {
+    if (prevBusquedaRef.current !== busquedaDebounced) {
+      prevBusquedaRef.current = busquedaDebounced;
+      if (paginaActual !== 1) {
+        setPaginaActual(1);
+        return;
+      }
+    }
+    cargarVehiculos();
+  }, [paginaActual, busquedaDebounced, filtroActivo]);
+
+  const cargarVehiculos = async () => {
+    try {
+      setLoading(true);
+      const skip = (paginaActual - 1) * vehiculosPorPagina;
+      const response = await vehiculosAPI.getAll({
+        skip,
+        limit: vehiculosPorPagina,
+        search: busquedaDebounced || undefined,
+        activo: filtroActivo === 'todos' ? undefined : filtroActivo === 'activos'
+      });
+      setVehiculos(response.items || []);
+      setTotalVehiculos(response.total || 0);
+    } catch (err) {
+      console.error('Error al cargar vehículos:', err);
+      setError('Error al cargar la lista de vehículos');
+      setVehiculos([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const abrirModalNuevo = () => {
+    setVehiculoEditar(null);
+    setPlaca('');
+    setTipo('');
+    setMarca('');
+    setModelo('');
+    setAnio('');
+    setActivo(true);
+    setColor('');
+    setCilindraje('');
+    setVin('');
+    setKilometrajeActual('');
+    setFotoUrl('');
+    setFotoArchivo(null);
+    setMostrarModal(true);
+  };
+
+  const abrirModalEditar = (vehiculo: Vehiculo) => {
+    setVehiculoEditar(vehiculo);
+    setPlaca(vehiculo.placa);
+    setTipo(vehiculo.tipo || '');
+    setMarca(vehiculo.marca || '');
+    setModelo(vehiculo.modelo || '');
+    setAnio(vehiculo.año ? String(vehiculo.año) : '');
+    setActivo(Boolean(vehiculo.is_active));
+    setColor(vehiculo.color || '');
+    setCilindraje(vehiculo.cilindraje || '');
+    setVin(vehiculo.vin || '');
+    setKilometrajeActual(vehiculo.kilometraje_actual ? String(vehiculo.kilometraje_actual) : '');
+    setFotoUrl(vehiculo.foto_url || '');
+    setFotoArchivo(null);
+    setMostrarModal(true);
+  };
+
+  const handleFotoSelect = async (file: File) => {
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      try {
+        const base64 = reader.result as string;
+        const res = await uploadsAPI.uploadVehiculoFoto(base64);
+        setFotoUrl(res.foto_url);
+        setFotoArchivo(file);
+      } catch (err: any) {
+        const detail = err?.response?.data?.detail;
+        const msg = Array.isArray(detail) ? detail[0]?.msg : detail;
+        alert(msg || 'Error al subir foto');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const guardarVehiculo = async () => {
+    if (!placa.trim()) {
+      alert('La placa es obligatoria');
+      return;
+    }
+    const payload = {
+      placa: placa.trim().toUpperCase(),
+      tipo: tipo || null,
+      marca: marca ? marca.toUpperCase() : null,
+      modelo: modelo ? modelo.toUpperCase() : null,
+      año: anio ? parseInt(anio) : null,
+      is_active: activo,
+      color: color ? color.toUpperCase() : null,
+      cilindraje: cilindraje || null,
+      vin: vin || null,
+      kilometraje_actual: kilometrajeActual ? parseInt(kilometrajeActual) : null,
+      foto_url: fotoUrl || null
+    };
+    try {
+      if (vehiculoEditar) {
+        await vehiculosAPI.update(vehiculoEditar.id, payload);
+      } else {
+        await vehiculosAPI.create(payload);
+      }
+      setMostrarModal(false);
+      await cargarVehiculos();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error al guardar el vehículo');
+    }
+  };
+
+  const eliminarVehiculo = async (vehiculo: Vehiculo) => {
+    const confirmacion = window.confirm(`¿Desactivar el vehículo ${vehiculo.placa}?`);
+    if (!confirmacion) return;
+    try {
+      await vehiculosAPI.delete(vehiculo.id);
+      await cargarVehiculos();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error al desactivar el vehículo');
+    }
+  };
+
+  const totalPaginas = Math.ceil(totalVehiculos / vehiculosPorPagina);
+
+  const cambiarPagina = (nuevaPagina: number) => {
+    if (nuevaPagina < 1 || nuevaPagina > totalPaginas) return;
+    setPaginaActual(nuevaPagina);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="vehiculos-container">
+      <div className="vehiculos-header">
+        <div className="header-title">
+          <Car size={28} />
+          <h1>Vehículos</h1>
+        </div>
+        <button className="btn-primary" onClick={abrirModalNuevo}>
+          <Plus size={18} />
+          Nuevo Vehículo
+        </button>
+      </div>
+
+      <div className="vehiculos-filtros">
+        <div className="search-box">
+          <Search size={18} />
+          <input
+            type="text"
+            placeholder="Buscar por placa, marca o modelo..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+          />
+        </div>
+        <select value={filtroActivo} onChange={(e) => setFiltroActivo(e.target.value as any)}>
+          <option value="activos">Activos</option>
+          <option value="inactivos">Inactivos</option>
+          <option value="todos">Todos</option>
+        </select>
+        <div className="total-label">
+          {totalVehiculos} vehículo{totalVehiculos !== 1 ? 's' : ''}
+        </div>
+      </div>
+
+      {error && <div className="error-message">{error}</div>}
+
+      {loading ? (
+        <div className="loading-container">
+          <p>Cargando vehículos...</p>
+        </div>
+      ) : (
+        <div className="vehiculos-table">
+          {vehiculos.length === 0 ? (
+            <div className="empty-state">
+              <p>No se encontraron vehículos</p>
+            </div>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Placa</th>
+                  <th>Tipo</th>
+                  <th>Marca</th>
+                  <th>Modelo</th>
+                  <th>Año</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vehiculos.map((vehiculo) => (
+                  <tr key={vehiculo.id}>
+                    <td>{vehiculo.placa}</td>
+                    <td>{vehiculo.tipo || '-'}</td>
+                    <td>{vehiculo.marca || '-'}</td>
+                    <td>{vehiculo.modelo || '-'}</td>
+                    <td>{vehiculo.año || '-'}</td>
+                    <td>
+                      <span className={`badge ${vehiculo.is_active ? 'badge-activo' : 'badge-inactivo'}`}>
+                        {vehiculo.is_active ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </td>
+                    <td className="acciones">
+                      <button className="btn-icon" onClick={() => navigate(`/vehiculos/${vehiculo.id}`)} title="Hoja de vida">
+                        <Eye size={16} />
+                      </button>
+                      <button className="btn-icon" onClick={() => abrirModalEditar(vehiculo)}>
+                        <Pencil size={16} />
+                      </button>
+                      {vehiculo.is_active && (
+                        <button className="btn-icon danger" onClick={() => eliminarVehiculo(vehiculo)}>
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {totalPaginas > 1 && (
+        <div className="pagination">
+          <button onClick={() => cambiarPagina(paginaActual - 1)} disabled={paginaActual === 1}>
+            Anterior
+          </button>
+          <span>Página {paginaActual} de {totalPaginas}</span>
+          <button onClick={() => cambiarPagina(paginaActual + 1)} disabled={paginaActual === totalPaginas}>
+            Siguiente
+          </button>
+        </div>
+      )}
+
+      {mostrarModal && (
+        <div className="modal-overlay" onClick={() => setMostrarModal(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{vehiculoEditar ? 'Editar Vehículo' : 'Nuevo Vehículo'}</h3>
+              <button className="btn-icon" onClick={() => setMostrarModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Placa *</label>
+                <input value={placa} onChange={(e) => setPlaca(e.target.value.toUpperCase())} />
+              </div>
+              <div className="form-group">
+                <label>Foto</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      handleFotoSelect(file);
+                    }
+                  }}
+                />
+                {fotoUrl && <small>Foto cargada</small>}
+              </div>
+              <div className="form-group">
+                <label>Tipo</label>
+                <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+                  <option value="">Seleccione</option>
+                  {tiposVehiculo.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Color</label>
+                <input value={color} onChange={(e) => setColor(e.target.value.toUpperCase())} />
+              </div>
+              <div className="form-group">
+                <label>Cilindraje</label>
+                <input value={cilindraje} onChange={(e) => setCilindraje(e.target.value)} placeholder="Ej: 1600cc" />
+              </div>
+              <div className="form-group">
+                <label>Marca</label>
+                <input value={marca} onChange={(e) => setMarca(e.target.value.toUpperCase())} />
+              </div>
+              <div className="form-group">
+                <label>Modelo</label>
+                <input value={modelo} onChange={(e) => setModelo(e.target.value.toUpperCase())} />
+              </div>
+              <div className="form-group">
+                <label>Año</label>
+                <input
+                  type="number"
+                  min="1980"
+                  max={new Date().getFullYear() + 1}
+                  value={anio}
+                  onChange={(e) => setAnio(e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>VIN</label>
+                <input value={vin} onChange={(e) => setVin(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Kilometraje Actual</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={kilometrajeActual}
+                  onChange={(e) => setKilometrajeActual(e.target.value)}
+                />
+              </div>
+              {vehiculoEditar && (
+                <div className="form-group checkbox">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={activo}
+                      onChange={(e) => setActivo(e.target.checked)}
+                    />
+                    Activo
+                  </label>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setMostrarModal(false)}>
+                Cancelar
+              </button>
+              <button className="btn-primary" onClick={guardarVehiculo}>
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

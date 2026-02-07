@@ -1,4 +1,5 @@
 from pydantic import BaseModel, EmailStr, field_validator
+import re
 from typing import Optional, List, TYPE_CHECKING
 from datetime import date, datetime
 from decimal import Decimal
@@ -34,6 +35,40 @@ class EstudianteCreate(EstudianteBase):
     cedula: str
     telefono: str
     foto_base64: str  # Foto en base64
+
+    @field_validator('nombre_completo')
+    @classmethod
+    def validate_nombre(cls, v: str) -> str:
+        value = v.strip()
+        if not value:
+            raise ValueError('El nombre_completo es obligatorio')
+        return value
+
+    @field_validator('cedula')
+    @classmethod
+    def validate_cedula(cls, v: str) -> str:
+        value = v.strip()
+        if not re.fullmatch(r'\d{5,20}', value):
+            raise ValueError('La cédula debe tener entre 5 y 20 dígitos')
+        return value
+
+    @field_validator('telefono')
+    @classmethod
+    def validate_telefono(cls, v: str) -> str:
+        value = v.strip()
+        if not re.fullmatch(r'\d{7,15}', value):
+            raise ValueError('El teléfono debe tener entre 7 y 15 dígitos')
+        return value
+
+    @field_validator('foto_base64')
+    @classmethod
+    def validate_foto_base64(cls, v: str) -> str:
+        value = v.strip()
+        if not value.startswith('data:image/'):
+            raise ValueError('La foto debe ser una imagen válida')
+        if len(value) > 3_000_000:
+            raise ValueError('La foto es demasiado grande')
+        return value
 
 
 class EstudianteUpdate(BaseModel):

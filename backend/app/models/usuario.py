@@ -8,6 +8,7 @@ from app.core.database import Base
 class RolUsuario(str, enum.Enum):
     """Roles de usuario en el sistema"""
     ADMIN = "ADMIN"
+    GERENTE = "GERENTE"
     COORDINADOR = "COORDINADOR"
     INSTRUCTOR = "INSTRUCTOR"
     ESTUDIANTE = "ESTUDIANTE"

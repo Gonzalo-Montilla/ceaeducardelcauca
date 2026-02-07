@@ -118,6 +118,11 @@ class Vehiculo(Base):
     marca = Column(String(50))
     modelo = Column(String(50))
     año = Column(Integer)
+    color = Column(String(30))
+    cilindraje = Column(String(30))
+    vin = Column(String(50))
+    foto_url = Column(Text)
+    kilometraje_actual = Column(Integer)
     is_active = Column(Integer, default=1)
     
     # Auditoría
@@ -125,9 +130,127 @@ class Vehiculo(Base):
     
     # Relaciones
     clases = relationship("Clase", back_populates="vehiculo")
+    mantenimientos = relationship("MantenimientoVehiculo", back_populates="vehiculo")
+    combustibles = relationship("CombustibleVehiculo", back_populates="vehiculo")
     
     def __repr__(self):
         return f"<Vehiculo {self.placa} - {self.tipo}>"
+
+
+class MantenimientoVehiculo(Base):
+    """Historial de mantenimiento y fallas de vehículo"""
+    __tablename__ = "vehiculo_mantenimientos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    vehiculo_id = Column(Integer, ForeignKey("vehiculos.id"), nullable=False)
+    fecha = Column(DateTime, default=datetime.utcnow, nullable=False)
+    tipo = Column(String(30), default="FALLA")  # FALLA, PREVENTIVO
+    descripcion_falla = Column(Text)
+    diagnostico = Column(Text)
+    reparacion_requerida = Column(Text)
+    estado = Column(String(30), default="ABIERTO")  # ABIERTO, EN_PROCESO, CERRADO
+    km_registro = Column(Integer)
+    costo_total = Column(Numeric(12, 2), default=0)
+    taller = Column(String(100))
+    observaciones = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    vehiculo = relationship("Vehiculo", back_populates="mantenimientos")
+    repuestos = relationship("RepuestoMantenimiento", back_populates="mantenimiento")
+    adjuntos = relationship("AdjuntoMantenimientoVehiculo", back_populates="mantenimiento")
+
+    def __repr__(self):
+        return f"<MantenimientoVehiculo {self.vehiculo_id} - {self.estado}>"
+
+
+class RepuestoMantenimiento(Base):
+    """Repuestos asociados a un mantenimiento"""
+    __tablename__ = "vehiculo_repuestos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    mantenimiento_id = Column(Integer, ForeignKey("vehiculo_mantenimientos.id"), nullable=False)
+    nombre = Column(String(100), nullable=False)
+    cantidad = Column(Integer, default=1)
+    costo_unitario = Column(Numeric(12, 2), default=0)
+    proveedor = Column(String(100))
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    mantenimiento = relationship("MantenimientoVehiculo", back_populates="repuestos")
+
+    def __repr__(self):
+        return f"<RepuestoMantenimiento {self.nombre}>"
+
+
+class CombustibleVehiculo(Base):
+    """Registro de consumo y tanques de combustible"""
+    __tablename__ = "vehiculo_combustibles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    vehiculo_id = Column(Integer, ForeignKey("vehiculos.id"), nullable=False)
+    fecha = Column(DateTime, default=datetime.utcnow, nullable=False)
+    km_inicial = Column(Integer, nullable=False)
+    km_final = Column(Integer)
+    nivel_inicial = Column(String(20))  # 1/4, 1/2, 3/4, lleno
+    nivel_final = Column(String(20))
+    litros = Column(Numeric(10, 2))
+    costo = Column(Numeric(12, 2))
+    recibo_url = Column(Text)
+    conductor = Column(String(100))
+    observaciones = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    vehiculo = relationship("Vehiculo", back_populates="combustibles")
+    adjuntos = relationship("AdjuntoCombustibleVehiculo", back_populates="combustible")
+
+    def __repr__(self):
+        return f"<CombustibleVehiculo {self.vehiculo_id} - {self.fecha}>"
+
+
+class AdjuntoMantenimientoVehiculo(Base):
+    """Adjuntos (foto/documento) de un mantenimiento"""
+    __tablename__ = "vehiculo_mantenimiento_adjuntos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    mantenimiento_id = Column(Integer, ForeignKey("vehiculo_mantenimientos.id"), nullable=False)
+    archivo_url = Column(Text, nullable=False)
+    nombre_archivo = Column(String(200))
+    mime = Column(String(100))
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    mantenimiento = relationship("MantenimientoVehiculo", back_populates="adjuntos")
+
+    def __repr__(self):
+        return f"<AdjuntoMantenimientoVehiculo {self.mantenimiento_id}>"
+
+
+class AdjuntoCombustibleVehiculo(Base):
+    """Adjuntos (recibos) de un registro de combustible"""
+    __tablename__ = "vehiculo_combustible_adjuntos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    combustible_id = Column(Integer, ForeignKey("vehiculo_combustibles.id"), nullable=False)
+    archivo_url = Column(Text, nullable=False)
+    nombre_archivo = Column(String(200))
+    mime = Column(String(100))
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    combustible = relationship("CombustibleVehiculo", back_populates="adjuntos")
+
+    def __repr__(self):
+        return f"<AdjuntoCombustibleVehiculo {self.combustible_id}>"
+
+
+class VehiculoConsumoUmbral(Base):
+    """Umbrales de consumo por tipo de vehículo (km/gal)"""
+    __tablename__ = "vehiculo_consumo_umbrales"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tipo = Column(String(50), unique=True, nullable=False)
+    km_por_galon_min = Column(Numeric(10, 2), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    def __repr__(self):
+        return f"<VehiculoConsumoUmbral {self.tipo}={self.km_por_galon_min}>"
 
 
 class Evaluacion(Base):

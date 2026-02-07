@@ -1,6 +1,6 @@
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { X, DollarSign, FileText, Save } from 'lucide-react';
-import { estudiantesAPI } from '../services/api';
+import { estudiantesAPI, tarifasAPI } from '../services/api';
 import '../styles/DefinirServicioModal.css';
 
 interface DefinirServicioModalProps {
@@ -25,20 +25,36 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
   const [observaciones, setObservaciones] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [tarifas, setTarifas] = useState<any[]>([]);
 
-  // Precios base para clientes directos
-  const preciosBase: { [key: string]: number } = {
-    'LICENCIA_A2': 950000,
-    'LICENCIA_B1': 1200000,
-    'LICENCIA_C1': 1300000,
-    'RECATEGORIZACION_C1': 1300000,
-    'COMBO_A2_B1': 2000000,
-    'COMBO_A2_C1': 2200000,
-    'CERTIFICADO_MOTO': 480000,
-    'CERTIFICADO_B1': 650000,
-    'CERTIFICADO_B1_PRACTICAS': 750000,
-    'CERTIFICADO_C1': 750000,
-    'CERTIFICADO_C1_PRACTICAS': 850000,
+  useEffect(() => {
+    const cargarTarifas = async () => {
+      try {
+        const data = await tarifasAPI.getAll();
+        setTarifas(data || []);
+      } catch (err) {
+        console.error('Error al cargar tarifas:', err);
+      }
+    };
+    cargarTarifas();
+  }, []);
+
+  useEffect(() => {
+    if (origenCliente === 'DIRECTO' && tipoServicio) {
+      const minimo = calcularPrecioMinimo(tipoServicio);
+      if (minimo && !valorTotal) {
+        setValorTotal(minimo.toString());
+      }
+    }
+  }, [tarifas, origenCliente, tipoServicio, valorTotal]);
+
+  const calcularPrecioMinimo = (tipo: string) => {
+    const tarifa = tarifas.find((t) => t.tipo_servicio === tipo && t.activo);
+    if (!tarifa) return 0;
+    const base = Number(tarifa.precio_base || 0);
+    const practica = Number(tarifa.costo_practica || 0);
+    const esCertificado = ['CERTIFICADO_B1', 'CERTIFICADO_C1'].includes(tipo);
+    return esCertificado ? base + practica : base;
   };
 
   const tiposServicio = [
@@ -50,9 +66,7 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
     { value: 'COMBO_A2_C1', label: 'Combo A2 + C1', categoria: 'A2,C1' },
     { value: 'CERTIFICADO_MOTO', label: 'Certificado Moto', categoria: 'A2' },
     { value: 'CERTIFICADO_B1', label: 'Certificado B1', categoria: 'B1' },
-    { value: 'CERTIFICADO_B1_PRACTICAS', label: 'Certificado B1 + Prácticas', categoria: 'B1' },
     { value: 'CERTIFICADO_C1', label: 'Certificado C1', categoria: 'C1' },
-    { value: 'CERTIFICADO_C1_PRACTICAS', label: 'Certificado C1 + Prácticas', categoria: 'C1' },
   ];
 
   const handleTipoServicioChange = (tipo: string) => {
@@ -63,7 +77,8 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
       
       // Si es cliente directo, establecer precio base
       if (origenCliente === 'DIRECTO') {
-        setValorTotal(preciosBase[tipo]?.toString() || '');
+        const minimo = calcularPrecioMinimo(tipo);
+        setValorTotal(minimo ? minimo.toString() : '');
       } else {
         // Si es referido, dejar en blanco para ingreso manual
         setValorTotal('');
@@ -76,7 +91,8 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
     
     // Si cambia a DIRECTO y hay un tipo de servicio seleccionado, establecer precio base
     if (origen === 'DIRECTO' && tipoServicio) {
-      setValorTotal(preciosBase[tipoServicio]?.toString() || '');
+      const minimo = calcularPrecioMinimo(tipoServicio);
+      setValorTotal(minimo ? minimo.toString() : '');
     } else {
       // Si es REFERIDO, limpiar para ingreso manual
       setValorTotal('');
@@ -89,6 +105,16 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
 
     if (!tipoServicio || !categoria || !valorTotal) {
       setError('Por favor complete todos los campos obligatorios');
+      return;
+    }
+
+    const minimo = calcularPrecioMinimo(tipoServicio);
+    if (origenCliente === 'DIRECTO' && minimo <= 0) {
+      setError('No hay tarifa definida para este servicio');
+      return;
+    }
+    if (origenCliente === 'REFERIDO' && minimo > 0 && parseInt(valorTotal) < minimo) {
+      setError(`El valor no puede ser menor a ${formatearMoneda(minimo.toString())}`);
       return;
     }
 
@@ -239,6 +265,11 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
 
           <div className="form-group">
             <label>Valor Total del Curso *</label>
+            {origenCliente === 'REFERIDO' && (
+              <small className="help-text">
+                Mínimo permitido: {formatearMoneda(calcularPrecioMinimo(tipoServicio).toString())}
+              </small>
+            )}
             <div className="input-with-icon">
               <DollarSign size={20} className="input-icon" />
               <input

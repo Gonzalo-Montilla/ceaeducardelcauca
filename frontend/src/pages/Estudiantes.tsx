@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { estudiantesAPI } from '../services/api';
 import { Search, UserPlus, Eye, Settings, ChevronDown } from 'lucide-react';
@@ -24,6 +24,7 @@ export const Estudiantes = () => {
   const navigate = useNavigate();
   const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
   const [busqueda, setBusqueda] = useState('');
+  const [busquedaDebounced, setBusquedaDebounced] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [estudianteSeleccionado, setEstudianteSeleccionado] = useState<Estudiante | null>(null);
@@ -36,16 +37,35 @@ export const Estudiantes = () => {
   
   // Control de tarjetas expandidas
   const [tarjetasExpandidas, setTarjetasExpandidas] = useState<Set<number>>(new Set());
+  const prevBusquedaRef = useRef('');
 
   useEffect(() => {
+    const handler = setTimeout(() => {
+      setBusquedaDebounced(busqueda.trim());
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [busqueda]);
+
+  useEffect(() => {
+    if (prevBusquedaRef.current !== busquedaDebounced) {
+      prevBusquedaRef.current = busquedaDebounced;
+      if (paginaActual !== 1) {
+        setPaginaActual(1);
+        return;
+      }
+    }
     cargarEstudiantes();
-  }, [paginaActual]);
+  }, [paginaActual, busquedaDebounced]);
 
   const cargarEstudiantes = async () => {
     try {
       setIsLoading(true);
       const skip = (paginaActual - 1) * estudiantesPorPagina;
-      const response = await estudiantesAPI.getAll({ skip, limit: estudiantesPorPagina });
+      const response = await estudiantesAPI.getAll({
+        skip,
+        limit: estudiantesPorPagina,
+        search: busquedaDebounced || undefined
+      });
       
       // La API ahora devuelve {items, total, skip, limit}
       setEstudiantes(response.items || []);
@@ -58,15 +78,6 @@ export const Estudiantes = () => {
       setIsLoading(false);
     }
   };
-
-  const estudiantesFiltrados = busqueda.trim() 
-    ? estudiantes.filter(est => 
-        est.cedula.includes(busqueda) ||
-        est.nombre_completo.toLowerCase().includes(busqueda.toLowerCase()) ||
-        est.email.toLowerCase().includes(busqueda.toLowerCase()) ||
-        est.matricula_numero?.toLowerCase().includes(busqueda.toLowerCase())
-      )
-    : estudiantes;
 
   const formatearFecha = (fecha: string) => {
     return new Date(fecha).toLocaleDateString('es-CO', {
@@ -160,9 +171,9 @@ export const Estudiantes = () => {
           />
         </div>
         <div className="search-results">
-          {busqueda && (
+          {busquedaDebounced && (
             <span className="results-count">
-              {estudiantesFiltrados.length} resultado(s) encontrado(s)
+              {totalEstudiantes} resultado(s) encontrado(s)
             </span>
           )}
         </div>
@@ -176,10 +187,10 @@ export const Estudiantes = () => {
         </div>
       ) : (
         <div className="estudiantes-grid">
-          {estudiantesFiltrados.length === 0 ? (
+          {estudiantes.length === 0 ? (
             <div className="empty-state">
               <p>No se encontraron estudiantes</p>
-              {busqueda && (
+              {busquedaDebounced && (
                 <button 
                   className="btn-clear"
                   onClick={() => setBusqueda('')}
@@ -189,7 +200,7 @@ export const Estudiantes = () => {
               )}
             </div>
           ) : (
-            estudiantesFiltrados.map((estudiante) => {
+            estudiantes.map((estudiante) => {
               const isExpanded = tarjetasExpandidas.has(estudiante.id);
               
               return (

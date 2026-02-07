@@ -285,6 +285,10 @@
   border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
+.dashboard-panel {
+  margin-bottom: 24px;
+}
+
 .panel-header {
   background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
   padding: 16px 24px;
@@ -310,4 +314,52 @@
 
 .panel-body p:last-child {
   margin-bottom: 0;
+}
+
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.quick-action {
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-weight: 600;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quick-action:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+.alertas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.alerta-card {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.alerta-info {
+  display: grid;
+  gap: 4px;
+  color: #334155;
 }

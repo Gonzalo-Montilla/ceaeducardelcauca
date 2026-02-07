@@ -12,7 +12,7 @@ from app.models.estudiante import Estudiante, EstadoEstudiante, CategoriaLicenci
 from app.models.pago import Pago, MetodoPago, EstadoPago
 from app.models.compromiso_pago import CompromisoPago, CuotaPago, FrecuenciaPago, EstadoCuota
 from app.schemas.estudiante import EstudianteCreate, EstudianteUpdate, EstudianteResponse, EstudianteListItem, EstudiantesListResponse, DefinirServicioRequest
-from app.api.deps import get_current_active_user, get_admin_or_coordinador
+from app.api.deps import get_current_active_user, get_admin_or_coordinador_or_cajero
 
 router = APIRouter()
 
@@ -21,7 +21,7 @@ router = APIRouter()
 def create_estudiante(
     estudiante_data: EstudianteCreate,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_admin_or_coordinador)
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
 ):
     """
     Crear un nuevo estudiante (solo datos personales):
@@ -192,7 +192,7 @@ def update_estudiante(
     estudiante_id: int,
     estudiante_data: EstudianteUpdate,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_admin_or_coordinador)
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
 ):
     """
     Actualizar información de un estudiante
@@ -220,7 +220,7 @@ def update_estudiante(
 def delete_estudiante(
     estudiante_id: int,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_admin_or_coordinador)
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
 ):
     """
     Eliminar un estudiante (soft delete - marca como inactivo)
@@ -247,7 +247,7 @@ def definir_servicio(
     estudiante_id: int,
     servicio_data: DefinirServicioRequest,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_admin_or_coordinador)
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
 ):
     """
     Definir el servicio para un estudiante PROSPECTO:
@@ -288,11 +288,22 @@ def definir_servicio(
             estudiante.telefono_referidor = servicio_data.telefono_referidor
         
         # 4. Calcular o asignar valor total
+        precio_minimo = calcular_precio(servicio_data.tipo_servicio, db=db)
         if servicio_data.origen_cliente == OrigenCliente.DIRECTO:
             # Cliente directo: usar precio fijo del sistema
-            estudiante.valor_total_curso = calcular_precio(servicio_data.tipo_servicio)
+            estudiante.valor_total_curso = precio_minimo
         else:
-            # Cliente referido: usar valor manual proporcionado
+            # Cliente referido: valor manual, pero no menor al mínimo
+            if servicio_data.valor_total_curso is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="El valor total es obligatorio para clientes referidos"
+                )
+            if servicio_data.valor_total_curso < precio_minimo:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"El valor total no puede ser menor a {precio_minimo}"
+                )
             estudiante.valor_total_curso = servicio_data.valor_total_curso
         
         # 5. Asignar horas teóricas y prácticas según la categoría

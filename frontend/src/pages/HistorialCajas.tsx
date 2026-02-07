@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { History, Search, X, FileText, ChevronDown, ChevronUp } from 'lucide-react';
-import axios from 'axios';
+import { cajaAPI } from '../services/api';
 import '../styles/HistorialCajas.css';
 
 interface CajaHistorial {
@@ -18,6 +18,7 @@ interface CajaHistorial {
   total_ingresos: number;
   total_egresos: number;
   saldo_efectivo_caja: number;
+  total_ingresos_efectivo: number;
   total_nequi: number;
   total_daviplata: number;
   total_transferencia_bancaria: number;
@@ -39,17 +40,18 @@ export const HistorialCajas = () => {
   const [cajaSeleccionada, setCajaSeleccionada] = useState<CajaHistorial | null>(null);
   const [showDetalleModal, setShowDetalleModal] = useState(false);
   const [expandirResumen, setExpandirResumen] = useState(false);
+  const [paginaActual, setPaginaActual] = useState(1);
+  const cajasPorPagina = 15;
 
   useEffect(() => {
     cargarHistorial();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const cargarHistorial = async (inicio?: string, fin?: string) => {
+  const cargarHistorial = async (inicio?: string, fin?: string, pagina = 1) => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('access_token');
-      const params: any = {};
+      const params: { fecha_inicio?: string; fecha_fin?: string; skip?: number; limit?: number } = {};
       
       // Convertir fechas a formato ISO con hora
       if (inicio) {
@@ -60,17 +62,13 @@ export const HistorialCajas = () => {
         const fechaFinISO = new Date(fin + 'T23:59:59').toISOString();
         params.fecha_fin = fechaFinISO;
       }
+      params.skip = (pagina - 1) * cajasPorPagina;
+      params.limit = cajasPorPagina;
 
-      const response = await axios.get(
-        `${import.meta.env.VITE_API_URL}/api/v1/caja/historial`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          params
-        }
-      );
+      const response = await cajaAPI.getHistorial(params);
       
       // Asegurar que response.data es un array
-      const data = Array.isArray(response.data) ? response.data : [];
+      const data = Array.isArray(response) ? response : [];
       console.log('Historial cargado:', data);
       setCajas(data);
     } catch (error) {
@@ -82,19 +80,32 @@ export const HistorialCajas = () => {
   };
 
   const handleFiltrar = () => {
-    cargarHistorial(fechaInicio, fechaFin);
+    if (fechaInicio && fechaFin && new Date(fechaInicio) > new Date(fechaFin)) {
+      alert('La fecha de inicio no puede ser mayor a la fecha fin');
+      return;
+    }
+    setPaginaActual(1);
+    cargarHistorial(fechaInicio, fechaFin, 1);
   };
 
   const handleLimpiarFiltros = () => {
     setFechaInicio('');
     setFechaFin('');
-    cargarHistorial();
+    setPaginaActual(1);
+    cargarHistorial(undefined, undefined, 1);
   };
 
   const handleVerDetalle = (caja: CajaHistorial) => {
     setCajaSeleccionada(caja);
     setShowDetalleModal(true);
     setExpandirResumen(false);
+  };
+
+  const cambiarPagina = (nuevaPagina: number) => {
+    if (nuevaPagina < 1) return;
+    setPaginaActual(nuevaPagina);
+    cargarHistorial(fechaInicio, fechaFin, nuevaPagina);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const formatearFecha = (fecha: string | null) => {
@@ -238,6 +249,25 @@ export const HistorialCajas = () => {
               ))}
             </tbody>
           </table>
+          <div className="pagination">
+            <button
+              onClick={() => cambiarPagina(paginaActual - 1)}
+              disabled={paginaActual === 1}
+              className="pagination-btn"
+            >
+              « Anterior
+            </button>
+            <div className="pagination-info">
+              <span>Página {paginaActual}</span>
+            </div>
+            <button
+              onClick={() => cambiarPagina(paginaActual + 1)}
+              disabled={cajas.length < cajasPorPagina}
+              className="pagination-btn"
+            >
+              Siguiente »
+            </button>
+          </div>
         </div>
       )}
 
@@ -302,7 +332,7 @@ export const HistorialCajas = () => {
                       <h4>Efectivo</h4>
                       <div className="metodo-item">
                         <span>Efectivo Recibido</span>
-                        <span className="monto">{formatearMoneda(cajaSeleccionada.saldo_efectivo_caja - cajaSeleccionada.saldo_inicial)}</span>
+                        <span className="monto">{formatearMoneda(cajaSeleccionada.total_ingresos_efectivo)}</span>
                       </div>
                     </div>
 

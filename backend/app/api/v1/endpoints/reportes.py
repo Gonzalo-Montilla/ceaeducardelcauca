@@ -9,14 +9,17 @@ from app.core.database import get_db
 from app.api.deps import get_current_active_user
 from app.models.usuario import Usuario
 from app.models.caja import Caja, MovimientoCaja, EstadoCaja, ConceptoEgreso
-from app.models.pago import Pago, DetallePago, MetodoPago
+from app.models.pago import Pago, DetallePago, MetodoPago, EstadoPago
+from app.models.compromiso_pago import CuotaPago, EstadoCuota
 from app.models.estudiante import Estudiante, EstadoEstudiante
+from app.models.clase import MantenimientoVehiculo
 from app.schemas.reportes import (
     DashboardEjecutivo, KPIDashboard, KPIMetrica,
     GraficoEvolucionIngresos, GraficoMetodosPago,
     GraficoEstudiantesCategorias, GraficoEgresos,
     DatoPunto, DatoCategoria,
-    EstudianteRegistrado, EstudiantePago, ReferidoRanking
+    EstudianteRegistrado, EstudiantePago, ReferidoRanking,
+    AlertasOperativas
 )
 
 router = APIRouter()
@@ -81,6 +84,69 @@ def get_dashboard_ejecutivo(
         fecha_generacion=datetime.now(),
         periodo_inicio=fecha_inicio,
         periodo_fin=fecha_fin
+    )
+
+
+@router.get("/alertas-operativas", response_model=AlertasOperativas)
+def get_alertas_operativas(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_active_user)
+):
+    ahora = datetime.utcnow()
+
+    caja = db.query(Caja).filter(Caja.estado == EstadoCaja.ABIERTA).order_by(Caja.fecha_apertura.desc()).first()
+    caja_abierta = bool(caja)
+    caja_abierta_horas = None
+    if caja and caja.fecha_apertura:
+        caja_abierta_horas = round((ahora - caja.fecha_apertura).total_seconds() / 3600, 1)
+
+    pagos_vencidos_query = db.query(Pago).filter(
+        Pago.estado == EstadoPago.PENDIENTE,
+        Pago.fecha_vencimiento.isnot(None),
+        Pago.fecha_vencimiento < ahora
+    )
+    pagos_vencidos_cantidad = pagos_vencidos_query.count()
+    pagos_vencidos_total = pagos_vencidos_query.with_entities(func.sum(Pago.monto)).scalar() or Decimal('0')
+
+    ventana_fin = ahora + timedelta(days=7)
+    compromisos_query = db.query(CuotaPago).filter(
+        CuotaPago.estado.in_([EstadoCuota.PENDIENTE, EstadoCuota.PARCIAL]),
+        CuotaPago.fecha_vencimiento >= ahora,
+        CuotaPago.fecha_vencimiento <= ventana_fin
+    )
+    compromisos_por_vencer_cantidad = compromisos_query.count()
+    compromisos_por_vencer_total = compromisos_query.with_entities(func.sum(CuotaPago.saldo_cuota)).scalar() or Decimal('0')
+
+    pin_por_vencer_cantidad = 0
+    pin_limite = ahora + timedelta(days=90)
+    estudiantes_pin = db.query(Estudiante).filter(Estudiante.sicov_pin.isnot(None)).all()
+    for est in estudiantes_pin:
+        fecha_pin = _parse_pin_vencimiento(est)
+        if fecha_pin and ahora <= fecha_pin <= pin_limite:
+            pin_por_vencer_cantidad += 1
+
+    fallas_abiertas_cantidad = db.query(MantenimientoVehiculo).filter(
+        MantenimientoVehiculo.tipo == "FALLA",
+        MantenimientoVehiculo.estado.in_(["ABIERTO", "EN_PROCESO"])
+    ).count()
+
+    estudiantes_listos_examen_cantidad = db.query(Estudiante).filter(
+        Estudiante.horas_teoricas_completadas >= Estudiante.horas_teoricas_requeridas,
+        Estudiante.horas_practicas_completadas >= Estudiante.horas_practicas_requeridas,
+        ~Estudiante.estado.in_([EstadoEstudiante.GRADUADO, EstadoEstudiante.DESERTOR, EstadoEstudiante.RETIRADO])
+    ).count()
+
+    return AlertasOperativas(
+        caja_abierta=caja_abierta,
+        caja_id=caja.id if caja else None,
+        caja_abierta_horas=caja_abierta_horas,
+        pagos_vencidos_cantidad=pagos_vencidos_cantidad,
+        pagos_vencidos_total=pagos_vencidos_total,
+        compromisos_por_vencer_cantidad=compromisos_por_vencer_cantidad,
+        compromisos_por_vencer_total=compromisos_por_vencer_total,
+        pin_por_vencer_cantidad=pin_por_vencer_cantidad,
+        fallas_abiertas_cantidad=fallas_abiertas_cantidad,
+        estudiantes_listos_examen_cantidad=estudiantes_listos_examen_cantidad
     )
 
 
@@ -316,6 +382,47 @@ def _grafico_evolucion_ingresos(db: Session, fecha_inicio: date, fecha_fin: date
         total_periodo=total_periodo,
         promedio_mensual=promedio_por_periodo
     )
+
+
+def _parse_pin_vencimiento(estudiante: Estudiante) -> Optional[datetime]:
+    datos_adicionales = estudiante.datos_adicionales or {}
+    posibles_keys = [
+        "pin_vencimiento",
+        "pin_fecha_vencimiento",
+        "sicov_pin_vencimiento",
+        "sicov_pin_fecha_vencimiento",
+        "pin_expiracion",
+        "pin_expira",
+        "fecha_vencimiento_pin"
+    ]
+    for key in posibles_keys:
+        value = datos_adicionales.get(key)
+        fecha = _parse_fecha(value)
+        if fecha:
+            return fecha
+    if estudiante.fecha_inscripcion:
+        return estudiante.fecha_inscripcion + timedelta(days=90)
+    return None
+
+
+def _parse_fecha(value) -> Optional[datetime]:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time())
+    if isinstance(value, str):
+        for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y"):
+            try:
+                return datetime.strptime(value, fmt)
+            except ValueError:
+                continue
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
 
 
 def _grafico_metodos_pago(db: Session, fecha_inicio: date, fecha_fin: date) -> GraficoMetodosPago:

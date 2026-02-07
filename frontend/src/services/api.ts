@@ -79,10 +79,11 @@ export const estudiantesAPI = {
     return response.data;
   },
 
-  getAll: async (params?: { skip?: number; limit?: number }): Promise<any> => {
+  getAll: async (params?: { skip?: number; limit?: number; search?: string }): Promise<any> => {
     const queryParams = new URLSearchParams();
     if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString());
     if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
+    if (params?.search) queryParams.append('search', params.search);
     
     const url = queryParams.toString() ? `/estudiantes/?${queryParams.toString()}` : '/estudiantes/';
     const response = await api.get(url);
@@ -167,11 +168,14 @@ export const cajaAPI = {
     return response.data;
   },
 
-  getHistorial: async (fecha_inicio?: string, fecha_fin?: string): Promise<any> => {
-    const params = new URLSearchParams();
-    if (fecha_inicio) params.append('fecha_inicio', fecha_inicio);
-    if (fecha_fin) params.append('fecha_fin', fecha_fin);
-    const response = await api.get(`/caja/historial?${params.toString()}`);
+  getHistorial: async (params?: { fecha_inicio?: string; fecha_fin?: string; skip?: number; limit?: number }): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (params?.fecha_inicio) queryParams.append('fecha_inicio', params.fecha_inicio);
+    if (params?.fecha_fin) queryParams.append('fecha_fin', params.fecha_fin);
+    if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString());
+    if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
+    const query = queryParams.toString();
+    const response = await api.get(`/caja/historial${query ? `?${query}` : ''}`);
     return response.data;
   },
 };
@@ -211,6 +215,242 @@ export const instructoresAPI = {
 
   getEstadisticas: async (id: number): Promise<any> => {
     const response = await api.get(`/instructores/${id}/estadisticas`);
+    return response.data;
+  },
+};
+
+// Reportes endpoints
+export const reportesAPI = {
+  getDashboard: async (params?: { fecha_inicio?: string; fecha_fin?: string; comparar_periodo_anterior?: boolean }): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (params?.fecha_inicio) queryParams.append('fecha_inicio', params.fecha_inicio);
+    if (params?.fecha_fin) queryParams.append('fecha_fin', params.fecha_fin);
+    if (params?.comparar_periodo_anterior !== undefined) {
+      queryParams.append('comparar_periodo_anterior', String(params.comparar_periodo_anterior));
+    }
+    const query = queryParams.toString();
+    const response = await api.get(`/reportes/dashboard${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+  getAlertasOperativas: async (): Promise<any> => {
+    const response = await api.get('/reportes/alertas-operativas');
+    return response.data;
+  },
+};
+
+// Vehículos endpoints
+export const vehiculosAPI = {
+  getAll: async (params?: { skip?: number; limit?: number; search?: string; activo?: boolean }): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString());
+    if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.activo !== undefined) queryParams.append('activo', String(params.activo));
+    const query = queryParams.toString();
+    const response = await api.get(`/vehiculos/${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+
+  getById: async (id: number): Promise<any> => {
+    const response = await api.get(`/vehiculos/${id}`);
+    return response.data;
+  },
+
+  create: async (data: any): Promise<any> => {
+    const response = await api.post('/vehiculos/', data);
+    return response.data;
+  },
+
+  update: async (id: number, data: any): Promise<any> => {
+    const response = await api.put(`/vehiculos/${id}`, data);
+    return response.data;
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await api.delete(`/vehiculos/${id}`);
+  },
+
+  getMantenimientos: async (vehiculoId: number): Promise<any> => {
+    const response = await api.get(`/vehiculos/${vehiculoId}/mantenimientos`);
+    return response.data;
+  },
+
+  getMantenimientosPaged: async (
+    vehiculoId: number,
+    params?: { skip?: number; limit?: number; fecha_inicio?: string; fecha_fin?: string; orden?: string }
+  ): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString());
+    if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
+    if (params?.fecha_inicio) queryParams.append('fecha_inicio', params.fecha_inicio);
+    if (params?.fecha_fin) queryParams.append('fecha_fin', params.fecha_fin);
+    if (params?.orden) queryParams.append('orden', params.orden);
+    const query = queryParams.toString();
+    const response = await api.get(`/vehiculos/${vehiculoId}/mantenimientos${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+
+  createMantenimiento: async (vehiculoId: number, data: any): Promise<any> => {
+    const response = await api.post(`/vehiculos/${vehiculoId}/mantenimientos`, data);
+    return response.data;
+  },
+
+  updateMantenimiento: async (vehiculoId: number, mantenimientoId: number, data: any): Promise<any> => {
+    const response = await api.put(`/vehiculos/${vehiculoId}/mantenimientos/${mantenimientoId}`, data);
+    return response.data;
+  },
+
+  addRepuesto: async (vehiculoId: number, mantenimientoId: number, data: any): Promise<any> => {
+    const response = await api.post(`/vehiculos/${vehiculoId}/mantenimientos/${mantenimientoId}/repuestos`, data);
+    return response.data;
+  },
+
+  getCombustibles: async (vehiculoId: number): Promise<any> => {
+    const response = await api.get(`/vehiculos/${vehiculoId}/combustible`);
+    return response.data;
+  },
+
+  getCombustiblesPaged: async (
+    vehiculoId: number,
+    params?: { skip?: number; limit?: number; fecha_inicio?: string; fecha_fin?: string; conductor?: string; orden?: string }
+  ): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString());
+    if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
+    if (params?.fecha_inicio) queryParams.append('fecha_inicio', params.fecha_inicio);
+    if (params?.fecha_fin) queryParams.append('fecha_fin', params.fecha_fin);
+    if (params?.conductor) queryParams.append('conductor', params.conductor);
+    if (params?.orden) queryParams.append('orden', params.orden);
+    const query = queryParams.toString();
+    const response = await api.get(`/vehiculos/${vehiculoId}/combustible${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+
+  createCombustible: async (vehiculoId: number, data: any): Promise<any> => {
+    const response = await api.post(`/vehiculos/${vehiculoId}/combustible`, data);
+    return response.data;
+  },
+
+  addMantenimientoAdjuntos: async (vehiculoId: number, mantenimientoId: number, archivos: File[]): Promise<any> => {
+    const formData = new FormData();
+    archivos.forEach((archivo) => formData.append('archivos', archivo));
+    const response = await api.post(`/vehiculos/${vehiculoId}/mantenimientos/${mantenimientoId}/adjuntos`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  },
+
+  addCombustibleAdjuntos: async (vehiculoId: number, combustibleId: number, archivos: File[]): Promise<any> => {
+    const formData = new FormData();
+    archivos.forEach((archivo) => formData.append('archivos', archivo));
+    const response = await api.post(`/vehiculos/${vehiculoId}/combustible/${combustibleId}/adjuntos`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  },
+
+  getCombustibleResumen: async (
+    vehiculoId: number,
+    params?: { fecha_inicio?: string; fecha_fin?: string; conductor?: string }
+  ): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (params?.fecha_inicio) queryParams.append('fecha_inicio', params.fecha_inicio);
+    if (params?.fecha_fin) queryParams.append('fecha_fin', params.fecha_fin);
+    if (params?.conductor) queryParams.append('conductor', params.conductor);
+    const query = queryParams.toString();
+    const response = await api.get(`/vehiculos/${vehiculoId}/combustible/resumen${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+
+  getConsumoUmbral: async (tipo: string): Promise<any> => {
+    const response = await api.get(`/vehiculos/consumo-umbrales/${tipo}`);
+    return response.data;
+  },
+
+  upsertConsumoUmbral: async (tipo: string, km_por_galon_min: number): Promise<any> => {
+    const response = await api.put(`/vehiculos/consumo-umbrales/${tipo}`, { km_por_galon_min });
+    return response.data;
+  },
+
+  getExportData: async (
+    vehiculoId: number,
+    params?: {
+      mant_fecha_inicio?: string;
+      mant_fecha_fin?: string;
+      comb_fecha_inicio?: string;
+      comb_fecha_fin?: string;
+      comb_conductor?: string;
+    }
+  ): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (params?.mant_fecha_inicio) queryParams.append('mant_fecha_inicio', params.mant_fecha_inicio);
+    if (params?.mant_fecha_fin) queryParams.append('mant_fecha_fin', params.mant_fecha_fin);
+    if (params?.comb_fecha_inicio) queryParams.append('comb_fecha_inicio', params.comb_fecha_inicio);
+    if (params?.comb_fecha_fin) queryParams.append('comb_fecha_fin', params.comb_fecha_fin);
+    if (params?.comb_conductor) queryParams.append('comb_conductor', params.comb_conductor);
+    const query = queryParams.toString();
+    const response = await api.get(`/vehiculos/${vehiculoId}/export-data${query ? `?${query}` : ''}`);
+    return response.data;
+  }
+};
+
+// Tarifas endpoints
+export const tarifasAPI = {
+  getAll: async (): Promise<any> => {
+    const response = await api.get('/tarifas');
+    return response.data;
+  },
+  create: async (data: any): Promise<any> => {
+    const response = await api.post('/tarifas', data);
+    return response.data;
+  },
+  update: async (id: number, data: any): Promise<any> => {
+    const response = await api.put(`/tarifas/${id}`, data);
+    return response.data;
+  },
+  delete: async (id: number): Promise<void> => {
+    await api.delete(`/tarifas/${id}`);
+  }
+};
+
+// Usuarios endpoints
+export const usuariosAPI = {
+  getAll: async (params?: { search?: string }): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (params?.search) queryParams.append('search', params.search);
+    const query = queryParams.toString();
+    const response = await api.get(`/usuarios${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+  create: async (data: any): Promise<any> => {
+    const response = await api.post('/usuarios', data);
+    return response.data;
+  },
+  update: async (id: number, data: any): Promise<any> => {
+    const response = await api.put(`/usuarios/${id}`, data);
+    return response.data;
+  },
+  resetPassword: async (id: number, new_password: string): Promise<void> => {
+    await api.put(`/usuarios/${id}/password`, { new_password });
+  }
+};
+
+// Uploads endpoints
+export const uploadsAPI = {
+  uploadVehiculoFoto: async (foto_base64: string, vehiculo_id?: number): Promise<any> => {
+    const response = await api.post('/uploads/vehiculo/foto', { foto_base64, vehiculo_id });
+    return response.data;
+  },
+
+  uploadReciboCombustible: async (archivo: File, vehiculo_id?: number): Promise<any> => {
+    const formData = new FormData();
+    formData.append('archivo', archivo);
+    if (vehiculo_id !== undefined) {
+      formData.append('vehiculo_id', String(vehiculo_id));
+    }
+    const response = await api.post('/uploads/vehiculo/recibo-combustible', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
     return response.data;
   },
 };

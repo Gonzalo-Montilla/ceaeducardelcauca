@@ -13,6 +13,13 @@ class CajaApertura(BaseModel):
     saldo_inicial: Decimal
     observaciones_apertura: Optional[str] = None
 
+    @field_validator('saldo_inicial')
+    @classmethod
+    def validate_saldo_inicial(cls, v):
+        if v < 0:
+            raise ValueError('El saldo inicial no puede ser negativo')
+        return v
+
 
 class CajaCierre(BaseModel):
     """Schema para cerrar una caja (arqueo)"""

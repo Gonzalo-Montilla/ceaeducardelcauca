@@ -11,23 +11,52 @@ import { HistorialCajas } from './pages/HistorialCajas';
 import { Reportes } from './pages/Reportes';
 import { Instructores } from './pages/Instructores';
 import { InstructorDetalle } from './pages/InstructorDetalle';
+import { Vehiculos } from './pages/Vehiculos';
+import { VehiculoDetalle } from './pages/VehiculoDetalle';
+import { Tarifas } from './pages/Tarifas';
+import { Usuarios } from './pages/Usuarios';
+import { Clases } from './pages/Clases';
+import { RolUsuario } from './types';
+
+const getHomeRoute = (rol?: RolUsuario) => {
+  if (rol === RolUsuario.INSTRUCTOR) return '/clases';
+  return '/dashboard';
+};
+
+const RoleRoute = ({ children, roles }: { children: React.ReactNode; roles: RolUsuario[] }) => {
+  const { isAuthenticated, isLoading, user } = useAuth();
+  if (isLoading) {
+    return <div>Cargando...</div>;
+  }
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
+  if (!user || !roles.includes(user.rol)) {
+    return <Navigate to={getHomeRoute(user?.rol)} />;
+  }
+  return <>{children}</>;
+};
+
+const PublicRoute = ({ children }: { children: React.ReactNode }) => {
+  const { isAuthenticated, isLoading, user } = useAuth();
+  if (isLoading) {
+    return <div>Cargando...</div>;
+  }
+  return !isAuthenticated ? <>{children}</> : <Navigate to={getHomeRoute(user?.rol)} />;
+};
+
+const HomeRedirect = () => {
+  const { isAuthenticated, isLoading, user } = useAuth();
+  if (isLoading) {
+    return <div>Cargando...</div>;
+  }
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
+  return <Navigate to={getHomeRoute(user?.rol)} />;
+};
 
 function AppRoutes() {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
-    if (isLoading) {
-      return <div>Cargando...</div>;
-    }
-    return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
-  };
-
-  const PublicRoute = ({ children }: { children: React.ReactNode }) => {
-    if (isLoading) {
-      return <div>Cargando...</div>;
-    }
-    return !isAuthenticated ? <>{children}</> : <Navigate to="/dashboard" />;
-  };
   return (
     <Routes>
       <Route
@@ -41,94 +70,144 @@ function AppRoutes() {
       <Route
         path="/dashboard"
         element={
-          <PrivateRoute>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO]}>
             <Layout>
               <Dashboard />
             </Layout>
-          </PrivateRoute>
+          </RoleRoute>
         }
       />
       <Route
         path="/nuevo-estudiante"
         element={
-          <PrivateRoute>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO]}>
             <Layout>
               <NuevoEstudiante />
             </Layout>
-          </PrivateRoute>
+          </RoleRoute>
         }
       />
       <Route
         path="/estudiantes"
         element={
-          <PrivateRoute>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO]}>
             <Layout>
               <Estudiantes />
             </Layout>
-          </PrivateRoute>
+          </RoleRoute>
         }
       />
       <Route
         path="/estudiantes/:id"
         element={
-          <PrivateRoute>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO]}>
             <Layout>
               <EstudianteDetalle />
             </Layout>
-          </PrivateRoute>
+          </RoleRoute>
         }
       />
       <Route
         path="/caja"
         element={
-          <PrivateRoute>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO]}>
             <Layout>
               <Caja />
             </Layout>
-          </PrivateRoute>
+          </RoleRoute>
         }
       />
       <Route
         path="/historial-cajas"
         element={
-          <PrivateRoute>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]}>
             <Layout>
               <HistorialCajas />
             </Layout>
-          </PrivateRoute>
+          </RoleRoute>
         }
       />
       <Route
         path="/reportes"
         element={
-          <PrivateRoute>
+          <RoleRoute roles={[RolUsuario.GERENTE]}>
             <Layout>
               <Reportes />
             </Layout>
-          </PrivateRoute>
+          </RoleRoute>
         }
       />
       <Route
         path="/instructores"
         element={
-          <PrivateRoute>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]}>
             <Layout>
               <Instructores />
             </Layout>
-          </PrivateRoute>
+          </RoleRoute>
         }
       />
       <Route
         path="/instructores/:id"
         element={
-          <PrivateRoute>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]}>
             <Layout>
               <InstructorDetalle />
             </Layout>
-          </PrivateRoute>
+          </RoleRoute>
         }
       />
-      <Route path="/" element={<Navigate to="/dashboard" />} />
+      <Route
+        path="/tarifas"
+        element={
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE]}>
+            <Layout>
+              <Tarifas />
+            </Layout>
+          </RoleRoute>
+        }
+      />
+      <Route
+        path="/usuarios"
+        element={
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE]}>
+            <Layout>
+              <Usuarios />
+            </Layout>
+          </RoleRoute>
+        }
+      />
+      <Route
+        path="/vehiculos"
+        element={
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]}>
+            <Layout>
+              <Vehiculos />
+            </Layout>
+          </RoleRoute>
+        }
+      />
+      <Route
+        path="/vehiculos/:id"
+        element={
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]}>
+            <Layout>
+              <VehiculoDetalle />
+            </Layout>
+          </RoleRoute>
+        }
+      />
+      <Route
+        path="/clases"
+        element={
+          <RoleRoute roles={[RolUsuario.INSTRUCTOR, RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]}>
+            <Layout>
+              <Clases />
+            </Layout>
+          </RoleRoute>
+        }
+      />
+      <Route path="/" element={<HomeRedirect />} />
     </Routes>
   );
 }

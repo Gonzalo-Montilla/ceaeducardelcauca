@@ -3,7 +3,7 @@ import {
   BarChart3, DollarSign, Users, TrendingUp, AlertCircle,
   Calendar, CreditCard, PieChart, Download
 } from 'lucide-react';
-import axios from 'axios';
+import { reportesAPI } from '../services/api';
 import {
   LineChart, Line, BarChart, Bar, PieChart as RePieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -37,7 +37,6 @@ export const Reportes = () => {
     try {
       setLoading(true);
       setError(null);
-      const token = localStorage.getItem('access_token');
       
       const params: any = { comparar_periodo_anterior: comparar };
       if (fechaInicio) {
@@ -51,15 +50,8 @@ export const Reportes = () => {
         params.fecha_fin = fin.toISOString();
       }
 
-      const response = await axios.get(
-        `${import.meta.env.VITE_API_URL}/api/v1/reportes/dashboard`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          params
-        }
-      );
-
-      setDashboard(response.data);
+      const data = await reportesAPI.getDashboard(params);
+      setDashboard(data);
     } catch (err) {
       console.error('Error al cargar dashboard:', err);
       setError('Error al cargar los reportes');
@@ -119,30 +111,39 @@ export const Reportes = () => {
     );
   }
 
-  const { kpis, grafico_ingresos, grafico_metodos_pago, grafico_estudiantes, grafico_egresos, ranking_referidos, lista_estudiantes_registrados, lista_estudiantes_pagos } = dashboard!;
+  const {
+    kpis,
+    grafico_ingresos,
+    grafico_metodos_pago,
+    grafico_estudiantes,
+    grafico_egresos,
+    ranking_referidos,
+    lista_estudiantes_registrados,
+    lista_estudiantes_pagos
+  } = dashboard!;
 
   // Preparar datos para gráfico de línea (ingresos)
-  const datosIngresosLinea = grafico_ingresos.datos.map((d: any) => ({
+  const datosIngresosLinea = (grafico_ingresos?.datos || []).map((d: any) => ({
     mes: d.fecha,
     ingresos: parseFloat(d.valor)
   }));
 
   // Preparar datos para gráfico de barras (métodos de pago)
-  const datosMetodosPago = grafico_metodos_pago.datos.map((d: any) => ({
+  const datosMetodosPago = (grafico_metodos_pago?.datos || []).map((d: any) => ({
     nombre: d.nombre,
     valor: parseFloat(d.valor),
     porcentaje: d.porcentaje
   }));
 
   // Preparar datos para gráfico de dona (estudiantes)
-  const datosEstudiantes = grafico_estudiantes.datos.map((d: any) => ({
+  const datosEstudiantes = (grafico_estudiantes?.datos || []).map((d: any) => ({
     nombre: d.nombre,
     valor: parseFloat(d.valor),
     color: d.color
   }));
 
   // Preparar datos para gráfico de barras horizontales (egresos)
-  const datosEgresos = grafico_egresos.datos.map((d: any) => ({
+  const datosEgresos = (grafico_egresos?.datos || []).map((d: any) => ({
     categoria: d.nombre,
     monto: parseFloat(d.valor)
   }));

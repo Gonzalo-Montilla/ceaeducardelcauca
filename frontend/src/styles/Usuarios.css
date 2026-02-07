@@ -1,0 +1,38 @@
+.usuarios-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.usuarios-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.usuarios-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.input-search {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 10px;
+  min-width: 240px;
+}
+
+.usuarios-table table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.usuarios-table th,
+.usuarios-table td {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 10px 12px;
+  text-align: left;
+}

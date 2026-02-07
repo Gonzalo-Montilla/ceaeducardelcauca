@@ -88,9 +88,29 @@ def get_admin_user(current_user: Usuario = Depends(get_current_active_user)) -> 
 
 def get_admin_or_coordinador(current_user: Usuario = Depends(get_current_active_user)) -> Usuario:
     """Admins o coordinadores"""
-    if current_user.rol not in [RolUsuario.ADMIN, RolUsuario.COORDINADOR]:
+    if current_user.rol not in [RolUsuario.ADMIN, RolUsuario.COORDINADOR, RolUsuario.GERENTE]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Se requieren permisos de administrador o coordinador"
+        )
+    return current_user
+
+
+def get_admin_or_gerente(current_user: Usuario = Depends(get_current_active_user)) -> Usuario:
+    """Admins o gerente"""
+    if current_user.rol not in [RolUsuario.ADMIN, RolUsuario.GERENTE]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requieren permisos de administrador o gerente"
+        )
+    return current_user
+
+
+def get_admin_or_coordinador_or_cajero(current_user: Usuario = Depends(get_current_active_user)) -> Usuario:
+    """Admins, coordinadores o cajeros"""
+    if current_user.rol not in [RolUsuario.ADMIN, RolUsuario.COORDINADOR, RolUsuario.CAJERO, RolUsuario.GERENTE]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requieren permisos de administrador, coordinador o cajero"
         )
     return current_user

@@ -1,6 +1,7 @@
 // Enums
 export enum RolUsuario {
   ADMIN = "ADMIN",
+  GERENTE = "GERENTE",
   COORDINADOR = "COORDINADOR",
   INSTRUCTOR = "INSTRUCTOR",
   ESTUDIANTE = "ESTUDIANTE",
