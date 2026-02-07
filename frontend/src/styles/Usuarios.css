@@ -18,8 +18,8 @@
 }
 
 .input-search {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   padding: 8px 10px;
   min-width: 240px;
 }
@@ -27,12 +27,15 @@
 .usuarios-table table {
   width: 100%;
   border-collapse: collapse;
-  background: #fff;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
 
 .usuarios-table th,
 .usuarios-table td {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border);
   padding: 10px 12px;
   text-align: left;
 }

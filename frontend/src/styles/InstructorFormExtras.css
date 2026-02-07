@@ -6,8 +6,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f8f9fa;
-  border-radius: 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-lg);
   padding: 2rem;
 }
 
@@ -16,7 +16,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.875rem 1.75rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--primary);
   color: white;
   border: none;
   border-radius: 8px;
@@ -28,18 +28,18 @@
 
 .btn-camera:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: var(--shadow-md);
 }
 
 .btn-camera.btn-secondary {
-  background: white;
-  color: #667eea;
-  border: 2px solid #667eea;
+  background: var(--surface);
+  color: var(--primary);
+  border: 2px solid var(--primary);
 }
 
 .btn-camera.btn-secondary:hover {
-  background: #f8f9fa;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-sm);
 }
 
 .foto-preview {
@@ -54,9 +54,9 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1.5rem;
-  background: white;
-  color: #667eea;
-  border: 2px solid #667eea;
+  background: var(--surface);
+  color: var(--primary);
+  border: 2px solid var(--primary);
   border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
@@ -64,17 +64,17 @@
 }
 
 .btn-secondary:hover {
-  background: #f8f9fa;
-  border-color: #5568d3;
+  background: var(--surface-2);
+  border-color: var(--primary-600);
 }
 
 /* ========== UPLOAD DE DOCUMENTOS ========== */
 .documento-upload-group {
-  background: #f8f9fa;
-  border-radius: 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-lg);
   padding: 1.25rem;
   margin-bottom: 1rem;
-  border: 2px dashed #ddd;
+  border: 2px dashed var(--border);
   transition: border-color 0.2s;
 }
 

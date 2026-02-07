@@ -138,6 +138,11 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
       });
 
       alert('Servicio definido exitosamente');
+      if (window.confirm('¿Desea abrir el contrato en PDF?')) {
+        const pdfBlob = await estudiantesAPI.getContratoPdf(estudiante.id);
+        const fileUrl = URL.createObjectURL(pdfBlob);
+        window.open(fileUrl, '_blank', 'noopener,noreferrer');
+      }
       onSuccess();
       onClose();
     } catch (err: any) {

@@ -10,7 +10,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  margin-bottom: 24px;
 }
 
 .btn-back {
@@ -18,19 +18,19 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1.5rem;
-  background: white;
-  border: 1px solid #ddd;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
   transition: all 0.2s;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .btn-back:hover {
-  background: #f8f9fa;
-  border-color: #667eea;
-  color: #667eea;
+  background: var(--surface-2);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .header-actions {
@@ -43,7 +43,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--primary);
   color: white;
   border: none;
   border-radius: 8px;
@@ -54,19 +54,20 @@
 
 .btn-action:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: var(--shadow-md);
 }
 
 /* ========== INFO PRINCIPAL ========== */
 .info-principal {
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   padding: 2.5rem;
-  margin-bottom: 2rem;
+  margin-bottom: 24px;
   display: flex;
   gap: 2rem;
   align-items: flex-start;
+  border: 1px solid var(--border);
 }
 
 .foto-grande {
@@ -78,21 +79,21 @@
   height: 180px;
   border-radius: 50%;
   object-fit: cover;
-  border: 5px solid #f0f0f0;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  border: 5px solid var(--surface-2);
+  box-shadow: var(--shadow-sm);
 }
 
 .foto-placeholder-grande {
   width: 180px;
   height: 180px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--primary);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  border: 5px solid #f0f0f0;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  border: 5px solid var(--surface-2);
+  box-shadow: var(--shadow-sm);
 }
 
 .info-basica {
@@ -100,21 +101,21 @@
 }
 
 .info-basica h1 {
-  font-size: 2rem;
+  font-size: 28px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--text-primary);
   margin: 0 0 0.5rem 0;
 }
 
 .info-basica .cedula {
   font-size: 1rem;
-  color: #666;
+  color: var(--text-secondary);
   margin: 0.25rem 0;
 }
 
 .info-basica .licencia {
   font-size: 1rem;
-  color: #666;
+  color: var(--text-secondary);
   margin: 0.25rem 0 1rem 0;
 }
 
@@ -222,7 +223,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1.5rem;
-  margin-bottom: 2rem;
+  margin-bottom: 24px;
 }
 
 .stat-card {
@@ -273,7 +274,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
   gap: 1.5rem;
-  margin-bottom: 2rem;
+  margin-bottom: 24px;
 }
 
 .detalle-card,
@@ -473,7 +474,7 @@
 
 /* ========== ALERTAS DE VENCIMIENTO ========== */
 .alertas-vencimiento {
-  margin-bottom: 2rem;
+  margin-bottom: 24px;
   display: flex;
   flex-direction: column;
   gap: 1rem;

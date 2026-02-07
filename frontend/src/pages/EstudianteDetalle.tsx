@@ -17,6 +17,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import '../styles/EstudianteDetalle.css';
+import '../styles/DefinirServicioModal.css';
 
 interface DetallePagoItem {
   id: number;
@@ -82,6 +83,30 @@ export const EstudianteDetalle = () => {
   const [estudiante, setEstudiante] = useState<Estudiante | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editFotoBase64, setEditFotoBase64] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    nombre_completo: '',
+    email: '',
+    cedula: '',
+    telefono: '',
+    fecha_nacimiento: '',
+    direccion: '',
+    ciudad: '',
+    barrio: '',
+    tipo_sangre: '',
+    eps: '',
+    ocupacion: '',
+    estado_civil: '',
+    nivel_educativo: '',
+    estrato: '',
+    nivel_sisben: '',
+    necesidades_especiales: '',
+    contacto_emergencia_nombre: '',
+    contacto_emergencia_telefono: ''
+  });
 
   useEffect(() => {
     cargarEstudiante();
@@ -100,6 +125,27 @@ export const EstudianteDetalle = () => {
     }
   };
 
+  const handleDescargarContrato = async () => {
+    if (!id) return;
+    try {
+      const pdfBlob = await estudiantesAPI.getContratoPdf(Number(id));
+      const fileUrl = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = fileUrl;
+      const filename = estudiante?.matricula_numero
+        ? `contrato_${estudiante.matricula_numero}.pdf`
+        : `contrato_${id}.pdf`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(fileUrl);
+    } catch (err) {
+      console.error('Error al descargar contrato:', err);
+      alert('No se pudo descargar el contrato');
+    }
+  };
+
   const formatearFecha = (fecha: string) => {
     return new Date(fecha).toLocaleDateString('es-CO', {
       year: 'numeric',
@@ -115,6 +161,87 @@ export const EstudianteDetalle = () => {
       currency: 'COP',
       minimumFractionDigits: 0
     }).format(valor);
+  };
+
+  const abrirEditar = () => {
+    if (!estudiante) return;
+    setEditForm({
+      nombre_completo: estudiante.nombre_completo || '',
+      email: estudiante.email || '',
+      cedula: estudiante.cedula || '',
+      telefono: estudiante.telefono || '',
+      fecha_nacimiento: estudiante.fecha_nacimiento || '',
+      direccion: estudiante.direccion || '',
+      ciudad: estudiante.ciudad || '',
+      barrio: estudiante.barrio || '',
+      tipo_sangre: estudiante.tipo_sangre || '',
+      eps: estudiante.eps || '',
+      ocupacion: estudiante.ocupacion || '',
+      estado_civil: estudiante.estado_civil || '',
+      nivel_educativo: estudiante.nivel_educativo || '',
+      estrato: estudiante.estrato ? String(estudiante.estrato) : '',
+      nivel_sisben: estudiante.nivel_sisben || '',
+      necesidades_especiales: estudiante.necesidades_especiales || '',
+      contacto_emergencia_nombre: estudiante.contacto_emergencia_nombre || '',
+      contacto_emergencia_telefono: estudiante.contacto_emergencia_telefono || ''
+    });
+    setEditFotoBase64(null);
+    setEditError('');
+    setShowEditModal(true);
+  };
+
+  const handleEditChange = (field: string, value: string) => {
+    setEditForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleFotoChange = (file?: File | null) => {
+    if (!file) {
+      setEditFotoBase64(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : null;
+      setEditFotoBase64(result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleGuardarEdicion = async () => {
+    if (!id) return;
+    setIsSaving(true);
+    setEditError('');
+    try {
+      const payload: any = {
+        nombre_completo: editForm.nombre_completo.trim(),
+        email: editForm.email.trim(),
+        cedula: editForm.cedula.trim(),
+        telefono: editForm.telefono.trim(),
+        foto_base64: editFotoBase64 || undefined,
+        fecha_nacimiento: editForm.fecha_nacimiento || null,
+        direccion: editForm.direccion || null,
+        ciudad: editForm.ciudad || null,
+        barrio: editForm.barrio || null,
+        tipo_sangre: editForm.tipo_sangre || null,
+        eps: editForm.eps || null,
+        ocupacion: editForm.ocupacion || null,
+        estado_civil: editForm.estado_civil || null,
+        nivel_educativo: editForm.nivel_educativo || null,
+        estrato: editForm.estrato ? Number(editForm.estrato) : null,
+        nivel_sisben: editForm.nivel_sisben || null,
+        necesidades_especiales: editForm.necesidades_especiales || null,
+        contacto_emergencia_nombre: editForm.contacto_emergencia_nombre || null,
+        contacto_emergencia_telefono: editForm.contacto_emergencia_telefono || null
+      };
+      const data = await estudiantesAPI.update(Number(id), payload);
+      setEstudiante(data);
+      setShowEditModal(false);
+    } catch (err: any) {
+      console.error('Error al actualizar estudiante:', err);
+      setEditError(err.response?.data?.detail || 'No se pudo actualizar el estudiante');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const getEstadoBadgeClass = (estado: string) => {
@@ -152,16 +279,206 @@ export const EstudianteDetalle = () => {
 
   return (
     <div className="estudiante-detalle-container">
+      {showEditModal && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Editar Estudiante</h2>
+              <button className="btn-close" onClick={() => setShowEditModal(false)}>
+                ✕
+              </button>
+            </div>
+            <form className="modal-form" onSubmit={(e) => e.preventDefault()}>
+              {editError && <div className="error-message">{editError}</div>}
+              <div className="form-group">
+                <label>Nombre completo</label>
+                <input
+                  className="form-input"
+                  value={editForm.nombre_completo}
+                  onChange={(e) => handleEditChange('nombre_completo', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Foto</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="form-input"
+                  onChange={(e) => handleFotoChange(e.target.files?.[0])}
+                />
+                {(editFotoBase64 || estudiante?.foto_url) && (
+                  <div style={{ marginTop: '8px' }}>
+                    <img
+                      src={editFotoBase64 || estudiante?.foto_url}
+                      alt="Foto"
+                      style={{ width: '96px', height: '96px', objectFit: 'cover', borderRadius: '8px' }}
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="form-group">
+                <label>Email</label>
+                <input
+                  type="email"
+                  className="form-input"
+                  value={editForm.email}
+                  onChange={(e) => handleEditChange('email', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Cédula</label>
+                <input
+                  className="form-input"
+                  value={editForm.cedula}
+                  onChange={(e) => handleEditChange('cedula', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Teléfono</label>
+                <input
+                  className="form-input"
+                  value={editForm.telefono}
+                  onChange={(e) => handleEditChange('telefono', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Fecha de Nacimiento</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={editForm.fecha_nacimiento}
+                  onChange={(e) => handleEditChange('fecha_nacimiento', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Dirección</label>
+                <input
+                  className="form-input"
+                  value={editForm.direccion}
+                  onChange={(e) => handleEditChange('direccion', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Ciudad</label>
+                <input
+                  className="form-input"
+                  value={editForm.ciudad}
+                  onChange={(e) => handleEditChange('ciudad', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Barrio</label>
+                <input
+                  className="form-input"
+                  value={editForm.barrio}
+                  onChange={(e) => handleEditChange('barrio', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Tipo de Sangre</label>
+                <input
+                  className="form-input"
+                  value={editForm.tipo_sangre}
+                  onChange={(e) => handleEditChange('tipo_sangre', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>EPS</label>
+                <input
+                  className="form-input"
+                  value={editForm.eps}
+                  onChange={(e) => handleEditChange('eps', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Ocupación</label>
+                <input
+                  className="form-input"
+                  value={editForm.ocupacion}
+                  onChange={(e) => handleEditChange('ocupacion', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Estado Civil</label>
+                <input
+                  className="form-input"
+                  value={editForm.estado_civil}
+                  onChange={(e) => handleEditChange('estado_civil', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Nivel Educativo</label>
+                <input
+                  className="form-input"
+                  value={editForm.nivel_educativo}
+                  onChange={(e) => handleEditChange('nivel_educativo', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Estrato</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="6"
+                  className="form-input"
+                  value={editForm.estrato}
+                  onChange={(e) => handleEditChange('estrato', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Nivel SISBEN</label>
+                <input
+                  className="form-input"
+                  value={editForm.nivel_sisben}
+                  onChange={(e) => handleEditChange('nivel_sisben', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Necesidades Especiales</label>
+                <input
+                  className="form-input"
+                  value={editForm.necesidades_especiales}
+                  onChange={(e) => handleEditChange('necesidades_especiales', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Contacto de Emergencia (Nombre)</label>
+                <input
+                  className="form-input"
+                  value={editForm.contacto_emergencia_nombre}
+                  onChange={(e) => handleEditChange('contacto_emergencia_nombre', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Contacto de Emergencia (Teléfono)</label>
+                <input
+                  className="form-input"
+                  value={editForm.contacto_emergencia_telefono}
+                  onChange={(e) => handleEditChange('contacto_emergencia_telefono', e.target.value)}
+                />
+              </div>
+              <div className="modal-footer" style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn-outline" onClick={() => setShowEditModal(false)}>
+                  Cancelar
+                </button>
+                <button type="button" className="btn" onClick={handleGuardarEdicion} disabled={isSaving}>
+                  {isSaving ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="detalle-header">
         <button className="btn-back" onClick={() => navigate('/estudiantes')}>
           <ArrowLeft size={20} /> Volver
         </button>
         <div className="header-actions">
-          <button className="btn-action">
+          <button className="btn-action" onClick={abrirEditar}>
             <Edit size={18} /> Editar
           </button>
-          <button className="btn-action">
+          <button className="btn-action" onClick={handleDescargarContrato}>
             <Download size={18} /> Descargar Contrato
           </button>
         </div>

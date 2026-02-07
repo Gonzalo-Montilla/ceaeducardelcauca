@@ -20,9 +20,9 @@
   display: grid;
   grid-template-columns: 180px 1fr;
   gap: 16px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 16px;
 }
 
@@ -31,7 +31,7 @@
   height: 120px;
   object-fit: cover;
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
 }
 
 .vehiculo-foto.placeholder {
@@ -40,9 +40,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f1f5f9;
+  background: var(--surface-2);
   border-radius: 8px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .vehiculo-info-right {
@@ -52,9 +52,9 @@
 }
 
 .detalle-section {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 16px;
 }
 

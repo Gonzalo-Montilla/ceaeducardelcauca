@@ -135,6 +135,9 @@ export const Dashboard = () => {
               <p><CheckCircle size={16} style={{ display: 'inline', marginRight: '8px', color: '#10b981' }} /> Tasa de cobranza: {formatearPorcentaje(kpis.tasa_cobranza)}</p>
               <p><Award size={16} style={{ display: 'inline', marginRight: '8px', color: '#8b5cf6' }} /> Ticket promedio: {formatearMoneda(parseFloat(kpis.ticket_promedio))}</p>
               <p><TrendingUp size={16} style={{ display: 'inline', marginRight: '8px', color: '#22c55e' }} /> Margen operativo: {formatearPorcentaje(kpis.margen_operativo)}</p>
+              <p><DollarSign size={16} style={{ display: 'inline', marginRight: '8px', color: '#2563eb' }} /> Ingreso neto: {formatearMoneda(parseFloat(kpis.ingreso_neto))}</p>
+              <p><Database size={16} style={{ display: 'inline', marginRight: '8px', color: '#0ea5e9' }} /> Ingreso promedio por caja: {formatearMoneda(parseFloat(kpis.ingresos_promedio_por_caja))}</p>
+              <p><AlertTriangle size={16} style={{ display: 'inline', marginRight: '8px', color: '#f59e0b' }} /> % pagos vencidos: {formatearPorcentaje(kpis.porcentaje_pagos_vencidos)}</p>
             </>
           )}
           {!loading && !error && !kpis && (

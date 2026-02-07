@@ -27,10 +27,10 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--surface);
+  border: 1px solid var(--border);
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .search-box input {
@@ -42,15 +42,16 @@
 .vehiculos-table table {
   width: 100%;
   border-collapse: collapse;
-  background: #fff;
-  border-radius: 8px;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
   overflow: hidden;
+  border: 1px solid var(--border);
 }
 
 .vehiculos-table th,
 .vehiculos-table td {
   padding: 12px 10px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--border);
   text-align: left;
   font-size: 0.95rem;
 }
@@ -61,8 +62,8 @@
 }
 
 .btn-icon {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px;
   cursor: pointer;
@@ -89,11 +90,13 @@
 }
 
 .modal-box {
-  background: #fff;
-  border-radius: 10px;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
   padding: 16px;
   max-width: 520px;
   width: 90%;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
 }
 
 .modal-header,

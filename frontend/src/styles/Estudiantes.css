@@ -5,7 +5,7 @@
 }
 
 .page-header {
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 
 .header-content {
@@ -15,9 +15,9 @@
 }
 
 .header-content h1 {
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .btn-nuevo {
@@ -25,7 +25,7 @@
   align-items: center;
   gap: 8px;
   padding: 12px 24px;
-  background-color: #3b82f6;
+  background-color: var(--primary);
   color: white;
   border: none;
   border-radius: 8px;
@@ -36,13 +36,13 @@
 }
 
 .btn-nuevo:hover {
-  background-color: #2563eb;
+  background-color: var(--primary-600);
   transform: translateY(-1px);
 }
 
 /* Búsqueda */
 .search-section {
-  margin-bottom: 32px;
+  margin-bottom: 24px;
 }
 
 .search-box {
@@ -61,7 +61,7 @@
 .search-input {
   width: 100%;
   padding: 14px 14px 14px 48px;
-  border: 2px solid #e2e8f0;
+  border: 1px solid var(--border);
   border-radius: 12px;
   font-size: 16px;
   transition: all 0.2s;
@@ -69,8 +69,8 @@
 
 .search-input:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
 }
 
 .search-results {
@@ -91,11 +91,11 @@
 }
 
 .estudiante-card {
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   transition: all 0.3s ease;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
   overflow: hidden;
 }
 
@@ -128,7 +128,7 @@
 }
 
 .card-header.clickeable:hover {
-  background-color: #f8fafc;
+  background-color: var(--surface-2);
 }
 
 .estudiante-card.collapsed .card-header {
@@ -136,7 +136,7 @@
 }
 
 .estudiante-card.expanded .card-header {
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--border);
 }
 
 .estudiante-foto {
@@ -148,14 +148,14 @@
   height: 80px;
   border-radius: 12px;
   object-fit: cover;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .foto-placeholder {
   width: 80px;
   height: 80px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: var(--primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -173,7 +173,7 @@
 .chevron-toggle {
   flex-shrink: 0;
   transition: transform 0.3s ease;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .chevron-toggle.rotated {
@@ -183,7 +183,7 @@
 .estudiante-info h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text-primary);
   margin-bottom: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -192,14 +192,14 @@
 
 .cedula {
   font-size: 14px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 500;
   margin-bottom: 2px;
 }
 
 .matricula {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
@@ -219,13 +219,13 @@
 
 .info-row .label {
   font-size: 14px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .info-row .value {
   font-size: 14px;
-  color: #1e293b;
+  color: var(--text-primary);
   font-weight: 600;
   text-align: right;
 }
@@ -382,11 +382,11 @@
   padding: 24px 0;
 }
 
-.pagination-btn {
+.estudiantes-container .pagination .pagination-btn {
   padding: 10px 20px;
-  background-color: #3b82f6;
-  color: white;
-  border: none;
+  background-color: #3b82f6 !important;
+  color: white !important;
+  border: none !important;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
@@ -400,9 +400,11 @@
   transform: translateY(-1px);
 }
 
-.pagination-btn:disabled {
-  background-color: #cbd5e1;
-  color: #94a3b8;
+.estudiantes-container .pagination .pagination-btn:disabled {
+  background-color: #cbd5e1 !important;
+  color: #475569 !important;
+  border: 1px solid #94a3b8 !important;
+  opacity: 1;
   cursor: not-allowed;
 }
 

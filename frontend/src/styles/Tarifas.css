@@ -13,19 +13,22 @@
 .tarifas-table table {
   width: 100%;
   border-collapse: collapse;
-  background: #fff;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
 
 .tarifas-table th,
 .tarifas-table td {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border);
   padding: 10px 12px;
   text-align: left;
 }
 
 .btn-icon {
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   padding: 6px;
   border-radius: 6px;
   margin-right: 6px;

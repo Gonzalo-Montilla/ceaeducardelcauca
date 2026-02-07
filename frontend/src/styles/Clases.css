@@ -1,0 +1,104 @@
+.clases-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.clases-busqueda {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.clases-busqueda input {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  min-width: 240px;
+}
+
+.clases-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  display: grid;
+  gap: 16px;
+}
+
+.clases-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.clases-foto img {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.clases-foto-placeholder {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+.clases-info p {
+  margin: 2px 0;
+}
+
+.clases-progreso {
+  display: grid;
+  gap: 12px;
+}
+
+.clases-form {
+  display: grid;
+  gap: 12px;
+}
+
+.clases-historial {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.historial-list {
+  display: grid;
+  gap: 8px;
+}
+
+.historial-item {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.historial-fecha {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.historial-obs {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.historial-empty {
+  color: var(--text-secondary);
+  font-size: 13px;
+}

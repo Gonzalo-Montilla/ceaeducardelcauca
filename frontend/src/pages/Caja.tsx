@@ -190,9 +190,10 @@ export const Caja = () => {
     try {
       setRegistrandoPago(true);
       
+      let pagoResponse: any = null;
       if (esPagoMixto) {
         // Pago mixto
-        await cajaAPI.registrarPago({
+        pagoResponse = await cajaAPI.registrarPago({
           estudiante_id: estudiante.id,
           monto: montoTotal,
           concepto: 'Abono al curso',
@@ -206,7 +207,7 @@ export const Caja = () => {
         });
       } else {
         // Pago simple
-        await cajaAPI.registrarPago({
+        pagoResponse = await cajaAPI.registrarPago({
           estudiante_id: estudiante.id,
           monto: montoTotal,
           metodo_pago: detallesPago[0].metodo,
@@ -216,6 +217,15 @@ export const Caja = () => {
       }
       
       alert('Pago registrado exitosamente');
+      if (pagoResponse?.id) {
+        const abrir = window.confirm('¿Desea abrir el recibo PDF del pago?');
+        if (abrir) {
+          const blob = await cajaAPI.getPagoReciboPdf(pagoResponse.id);
+          const url = URL.createObjectURL(blob);
+          window.open(url, '_blank');
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        }
+      }
       setMontoPago('');
       setEsPagoMixto(false);
       setDetallesPago([{metodo: 'EFECTIVO', monto: ''}]);
@@ -240,7 +250,7 @@ export const Caja = () => {
     }
     
     try {
-      await cajaAPI.registrarEgreso({
+      const egresoResponse = await cajaAPI.registrarEgreso({
         concepto: conceptoEgreso,
         categoria: categoriaEgreso,
         monto: parseFloat(montoEgreso),
@@ -250,6 +260,15 @@ export const Caja = () => {
       });
       
       alert('Egreso registrado exitosamente');
+      if (egresoResponse?.id) {
+        const abrir = window.confirm('¿Desea abrir el recibo PDF del egreso?');
+        if (abrir) {
+          const blob = await cajaAPI.getEgresoReciboPdf(egresoResponse.id);
+          const url = URL.createObjectURL(blob);
+          window.open(url, '_blank');
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        }
+      }
       setShowEgreso(false);
       setConceptoEgreso('');
       setMontoEgreso('');
@@ -281,6 +300,13 @@ export const Caja = () => {
       });
       
       alert('Caja cerrada exitosamente');
+      const abrir = window.confirm('¿Desea abrir el soporte PDF de cierre de caja?');
+      if (abrir) {
+        const blob = await cajaAPI.getCierrePdf(cajaActual.id);
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      }
       setShowCerrarCaja(false);
       setEfectivoFisico('');
       setObservacionesCierre('');

@@ -11,7 +11,7 @@
 .caja-header h1 {
   font-size: 28px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -27,13 +27,14 @@
 
 /* Caja Cerrada */
 .caja-cerrada-card {
-  background: white;
+  background: var(--surface);
   border-radius: 12px;
   padding: 48px;
   text-align: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   max-width: 500px;
   margin: 100px auto;
+  border: 1px solid var(--border);
 }
 
 .icon-warning {
@@ -44,12 +45,12 @@
 .caja-cerrada-card h2 {
   font-size: 24px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
   margin: 0 0 12px 0;
 }
 
 .caja-cerrada-card p {
-  color: #6b7280;
+  color: var(--text-secondary);
   margin-bottom: 32px;
 }
 
@@ -68,23 +69,24 @@
 }
 
 .stat-card {
-  background: white;
+  background: var(--surface);
   border-radius: 12px;
   padding: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   display: flex;
   align-items: center;
   gap: 16px;
   transition: transform 0.2s, box-shadow 0.2s;
+  border: 1px solid var(--border);
 }
 
 .stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
 }
 
 .stat-card.highlight {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
   color: white;
 }
 
@@ -103,7 +105,7 @@
 
 .stat-label {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--text-secondary);
   margin: 0 0 4px 0;
 }
 
@@ -114,7 +116,7 @@
 .stat-value {
   font-size: 24px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -135,7 +137,7 @@
 
 .stat-sublabel {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--text-secondary);
   margin-top: 4px;
 }
 
@@ -152,25 +154,26 @@
 }
 
 .stat-small {
-  background: white;
-  border-radius: 8px;
+  background: var(--surface);
+  border-radius: var(--radius-md);
   padding: 12px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
 }
 
 .stat-small-label {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .stat-small-value {
   font-size: 16px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--text-primary);
 }
 
 .stat-small-value.success {
@@ -185,17 +188,17 @@
 .seccion-caja-fisica {
   margin-bottom: 32px;
   padding: 24px;
-  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-  border-radius: 16px;
-  border: 2px solid #22c55e;
+  background: #f0fdf4;
+  border-radius: var(--radius-lg);
+  border: 1px solid #22c55e;
 }
 
 .metodos-digitales-section {
   margin-bottom: 32px;
   padding: 24px;
-  background: white;
-  border-radius: 16px;
-  border: 2px solid #e5e7eb;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
 }
 
 .metodo-grupo {
@@ -209,23 +212,23 @@
 .metodo-grupo-titulo {
   font-size: 16px;
   font-weight: 600;
-  color: #4b5563;
+  color: var(--text-secondary);
   margin: 0 0 12px 0;
   padding-left: 8px;
-  border-left: 4px solid #3b82f6;
+  border-left: 4px solid var(--primary);
 }
 
 .section-title {
   font-size: 18px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
   margin: 0 0 16px 0;
 }
 
 .section-title-main {
   font-size: 20px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--text-primary);
   margin: 0 0 12px 0;
   display: flex;
   align-items: center;
@@ -257,14 +260,14 @@
 }
 
 .section-subtitle-white {
-  font-size: 13px;
-  color: #6b7280;
+  font-size: 14px;
+  color: var(--text-secondary);
   margin: 0 0 20px 0;
   font-weight: 500;
   padding: 8px 12px;
-  background: #f9fafb;
+  background: var(--surface-2);
   border-radius: 6px;
-  border-left: 3px solid #3b82f6;
+  border-left: 3px solid var(--primary);
 }
 
 .metodos-grid {
@@ -484,14 +487,14 @@
 }
 
 .section-subtitle {
-  font-size: 13px;
-  color: #92400e;
+  font-size: 14px;
+  color: var(--text-secondary);
   margin: 0 0 16px 0;
   font-weight: 500;
-  background: white;
+  background: var(--surface-2);
   padding: 8px 12px;
   border-radius: 6px;
-  border-left: 3px solid #f59e0b;
+  border-left: 3px solid var(--primary);
 }
 
 /* Resumen General */

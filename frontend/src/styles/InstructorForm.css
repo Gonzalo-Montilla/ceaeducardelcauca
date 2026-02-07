@@ -14,13 +14,14 @@
 }
 
 .modal-content-large {
-  background: white;
-  border-radius: 16px;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
   width: 100%;
   max-width: 700px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border);
 }
 
 /* ========== MODAL HEADER ========== */
@@ -29,22 +30,22 @@
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem 2rem;
-  border-bottom: 1px solid #e0e0e0;
-  background: #f8f9fa;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
 }
 
 .modal-header h2 {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--text-primary);
 }
 
 .btn-close {
   background: none;
   border: none;
   cursor: pointer;
-  color: #666;
+  color: var(--text-secondary);
   padding: 0.25rem;
   display: flex;
   align-items: center;
@@ -54,8 +55,8 @@
 }
 
 .btn-close:hover {
-  background: #e0e0e0;
-  color: #333;
+  background: var(--surface-2);
+  color: var(--text-primary);
 }
 
 /* ========== FORM ========== */
@@ -76,7 +77,7 @@
 .form-group label {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .form-group input,

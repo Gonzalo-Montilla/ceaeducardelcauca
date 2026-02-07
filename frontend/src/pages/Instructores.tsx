@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { instructoresAPI } from '../services/api';
 import { 
   UserCheck, Search, Plus, Eye, Star, Phone, Award, 
-  AlertCircle, Filter, X, AlertTriangle, Clock
+  AlertCircle, Filter, X, AlertTriangle, Clock, ChevronDown
 } from 'lucide-react';
 import { InstructorForm } from '../components/InstructorForm';
 import '../styles/Instructores.css';
@@ -37,6 +37,7 @@ export const Instructores = () => {
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [instructorEditar, setInstructorEditar] = useState<Instructor | null>(null);
   const prevBusquedaRef = useRef('');
+  const [tarjetasExpandidas, setTarjetasExpandidas] = useState<Set<number>>(new Set());
   
   // Paginación
   const [paginaActual, setPaginaActual] = useState(1);
@@ -150,6 +151,18 @@ export const Instructores = () => {
     }
   };
 
+  const toggleTarjeta = (instructorId: number) => {
+    setTarjetasExpandidas(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(instructorId)) {
+        newSet.delete(instructorId);
+      } else {
+        newSet.add(instructorId);
+      }
+      return newSet;
+    });
+  };
+
   return (
     <div className="instructores-container">
       {/* Header */}
@@ -244,81 +257,99 @@ export const Instructores = () => {
           ) : (
             <>
               <div className="instructores-grid">
-                {instructores.map((instructor) => (
-                  <div 
-                    key={instructor.id} 
-                    className="instructor-card"
-                    onClick={() => navigate(`/instructores/${instructor.id}`)}
-                  >
-                    {/* Foto y Estado */}
-                    <div className="instructor-card-header">
-                      {instructor.foto_url ? (
-                        <img 
-                          src={instructor.foto_url} 
-                          alt={instructor.nombre_completo}
-                          className="instructor-foto"
-                        />
-                      ) : (
-                        <div className="instructor-foto-placeholder">
-                          <UserCheck size={40} />
-                        </div>
-                      )}
-                      <span className={`estado-badge ${instructor.estado.toLowerCase()}`}>
-                        {getEstadoTexto(instructor.estado)}
-                      </span>
-                      {/* Indicador de documentación */}
-                      {instructor.estado_documentacion && instructor.estado_documentacion !== 'COMPLETO' && (
-                        <span className="doc-alert-badge" title={instructor.estado_documentacion}>
-                          {instructor.estado_documentacion === 'VENCIDO' ? (
-                            <AlertCircle size={20} />
-                          ) : instructor.estado_documentacion === 'PROXIMO_VENCER' ? (
-                            <AlertTriangle size={20} />
+                {instructores.map((instructor) => {
+                  const isExpanded = tarjetasExpandidas.has(instructor.id);
+                  return (
+                    <div key={instructor.id} className={`instructor-card ${isExpanded ? 'expanded' : 'collapsed'}`}>
+                      <div
+                        className="card-header clickeable"
+                        onClick={() => toggleTarjeta(instructor.id)}
+                      >
+                        <div className="instructor-foto">
+                          {instructor.foto_url ? (
+                            <img src={instructor.foto_url} alt={instructor.nombre_completo} />
                           ) : (
-                            <Clock size={20} />
+                            <div className="foto-placeholder">
+                              <span>{instructor.nombre_completo.charAt(0)}</span>
+                            </div>
                           )}
-                        </span>
+                        </div>
+                        <div className="instructor-info">
+                          <h3>{instructor.nombre_completo}</h3>
+                          <p className="cedula">CC: {instructor.cedula}</p>
+                          <p className="matricula">Lic: {instructor.licencia_numero}</p>
+                        </div>
+                        <ChevronDown
+                          size={24}
+                          className={`chevron-toggle ${isExpanded ? '' : 'rotated'}`}
+                        />
+                      </div>
+
+                      {isExpanded && (
+                        <>
+                          <div className="card-body">
+                            <div className="info-row">
+                              <span className="label">Teléfono:</span>
+                              <span className="value">{instructor.telefono}</span>
+                            </div>
+                            <div className="info-row">
+                              <span className="label">Categorías:</span>
+                              <span className="value">{instructor.categorias_enseña || 'N/A'}</span>
+                            </div>
+                            {instructor.especialidad && (
+                              <div className="info-row">
+                                <span className="label">Especialidad:</span>
+                                <span className="value">{instructor.especialidad}</span>
+                              </div>
+                            )}
+                            <div className="info-row">
+                              <span className="label">Calificación:</span>
+                              <span className="value">
+                                <span className="rating-inline">
+                                  {renderEstrellas(Number(instructor.calificacion_promedio) || 0)}
+                                </span>
+                                {Number(instructor.calificacion_promedio || 0).toFixed(1)}
+                              </span>
+                            </div>
+                            {instructor.estado_documentacion && (
+                              <div className="info-row">
+                                <span className="label">Documentación:</span>
+                                <span className="value">{instructor.estado_documentacion}</span>
+                              </div>
+                            )}
+                            {instructor.licencia_vigencia_hasta && (
+                              <div className="info-row">
+                                <span className="label">Vigencia Licencia:</span>
+                                <span className="value">{instructor.licencia_vigencia_hasta}</span>
+                              </div>
+                            )}
+                            {instructor.certificado_vigencia_hasta && (
+                              <div className="info-row">
+                                <span className="label">Vigencia Certificado:</span>
+                                <span className="value">{instructor.certificado_vigencia_hasta}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="card-footer">
+                            <span className={`badge ${getEstadoBadgeClass(instructor.estado)}`}>
+                              {getEstadoTexto(instructor.estado)}
+                            </span>
+                            <div className="card-actions">
+                              <button
+                                className="btn-ver"
+                                onClick={() => navigate(`/instructores/${instructor.id}`)}
+                              >
+                                <Eye size={18} />
+                                Ver Detalle
+                              </button>
+                            </div>
+                          </div>
+                        </>
                       )}
                     </div>
-
-                    {/* Información */}
-                    <div className="instructor-card-body">
-                      <h3 className="instructor-nombre">{instructor.nombre_completo}</h3>
-                      <div className="instructor-licencia">
-                        <Award size={16} />
-                        {instructor.licencia_numero}
-                      </div>
-                      
-                      <div className="instructor-info-grid">
-                        {/* Teléfono */}
-                        <div className="info-item">
-                          <Phone size={16} />
-                          <span>{instructor.telefono}</span>
-                        </div>
-
-                        {/* Categorías que enseña */}
-                        <div className="info-item">
-                          <div className="categorias-tags">
-                            {instructor.categorias_enseña?.split(',').map((cat, idx) => (
-                              <span key={idx} className="categoria-tag">{cat.trim()}</span>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Calificación */}
-                        <div className="info-item">
-                          <div className="rating-display">
-                            <div className="stars">
-                              {renderEstrellas(Number(instructor.calificacion_promedio) || 0)}
-                            </div>
-                            <span className="rating-number">
-                              {Number(instructor.calificacion_promedio || 0).toFixed(1)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Paginación */}

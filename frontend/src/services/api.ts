@@ -95,6 +95,11 @@ export const estudiantesAPI = {
     return response.data;
   },
 
+  getByCedula: async (cedula: string): Promise<Estudiante> => {
+    const response = await api.get<Estudiante>(`/estudiantes/cedula/${cedula}`);
+    return response.data;
+  },
+
   update: async (id: number, data: Partial<Estudiante>): Promise<Estudiante> => {
     const response = await api.put<Estudiante>(`/estudiantes/${id}`, data);
     return response.data;
@@ -106,6 +111,16 @@ export const estudiantesAPI = {
 
   definirServicio: async (id: number, data: any): Promise<Estudiante> => {
     const response = await api.put<Estudiante>(`/estudiantes/${id}/definir-servicio`, data);
+    return response.data;
+  },
+
+  acreditarHoras: async (id: number, data: { tipo: string; horas: number; observaciones?: string | null }): Promise<Estudiante> => {
+    const response = await api.post<Estudiante>(`/estudiantes/${id}/acreditar-horas`, data);
+    return response.data;
+  },
+
+  getContratoPdf: async (id: number): Promise<Blob> => {
+    const response = await api.get(`/estudiantes/${id}/contrato-pdf`, { responseType: 'blob' });
     return response.data;
   },
 };
@@ -160,6 +175,21 @@ export const cajaAPI = {
     observaciones?: string | null;
   }): Promise<any> => {
     const response = await api.post('/caja/egresos', data);
+    return response.data;
+  },
+
+  getPagoReciboPdf: async (id: number): Promise<Blob> => {
+    const response = await api.get(`/caja/pagos/${id}/recibo-pdf`, { responseType: 'blob' });
+    return response.data;
+  },
+
+  getEgresoReciboPdf: async (id: number): Promise<Blob> => {
+    const response = await api.get(`/caja/egresos/${id}/recibo-pdf`, { responseType: 'blob' });
+    return response.data;
+  },
+
+  getCierrePdf: async (id: number): Promise<Blob> => {
+    const response = await api.get(`/caja/${id}/cierre-pdf`, { responseType: 'blob' });
     return response.data;
   },
 
@@ -234,6 +264,21 @@ export const reportesAPI = {
   },
   getAlertasOperativas: async (): Promise<any> => {
     const response = await api.get('/reportes/alertas-operativas');
+    return response.data;
+  },
+  getAlertasVencimientos: async (params?: { dias?: number }): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (params?.dias !== undefined) queryParams.append('dias', params.dias.toString());
+    const query = queryParams.toString();
+    const response = await api.get(`/reportes/alertas-vencimientos${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+  getCierreFinanciero: async (params?: { fecha_inicio?: string; fecha_fin?: string }): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (params?.fecha_inicio) queryParams.append('fecha_inicio', params.fecha_inicio);
+    if (params?.fecha_fin) queryParams.append('fecha_fin', params.fecha_fin);
+    const query = queryParams.toString();
+    const response = await api.get(`/reportes/cierre-financiero${query ? `?${query}` : ''}`);
     return response.data;
   },
 };

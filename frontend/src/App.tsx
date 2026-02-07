@@ -9,6 +9,8 @@ import { EstudianteDetalle } from './pages/EstudianteDetalle';
 import { Caja } from './pages/Caja';
 import { HistorialCajas } from './pages/HistorialCajas';
 import { Reportes } from './pages/Reportes';
+import Alertas from './pages/Alertas';
+import CierreFinanciero from './pages/CierreFinanciero';
 import { Instructores } from './pages/Instructores';
 import { InstructorDetalle } from './pages/InstructorDetalle';
 import { Vehiculos } from './pages/Vehiculos';
@@ -130,9 +132,29 @@ function AppRoutes() {
       <Route
         path="/reportes"
         element={
-          <RoleRoute roles={[RolUsuario.GERENTE]}>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE]}>
             <Layout>
               <Reportes />
+            </Layout>
+          </RoleRoute>
+        }
+      />
+      <Route
+        path="/alertas"
+        element={
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO, RolUsuario.COORDINADOR]}>
+            <Layout>
+              <Alertas />
+            </Layout>
+          </RoleRoute>
+        }
+      />
+      <Route
+        path="/cierre-financiero"
+        element={
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE]}>
+            <Layout>
+              <CierreFinanciero />
             </Layout>
           </RoleRoute>
         }
