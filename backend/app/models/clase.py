@@ -125,6 +125,15 @@ class Vehiculo(Base):
     kilometraje_actual = Column(Integer)
     is_active = Column(Integer, default=1)
     
+    # Documentación (vencimientos)
+    soat_vencimiento = Column(Date)
+    rtm_vencimiento = Column(Date)
+    tecnomecanica_vencimiento = Column(Date)
+    seguro_vencimiento = Column(Date)
+    soat_url = Column(Text)
+    rtm_url = Column(Text)
+    seguro_url = Column(Text)
+    
     # Auditoría
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     

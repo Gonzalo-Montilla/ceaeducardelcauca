@@ -1,9 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional
 from datetime import datetime, timedelta
 from decimal import Decimal
+from io import BytesIO
+import os
+import base64
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+from reportlab.lib import colors
 from app.core.database import get_db
 from app.core.security import get_password_hash
 from app.core.precios import calcular_precio, obtener_categoria_licencia
@@ -11,8 +18,16 @@ from app.models.usuario import Usuario, RolUsuario
 from app.models.estudiante import Estudiante, EstadoEstudiante, CategoriaLicencia, OrigenCliente, TipoServicio
 from app.models.pago import Pago, MetodoPago, EstadoPago
 from app.models.compromiso_pago import CompromisoPago, CuotaPago, FrecuenciaPago, EstadoCuota
-from app.schemas.estudiante import EstudianteCreate, EstudianteUpdate, EstudianteResponse, EstudianteListItem, EstudiantesListResponse, DefinirServicioRequest
-from app.api.deps import get_current_active_user, get_admin_or_coordinador_or_cajero
+from app.schemas.estudiante import (
+    EstudianteCreate,
+    EstudianteUpdate,
+    EstudianteResponse,
+    EstudianteListItem,
+    EstudiantesListResponse,
+    DefinirServicioRequest,
+    AcreditarHorasRequest
+)
+from app.api.deps import get_current_active_user, get_admin_or_coordinador_or_cajero, require_role
 
 router = APIRouter()
 
@@ -59,7 +74,7 @@ def create_estudiante(
         # 2. Generar número de matrícula (correlativo)
         ultimo_estudiante = db.query(Estudiante).order_by(Estudiante.id.desc()).first()
         nuevo_numero = 1 if not ultimo_estudiante else ultimo_estudiante.id + 1
-        matricula_numero = f"CEA-{datetime.now().year}-{nuevo_numero:05d}"
+        matricula_numero = f"CEAEDUCAR-{datetime.now().year}-{nuevo_numero:05d}"
         
         # 3. Crear Estudiante (solo datos personales)
         nuevo_estudiante = Estudiante(
@@ -187,6 +202,21 @@ def get_estudiante(
     return _build_estudiante_response(estudiante, db)
 
 
+@router.get("/cedula/{cedula}", response_model=EstudianteResponse)
+def get_estudiante_por_cedula(
+    cedula: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
+):
+    estudiante = db.query(Estudiante).join(Usuario).filter(Usuario.cedula == cedula).first()
+    if not estudiante:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Estudiante no encontrado"
+        )
+    return _build_estudiante_response(estudiante, db)
+
+
 @router.put("/{estudiante_id}", response_model=EstudianteResponse)
 def update_estudiante(
     estudiante_id: int,
@@ -207,8 +237,21 @@ def update_estudiante(
     
     # Actualizar solo los campos proporcionados
     update_data = estudiante_data.model_dump(exclude_unset=True)
+    user_fields = {}
+    for field in ["nombre_completo", "email", "telefono", "cedula"]:
+        if field in update_data:
+            user_fields[field] = update_data.pop(field)
+    foto_base64 = update_data.pop("foto_base64", None)
+
     for field, value in update_data.items():
         setattr(estudiante, field, value)
+
+    if foto_base64:
+        estudiante.foto_url = foto_base64
+
+    if user_fields:
+        for field, value in user_fields.items():
+            setattr(estudiante.usuario, field, value)
     
     db.commit()
     db.refresh(estudiante)
@@ -332,6 +375,7 @@ def definir_servicio(
         
         # 8. Cambiar estado a EN_FORMACION
         estudiante.estado = EstadoEstudiante.EN_FORMACION
+        estudiante.contrato_pdf_url = f"/api/v1/estudiantes/{estudiante.id}/contrato-pdf"
         
         db.commit()
         db.refresh(estudiante)
@@ -344,6 +388,483 @@ def definir_servicio(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al definir servicio: {str(e)}"
         )
+
+
+@router.get("/{estudiante_id}/contrato-pdf")
+def contrato_estudiante_pdf(
+    estudiante_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_active_user)
+):
+    estudiante = db.query(Estudiante).filter(Estudiante.id == estudiante_id).first()
+    if not estudiante:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Estudiante no encontrado")
+    return _build_contrato_pdf(estudiante)
+
+
+@router.post("/{estudiante_id}/acreditar-horas", response_model=EstudianteResponse)
+def acreditar_horas(
+    estudiante_id: int,
+    payload: AcreditarHorasRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_role([RolUsuario.INSTRUCTOR, RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]))
+):
+    estudiante = db.query(Estudiante).filter(Estudiante.id == estudiante_id).first()
+    if not estudiante:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Estudiante no encontrado"
+        )
+
+    if estudiante.estado in [EstadoEstudiante.GRADUADO, EstadoEstudiante.RETIRADO, EstadoEstudiante.DESERTOR]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se pueden acreditar horas a estudiantes inactivos"
+        )
+
+    if payload.tipo == "TEORICA":
+        nuevo = estudiante.horas_teoricas_completadas + payload.horas
+        if estudiante.horas_teoricas_requeridas:
+            nuevo = min(nuevo, estudiante.horas_teoricas_requeridas)
+        estudiante.horas_teoricas_completadas = nuevo
+    else:
+        nuevo = estudiante.horas_practicas_completadas + payload.horas
+        if estudiante.horas_practicas_requeridas:
+            nuevo = min(nuevo, estudiante.horas_practicas_requeridas)
+        estudiante.horas_practicas_completadas = nuevo
+
+    datos = dict(estudiante.datos_adicionales or {})
+    historial = list(datos.get("clases_historial", []))
+    historial.append({
+        "fecha": datetime.utcnow().isoformat(),
+        "tipo": payload.tipo,
+        "horas": payload.horas,
+        "observaciones": payload.observaciones,
+        "usuario_id": current_user.id
+    })
+    datos["clases_historial"] = historial
+    estudiante.datos_adicionales = datos
+
+    if estudiante.esta_listo_para_examen:
+        estudiante.estado = EstadoEstudiante.LISTO_EXAMEN
+
+    db.commit()
+    db.refresh(estudiante)
+    return _build_estudiante_response(estudiante, db)
+
+
+def _build_contrato_pdf(estudiante: Estudiante) -> Response:
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+
+    _draw_contrato_header(c)
+    y = 680
+
+    # Fecha de inscripcion
+    y = _draw_box_row(
+        c,
+        y,
+        [
+            ("Fecha de Inscripcion", ""),
+            ("Dia", f"{estudiante.fecha_inscripcion.day:02d}"),
+            ("Mes", f"{estudiante.fecha_inscripcion.month:02d}"),
+            ("Ano", f"{estudiante.fecha_inscripcion.year}")
+        ],
+        [150, 80, 80, 120]
+    )
+
+    # Registro fotografico
+    y -= 10
+    y = _draw_section_bar(c, "REGISTRO FOTOGRAFICO", y)
+    photo_y = y - 120
+    _draw_photo_box(c, 50, photo_y, 120, 120, estudiante.foto_url)
+    _draw_rect(c, 50, photo_y, 520, 120)
+    y = photo_y - 10
+
+    # Datos de matricula y RUNT
+    y = _draw_box_row(
+        c,
+        y,
+        [
+            ("Matricula Numero", estudiante.matricula_numero or ""),
+            ("No Solicitud en el RUNT", estudiante.sicov_expediente_id or ""),
+            ("No Certificado", estudiante.no_certificado or ""),
+            ("Fecha de Salida", "")
+        ],
+        [140, 140, 120, 120]
+    )
+
+    # Datos personales
+    y -= 6
+    y = _draw_box_row(
+        c,
+        y,
+        [
+            ("Nombre del Alumno", estudiante.usuario.nombre_completo if estudiante.usuario else ""),
+            ("Tipo de Documento", "CC"),
+            ("Numero", estudiante.usuario.cedula if estudiante.usuario else "")
+        ],
+        [250, 120, 150]
+    )
+
+    nacimiento = estudiante.fecha_nacimiento
+    y = _draw_box_row(
+        c,
+        y,
+        [
+            ("Fecha de Nacimiento", _fmt_date(nacimiento)),
+            ("Dia", f"{nacimiento.day:02d}"),
+            ("Mes", f"{nacimiento.month:02d}"),
+            ("Ano", f"{nacimiento.year}"),
+            ("Estrato", str(estudiante.estrato or "")),
+            ("Nivel SISBEN", estudiante.nivel_sisben or "")
+        ],
+        [150, 60, 60, 60, 60, 110]
+    )
+
+    y = _draw_box_row(
+        c,
+        y,
+        [
+            ("Nombre de su EPS", estudiante.eps or ""),
+            ("Nombre de su ARL", _extra(estudiante, "arl"))
+        ],
+        [250, 260]
+    )
+
+    y = _draw_box_row(
+        c,
+        y,
+        [
+            ("Estado Civil", estudiante.estado_civil or ""),
+            ("Ocupacion", estudiante.ocupacion or "")
+        ],
+        [180, 330]
+    )
+
+    y = _draw_box_row(
+        c,
+        y,
+        [
+            ("Direccion", estudiante.direccion or ""),
+        ],
+        [510]
+    )
+    y = _draw_box_row(
+        c,
+        y,
+        [
+            ("Telefono", estudiante.usuario.telefono if estudiante.usuario else ""),
+            ("Correo Electronico", estudiante.usuario.email if estudiante.usuario else "")
+        ],
+        [180, 330]
+    )
+
+    # Nivel educativo / necesidades especiales
+    y -= 6
+    y = _draw_section_bar(c, "NIVEL EDUCATIVO", y)
+    y = _draw_checkbox_row(
+        c,
+        y,
+        ["Basica Primaria", "Basica Secundaria", "Tecnica", "Pregrado", "Postgrado", "Sin Estudio"],
+        estudiante.nivel_educativo
+    )
+    y = _draw_section_bar(c, "NECESIDADES ESPECIALES", y)
+    y = _draw_checkbox_row(
+        c,
+        y,
+        ["Idioma", "Discapacidad", "Otra"],
+        estudiante.necesidades_especiales
+    )
+
+    # Certificacion y categoria
+    y = _draw_section_bar(c, "MIN-TRANSPORTE", y)
+    y = _draw_checkbox_row(
+        c,
+        y,
+        ["A2", "B1", "C1"],
+        estudiante.categoria.value if estudiante.categoria else None,
+        prefix="CATEGORIA"
+    )
+    y -= 12
+
+    # Texto del contrato
+    y = _ensure_space_contrato(c, y, 120)
+    y = _draw_paragraphs(c, CONTRATO_PARRAFOS, 50, y, 520, 12)
+
+    # Firmas
+    y = _ensure_space_contrato(c, y, 140)
+    y -= 30
+    y = _draw_signature_lines(c, y)
+
+    c.showPage()
+    c.save()
+    return _pdf_response(buffer, f"contrato_{estudiante.matricula_numero or estudiante.id}.pdf")
+
+
+def _draw_contrato_header(c: canvas.Canvas) -> None:
+    _draw_logo_contrato(c)
+    c.setFont("Helvetica-Bold", 11)
+    c.drawCentredString(330, 770, "SISTEMA DE GESTION DE CALIDAD SGC")
+    c.setFont("Helvetica-Bold", 12)
+    c.drawCentredString(330, 752, "CONTRATO DE APRENDIZAJE")
+    _draw_header_cells(c, 720)
+
+
+def _draw_logo_contrato(c: canvas.Canvas) -> None:
+    logo_path = os.getenv("CEA_LOGO_PATH")
+    if not logo_path:
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", ".."))
+        assets_dir = os.path.join(repo_root, "frontend", "src", "assets")
+        logo_path = os.path.join(assets_dir, "cea_educar_final.png")
+        if not os.path.exists(logo_path):
+            logo_path = os.path.join(assets_dir, "cea educar final.jpg")
+    if logo_path and os.path.exists(logo_path):
+        try:
+            logo = ImageReader(logo_path)
+            c.drawImage(logo, 30, 700, width=240, height=90, preserveAspectRatio=True, mask='auto')
+        except Exception:
+            return
+
+
+def _draw_header_cells(c: canvas.Canvas, y: int) -> None:
+    x = 200
+    w = 320
+    h = 14
+    col = w / 3
+    _draw_rect(c, x, y, w, h)
+    _draw_rect(c, x, y, col, h)
+    _draw_rect(c, x + col, y, col, h)
+    _draw_rect(c, x + 2 * col, y, col, h)
+    c.setFont("Helvetica", 7)
+    c.drawCentredString(x + col / 2, y + 4, "Vigente desde: 01/07/2022")
+    c.drawCentredString(x + col + col / 2, y + 4, "Codigo: SGC - FR 01")
+    c.drawCentredString(x + 2 * col + col / 2, y + 4, "Version: 01")
+
+
+def _draw_photo_box(c: canvas.Canvas, x: int, y: int, w: int, h: int, foto_url: Optional[str]) -> None:
+    if foto_url and foto_url.startswith("data:image"):
+        try:
+            header, data = foto_url.split(",", 1)
+            image_data = BytesIO(base64.b64decode(data))
+            c.drawImage(ImageReader(image_data), x + 5, y + 5, width=w - 10, height=h - 10, preserveAspectRatio=True, mask='auto')
+            return
+        except Exception:
+            pass
+    c.setFont("Helvetica", 8)
+    c.drawCentredString(x + w / 2, y + h / 2, "FOTO")
+
+
+def _draw_rect(c: canvas.Canvas, x: int, y: int, w: int, h: int) -> None:
+    c.setLineWidth(0.6)
+    c.rect(x, y, w, h)
+
+
+def _draw_section_bar(c: canvas.Canvas, title: str, y: int) -> int:
+    c.setFillColor(colors.Color(0.95, 0.96, 0.98))
+    c.rect(50, y - 16, 520, 16, fill=1, stroke=1)
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica-Bold", 9)
+    c.drawCentredString(310, y - 12, title)
+    return y - 22
+
+
+def _draw_box_row(c: canvas.Canvas, y: int, items: list, widths: list, total_width: int = 520) -> int:
+    x = 50
+    h = 22
+    c.setFont("Helvetica", 8)
+    used = sum(widths)
+    if widths and used < total_width:
+        widths = list(widths)
+        widths[-1] += (total_width - used)
+    for (label, value), w in zip(items, widths):
+        _draw_rect(c, x, y - h, w, h)
+        c.setFont("Helvetica-Bold", 7)
+        c.drawString(x + 4, y - 10, label)
+        c.setFont("Helvetica", 8)
+        c.drawString(x + 4, y - 18, str(value))
+        x += w
+    return y - h
+
+
+def _draw_checkbox_row(c: canvas.Canvas, y: int, options: list, selected: Optional[str], prefix: Optional[str] = None) -> int:
+    x = 50
+    h = 18
+    selected_norm = (str(selected).lower() if selected else "")
+    if prefix:
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(x, y - 12, prefix)
+        x += 70
+    for opt in options:
+        opt_norm = opt.lower().replace(" ", "_")
+        _draw_rect(c, x, y - h, 12, 12)
+        if selected_norm and (opt_norm in selected_norm or opt.lower() in selected_norm):
+            c.setFont("Helvetica-Bold", 9)
+            c.drawString(x + 3, y - 12, "X")
+        c.setFont("Helvetica", 8)
+        c.drawString(x + 16, y - 12, opt)
+        x += 90
+    return y - h
+
+
+def _draw_paragraphs(c: canvas.Canvas, paragraphs: list, x: int, y: int, width: int, leading: int) -> int:
+    font_name = "Helvetica"
+    font_size = 9
+    c.setFont(font_name, font_size)
+    for entry in paragraphs:
+        if isinstance(entry, tuple):
+            title, body = entry
+            c.setFont("Helvetica-Bold", font_size)
+            if y < 80:
+                c.showPage()
+                _draw_contrato_header(c)
+                y = 680
+            c.drawString(x, y, title)
+            y -= leading
+            c.setFont(font_name, font_size)
+            if not body:
+                y -= 4
+                continue
+            text = body
+        else:
+            text = entry
+        lines = _wrap_text(c, text, width, font_name, font_size)
+        for i, line in enumerate(lines):
+            if y < 80:
+                c.showPage()
+                _draw_contrato_header(c)
+                y = 680
+                c.setFont(font_name, font_size)
+            is_last = (i == len(lines) - 1)
+            _draw_justified_line(c, line, x, y, width, font_name, font_size, is_last)
+            y -= leading
+        y -= 6
+    return y
+
+
+def _wrap_text(c: canvas.Canvas, text: str, max_width: int, font_name: str, font_size: int) -> list:
+    words = text.split()
+    lines = []
+    current = []
+    for word in words:
+        test = " ".join(current + [word])
+        if c.stringWidth(test, font_name, font_size) <= max_width:
+            current.append(word)
+        else:
+            if current:
+                lines.append(" ".join(current))
+            current = [word]
+    if current:
+        lines.append(" ".join(current))
+    return lines
+
+
+def _draw_justified_line(
+    c: canvas.Canvas,
+    line: str,
+    x: int,
+    y: int,
+    width: int,
+    font_name: str,
+    font_size: int,
+    is_last: bool
+) -> None:
+    words = line.split()
+    if is_last or len(words) <= 1:
+        c.drawString(x, y, line)
+        return
+    words_width = sum(c.stringWidth(w, font_name, font_size) for w in words)
+    spaces = len(words) - 1
+    if spaces <= 0:
+        c.drawString(x, y, line)
+        return
+    space_width = (width - words_width) / spaces
+    cursor = x
+    for i, word in enumerate(words):
+        c.drawString(cursor, y, word)
+        cursor += c.stringWidth(word, font_name, font_size)
+        if i < spaces:
+            cursor += space_width
+
+
+def _draw_signature_lines(c: canvas.Canvas, y: int) -> int:
+    c.setLineWidth(0.6)
+    c.line(60, y, 260, y)
+    c.line(320, y, 520, y)
+    c.line(60, y - 50, 260, y - 50)
+    c.setFont("Helvetica", 8)
+    c.drawString(60, y - 12, "FIRMA ALUMNO: ACEPTO LAS CONDICIONES DEL CEAP")
+    c.drawString(320, y - 12, "FIRMA REPRESENTANTE LEGAL CEA")
+    c.drawString(60, y - 62, "FIRMA DE ACUDIENTE O PADRE DE FAMILIA")
+    _draw_rect(c, 480, y - 80, 50, 50)
+    _draw_rep_signature(c, 330, y + 4, 150, 30)
+    return y - 90
+
+
+def _draw_rep_signature(c: canvas.Canvas, x: int, y: int, w: int, h: int) -> None:
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", ".."))
+    assets_dir = os.path.join(repo_root, "frontend", "src", "assets")
+    signature_path = os.path.join(assets_dir, "firma jerson.png")
+    if signature_path and os.path.exists(signature_path):
+        try:
+            c.drawImage(ImageReader(signature_path), x, y, width=w, height=h, preserveAspectRatio=True, mask="auto")
+        except Exception:
+            return
+
+
+def _ensure_space_contrato(c: canvas.Canvas, y: int, min_y: int) -> int:
+    if y < min_y:
+        c.showPage()
+        _draw_contrato_header(c)
+        return 680
+    return y
+
+
+def _fmt_date(value: datetime) -> str:
+    if not value:
+        return ""
+    return value.strftime("%Y-%m-%d")
+
+
+def _extra(estudiante: Estudiante, key: str) -> str:
+    datos = estudiante.datos_adicionales or {}
+    return datos.get(key, "")
+
+
+def _pdf_response(buffer: BytesIO, filename: str) -> Response:
+    pdf_bytes = buffer.getvalue()
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'}
+    )
+
+
+CONTRATO_PARRAFOS = [
+    ("1. PRIMERA. Objetivo:", "Formar personas con aptitudes, habilidades, destrezas y fundamentar los conocimientos requeridos para la conduccion de un vehiculo automotor, sin poner en riesgo su vida y la de los demas segun la reglamentacion expedida por el Ministerio de Transporte, Decreto 1500 de 2009, Resolucion 3245 del 21 de Julio de 2009 y demas requisitos legales aplicables y reglamentarios."),
+    ("2. SEGUNDA. Naturaleza de la capacitacion.", "El alumno aspira a obtener la certificacion de aptitud en conduccion para la categoria A2___, B1___, C1___, de acuerdo con la formacion que imparte el Centro de Ensenanza Automovilistica y la aplicabilidad que el mismo tiene para la obtencion de la licencia de conduccion en la categoria seleccionada anteriormente por el alumno."),
+    ("3. TERCERA. Duracion y Periodos de la formacion.", "La formacion tiene una duracion maxima de 3 meses, comprendidos entre la fecha de iniciacion de los modulos de la formacion y la fecha de terminacion de los mismos. La capacitacion se encuentra distribuida en 3 modulos: Modulo de formacion teorica, Modulo de formacion basica aplicada y el Modulo de formacion especifica."),
+    ("PARAGRAFO. 1°", "Este contrato puede ser modificado en su duracion parcial y total, cuando por el rendimiento en la formacion del alumno y previo analisis de las evaluaciones que el Centro de Ensenanza le aplique al terminar cada bloque modular se identifique alguna necesidad de recapacitar al alumno en algun(os) tema(s) especifico(s)."),
+    ("PARAGRAFO. 2º", "La certificacion de la aptitud en conduccion del alumno esta sujeta al cumplimiento y aprobacion de los rangos establecidos por el Ministerio de Transporte al momento de realizar la evaluacion teorico-Practica."),
+    ("4. CUARTO: Contenido y desarrollo del curso:", "La formacion de conductores se llevara a cabo en (3) tres modulos con temas relacionados con:"),
+    ("MODULO I FORMACION TEORICA:", "ADAPTACION AL MEDIO: Ubicacion del vehiculo en la via y sus componentes, senales de transito, accidentalidad en Colombia, Normas de transito, Autoridades de transito, elementos, personas, definicion de terminos y factores que intervienen en el transito, la via, el vehiculo. ETICA, PREVENCION DE CONFLICTOS Y COMUNICACION: Valores del conductor, el peaton: deberes y responsabilidades, el conductor: deberes y responsabilidades, conductas apropiadas e inapropiadas de los usuarios de la via, los derechos humanos, compromiso con el medio ambiente, la movilidad y el transito, accesibilidad y sus barreras, respeto por el espacio publico, el alcohol y otras sustancias, cultura ciudadana, la agresividad y la velocidad, la responsabilidad social, autocontrol y autodiagnostico del conductor, respeto a la vida, sensibilizacion ante la incapacidad."),
+    ("MODULO II FORMACION BASICA APLICADA:", "MECANICA BASICA: Descripcion del vehiculo, partes esenciales y localizacion, accesorios del motor, cambio de aceite y llantas, funcionamiento de averias mas frecuentes. MARCO LEGAL: Aspectos legales de transito, documentos obligatorios, licencias, clasificacion y requisitos, Codigo Nacional de transito y sus reglamentaciones, procedimientos juridicos, normas de salud ocupacional, normas ambientales, normas de convivencia y restricciones por ciudades. TECNICAS EN CONDUCCION: Componentes del vehiculo, elementos de seguridad, inspeccion al vehiculo, adaptacion al vehiculo, familiarizacion con los distintos controles, conceptos de velocidad, operacion del control de velocidades o seleccion de velocidades, conduccion del vehiculo, manejo de las distancias en la conduccion, primeros auxilios en salud o mecanicos, adaptacion viso-espacial al vehiculo, parqueo y estacionamientos."),
+    ("MODULO III FORMACION ESPECIFICA:", "UNIDAD PRACTICA: Taller inspeccion pre operacional, ajuste de asiento, adaptacion Visio-espacial, utilizacion de elementos de seguridad, puesta en marcha del motor, regulacion de velocidades, puesta en marcha del vehiculo, coordinacion, aceleracion-freno-embrague, aceleracion y desaceleracion, control de cambios, conduccion del vehiculo en via urbana, carretera, terreno plano, terreno inclinado, maniobra de cruces y adelantamientos, utilizacion de senales luminicas, corporales y acusticas, utilizacion de calzadas, carriles, afrontar y utilizacion de glorietas, afrontar intersecciones, respeto a las marcas viales y senales de transito, distancias de reaccion, frenado, maniobras de adelantamiento, reversa, entrada y salida de curvas, parqueo, estacionamiento frontal y en reversa, utilizacion del equipo de seguridad, nomenclatura urbana y nacional, normas de seguridad en el aseguramiento de la carga, uso de salidas de emergencia."),
+    ("5. HORARIOS.", "Los horarios para las clases practicas se programaran con antelacion para que se puedan adecuar a la disponibilidad de tiempo de cada uno de los alumnos, en cuanto a las clases teoricas, se le entregara al alumno al inicio de sus clases el cronograma con sus respectivos horarios debido a que estos modulos se desarrollan en grupo, por lo cual tienen un horario fijo."),
+    ("6. METODOLOGIA.", "Clases presenciales, talleres con ejercicios, conferencias y practicas de campo orientadas a trabajar para el desarrollo de las habilidades teorico-practicas como conductor en cada modulo y al finalizar cada modulo se realizara una evaluacion."),
+    ("7. INTENSIDAD HORARIA.", "Al alumno se le impartira la formacion teorico-practica de acuerdo a la intensidad horaria reglamentada en el Anexo I de la Resolucion 3245 de 2009 emitida por el Ministerio de Transporte."),
+    ("8. CONDICIONES PARA LA PRESTACION DEL SERVICIO:", ""),
+    ("8.1", "Para acceder al proceso de capacitacion y de formacion como conductor, el aspirante debera como minimo, saber leer y escribir, tener 16 anos cumplidos para el servicio diferente al publico, y tener 18 anos para vehiculos de servicio publico. (Art. 15 Decreto 1500 de 2009)."),
+    ("8.2", "Cuando se este impartiendo ensenanza practica solo podran ir en el vehiculo el instructor debidamente acreditado y el aprendiz, excepto en los vehiculos tipo B2, C2, B3 y C3, de acuerdo a lo establecido por el Ministerio de Transporte. (Art. 7 Decreto 1500 de 2009)."),
+    ("8.3", "Quien padezca una limitacion fisica, podra obtener la licencia de conduccion, si ademas de cumplir con todos los requisitos, demuestra en el examen de aptitud fisica, mental y de coordinacion motriz, que se encuentra habilitado y adiestrado para conducir con dicha limitacion. (Art. 21 Ley 769 de 2002)."),
+    ("8.4", "Los horarios son programados por el Centro de Ensenanza, por lo tanto, no se responsabiliza por la ensenanza impartida por fuera de dicha programacion."),
+    ("8.5", "En caso de que el alumno suspenda su clase practica previamente programada, debe informar con 2 horas de anticipacion para realizar la reprogramacion de la misma."),
+    ("8.5", "Para el desarrollo de las clases el alumno debera presentarse en el Centro de Ensenanza Automovilistica en el horario programado."),
+    ("8.6", "Una vez iniciado el curso, no se admite interferencia de terceras personas."),
+    ("8.7", "No es posible cambiar horas teoricas por horas practicas, ya que la estructura curricular esta basada en modulos que son necesarios aprobar en todos los aspectos tanto teoricos como practicos."),
+    ("8.8", "Es deber del alumno manifestar al centro de ensenanza el grado de conformidad con el sistema de aprendizaje empleado por los instructores, para retroalimentar el Sistema de mejoramiento continuo de nuestra empresa.")
+]
 
 
 def _build_estudiante_response(estudiante: Estudiante, db: Session = None) -> EstudianteResponse:
@@ -364,6 +885,10 @@ def _build_estudiante_response(estudiante: Estudiante, db: Session = None) -> Es
         
         historial_pagos = [_build_pago_response(p) for p in pagos]
     
+    clases_historial = []
+    if estudiante.datos_adicionales:
+        clases_historial = estudiante.datos_adicionales.get("clases_historial", [])
+
     return EstudianteResponse(
         id=estudiante.id,
         usuario_id=estudiante.usuario_id,
@@ -406,5 +931,6 @@ def _build_estudiante_response(estudiante: Estudiante, db: Session = None) -> Es
         progreso_teorico=estudiante.progreso_teorico,
         progreso_practico=estudiante.progreso_practico,
         esta_listo_para_examen=estudiante.esta_listo_para_examen,
-        historial_pagos=historial_pagos
+        historial_pagos=historial_pagos,
+        clases_historial=clases_historial
     )

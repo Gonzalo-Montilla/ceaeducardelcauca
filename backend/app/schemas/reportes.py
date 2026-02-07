@@ -56,6 +56,8 @@ class KPIDashboard(BaseModel):
     # Financieros
     ingresos_totales: KPIMetrica
     egresos_totales: KPIMetrica
+    ingreso_neto: Decimal
+    ingresos_promedio_por_caja: Decimal
     saldo_pendiente: Decimal
     margen_operativo: float  # (ingresos - egresos) / ingresos * 100
     
@@ -69,6 +71,7 @@ class KPIDashboard(BaseModel):
     ticket_promedio: Decimal
     dias_promedio_pago: float
     tasa_cobranza: float  # Pagado vs pendiente
+    porcentaje_pagos_vencidos: float
     
     class Config:
         from_attributes = True
@@ -197,6 +200,85 @@ class AlertasOperativas(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AlertaDocumentoVehiculo(BaseModel):
+    vehiculo_id: int
+    placa: str
+    documento: str
+    fecha_vencimiento: datetime
+    dias_restantes: int
+
+
+class AlertaPin(BaseModel):
+    estudiante_id: int
+    nombre_completo: str
+    cedula: str
+    fecha_vencimiento: datetime
+    dias_restantes: int
+
+
+class AlertaPagoVencido(BaseModel):
+    pago_id: int
+    estudiante_id: int
+    nombre_completo: str
+    monto: Decimal
+    fecha_vencimiento: datetime
+    dias_mora: int
+
+
+class AlertaCompromiso(BaseModel):
+    cuota_id: int
+    estudiante_id: int
+    nombre_completo: str
+    saldo_cuota: Decimal
+    fecha_vencimiento: datetime
+    dias_restantes: int
+
+
+class AlertaDocumentoInstructor(BaseModel):
+    instructor_id: int
+    nombre_completo: str
+    documento: str
+    fecha_vencimiento: datetime
+    dias_restantes: int
+
+
+class AlertasVencimientosResponse(BaseModel):
+    documentos_vehiculo: List[AlertaDocumentoVehiculo]
+    documentos_instructor: List[AlertaDocumentoInstructor]
+    pins_por_vencer: List[AlertaPin]
+    pagos_vencidos: List[AlertaPagoVencido]
+    compromisos_por_vencer: List[AlertaCompromiso]
+
+
+class CierreCajaItem(BaseModel):
+    id: int
+    fecha_apertura: datetime
+    fecha_cierre: Optional[datetime]
+    estado: str
+    total_ingresos: Decimal
+    total_egresos: Decimal
+    diferencia: Optional[Decimal]
+
+
+class CierreFinancieroResponse(BaseModel):
+    fecha_inicio: datetime
+    fecha_fin: datetime
+    total_ingresos: Decimal
+    total_egresos: Decimal
+    saldo_efectivo_teorico: Decimal
+    total_efectivo: Decimal
+    total_transferencias: Decimal
+    total_tarjetas: Decimal
+    total_nequi: Decimal
+    total_daviplata: Decimal
+    total_transferencia_bancaria: Decimal
+    total_tarjeta_debito: Decimal
+    total_tarjeta_credito: Decimal
+    total_credismart: Decimal
+    total_sistecredito: Decimal
+    cajas: List[CierreCajaItem]
 
 
 # ==================== REPORTE FINANCIERO ====================

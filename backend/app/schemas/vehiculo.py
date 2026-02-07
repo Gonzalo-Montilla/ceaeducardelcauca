@@ -1,6 +1,6 @@
 from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, date
 import re
 
 
@@ -104,6 +104,13 @@ class VehiculoResponse(BaseModel):
     vin: Optional[str]
     foto_url: Optional[str]
     kilometraje_actual: Optional[int]
+    soat_vencimiento: Optional[date] = None
+    rtm_vencimiento: Optional[date] = None
+    tecnomecanica_vencimiento: Optional[date] = None
+    seguro_vencimiento: Optional[date] = None
+    soat_url: Optional[str] = None
+    rtm_url: Optional[str] = None
+    seguro_url: Optional[str] = None
     is_active: bool
     created_at: datetime
 

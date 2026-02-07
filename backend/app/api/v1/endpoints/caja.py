@@ -1,10 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func
 from typing import List, Optional
 from datetime import datetime, timedelta
 from decimal import Decimal
 import logging
+from io import BytesIO
+import os
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
+from reportlab.lib import colors
 
 from app.core.database import get_db
 from app.api.deps import get_current_active_user, get_admin_or_coordinador_or_cajero
@@ -212,6 +218,198 @@ def get_historial_cajas(
     cajas = query.offset(skip).limit(limit).all()
     
     return [_build_caja_resumen(c, db) for c in cajas]
+
+
+@router.get("/pagos/{pago_id}/recibo-pdf")
+def get_recibo_pago_pdf(
+    pago_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_active_user)
+):
+    pago = db.query(Pago).filter(Pago.id == pago_id).first()
+    if not pago:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pago no encontrado")
+
+    db.refresh(pago, ['detalles_pago', 'estudiante', 'usuario'])
+    estudiante = pago.estudiante
+
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    _pdf_header(c, "Recibo de pago")
+    y = 580
+    c.setLineWidth(0.5)
+    c.line(80, y, 532, y)
+    y -= 20
+
+    y = _pdf_section(c, "Datos del pago", y)
+    y = _pdf_kv(c, "ID pago", pago.id, y)
+    y = _pdf_kv(c, "Fecha", pago.fecha_pago.strftime("%Y-%m-%d %H:%M"), y)
+    y = _pdf_kv(c, "Concepto", pago.concepto, y)
+    y = _pdf_kv(c, "Monto", _fmt_money(pago.monto), y)
+    metodo = pago.metodo_pago.value if pago.metodo_pago else "MIXTO"
+    y = _pdf_kv(c, "Metodo", metodo, y)
+    if pago.referencia_pago:
+        y = _pdf_kv(c, "Referencia", pago.referencia_pago, y)
+
+    y -= 6
+    y = _pdf_section(c, "Estudiante", y)
+    y = _pdf_kv(c, "Nombre", estudiante.usuario.nombre_completo if estudiante and estudiante.usuario else "N/A", y)
+    y = _pdf_kv(c, "Cedula", estudiante.usuario.cedula if estudiante and estudiante.usuario else "N/A", y)
+    y = _pdf_kv(c, "Matricula", estudiante.matricula_numero if estudiante else "N/A", y)
+    if estudiante and estudiante.saldo_pendiente and estudiante.saldo_pendiente > 0:
+        y = _pdf_kv(c, "Saldo pendiente", _fmt_money(estudiante.saldo_pendiente), y)
+
+    if pago.es_pago_mixto and pago.detalles_pago:
+        y -= 6
+        y = _pdf_section(c, "Detalle pago mixto", y)
+        for d in pago.detalles_pago:
+            referencia = f" ({d.referencia})" if d.referencia else ""
+            y = _pdf_kv(
+                c,
+                d.metodo_pago.value,
+                f"{_fmt_money(d.monto)}{referencia}",
+                y
+            )
+
+    y -= 6
+    y = _pdf_section(c, "Atendido por", y)
+    y = _pdf_kv(c, "Usuario", pago.usuario.nombre_completo if pago.usuario else "N/A", y)
+    c.showPage()
+    c.save()
+    return _pdf_response(buffer, f"recibo_pago_{pago.id}.pdf")
+
+
+@router.get("/egresos/{egreso_id}/recibo-pdf")
+def get_recibo_egreso_pdf(
+    egreso_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_active_user)
+):
+    egreso = db.query(MovimientoCaja).filter(
+        MovimientoCaja.id == egreso_id,
+        MovimientoCaja.tipo == TipoMovimiento.EGRESO
+    ).first()
+    if not egreso:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Egreso no encontrado")
+
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    _pdf_header(c, "Recibo de egreso")
+    y = 580
+    c.setLineWidth(0.5)
+    c.line(80, y, 532, y)
+    y -= 20
+
+    y = _pdf_section(c, "Datos del egreso", y)
+    y = _pdf_kv(c, "ID egreso", egreso.id, y)
+    y = _pdf_kv(c, "Fecha", egreso.fecha.strftime("%Y-%m-%d %H:%M"), y)
+    y = _pdf_kv(c, "Concepto", egreso.concepto, y)
+    y = _pdf_kv(c, "Categoria", egreso.categoria.value if egreso.categoria else "OTROS", y)
+    y = _pdf_kv(c, "Metodo", str(egreso.metodo_pago), y)
+    if egreso.numero_factura:
+        y = _pdf_kv(c, "Factura", egreso.numero_factura, y)
+
+    y -= 6
+    y = _pdf_section(c, "Monto", y)
+    y = _pdf_kv(c, "Total", _fmt_money(egreso.monto), y)
+
+    y -= 6
+    y = _pdf_section(c, "Atendido por", y)
+    y = _pdf_kv(c, "Usuario", egreso.usuario.nombre_completo if egreso.usuario else "N/A", y)
+    c.showPage()
+    c.save()
+    return _pdf_response(buffer, f"recibo_egreso_{egreso.id}.pdf")
+
+
+@router.get("/{caja_id}/cierre-pdf")
+def get_cierre_caja_pdf(
+    caja_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_active_user)
+):
+    caja = db.query(Caja).filter(Caja.id == caja_id).first()
+    if not caja:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Caja no encontrada")
+
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    _pdf_header(c, "Cierre de caja")
+    y = 580
+    c.setLineWidth(0.5)
+    c.line(80, y, 532, y)
+    y -= 20
+
+    y = _pdf_section(c, "Datos de caja", y)
+    y = _pdf_kv(c, "ID caja", caja.id, y)
+    y = _pdf_kv(c, "Apertura", caja.fecha_apertura.strftime("%Y-%m-%d %H:%M"), y)
+    if caja.fecha_cierre:
+        y = _pdf_kv(c, "Cierre", caja.fecha_cierre.strftime("%Y-%m-%d %H:%M"), y)
+    y = _pdf_kv(c, "Usuario apertura", caja.usuario_apertura.nombre_completo, y)
+    y = _pdf_kv(c, "Usuario cierre", caja.usuario_cierre.nombre_completo if caja.usuario_cierre else "N/A", y)
+
+    y -= 6
+    y = _pdf_section(c, "Totales", y)
+    y = _pdf_kv(c, "Saldo inicial", _fmt_money(caja.saldo_inicial), y)
+    y = _pdf_kv(c, "Ingresos", _fmt_money(caja.total_ingresos), y)
+    y = _pdf_kv(c, "Egresos", _fmt_money(caja.total_egresos), y)
+    y = _pdf_kv(c, "Efectivo teorico", _fmt_money(caja.efectivo_teorico or 0), y)
+    y = _pdf_kv(c, "Efectivo fisico", _fmt_money(caja.efectivo_fisico or 0), y)
+    y = _pdf_kv(c, "Diferencia", _fmt_money(caja.diferencia or 0), y)
+
+    # Detalle de egresos
+    egresos = db.query(MovimientoCaja).filter(
+        MovimientoCaja.caja_id == caja.id,
+        MovimientoCaja.tipo == TipoMovimiento.EGRESO
+    ).order_by(MovimientoCaja.fecha.desc()).all()
+
+    y = _ensure_space(c, y, 180, "Cierre de caja (continuacion)")
+    y = _pdf_section(c, "Detalle de egresos", y)
+    table_headers = ["Fecha", "Concepto", "Categoria", "Metodo", "Monto"]
+    table_widths = [80, 170, 90, 70, 42]
+    y = _pdf_table_header(c, table_headers, table_widths, y)
+    for e in egresos:
+        if y < 90:
+            c.showPage()
+            _pdf_header(c, "Cierre de caja (continuacion)")
+            y = 580
+            c.setLineWidth(0.5)
+            c.line(80, y, 532, y)
+            y -= 20
+            y = _pdf_section(c, "Detalle de egresos", y)
+            y = _pdf_table_header(c, table_headers, table_widths, y)
+        concepto = (e.concepto or "")[:24]
+        categoria = e.categoria.value if e.categoria else "OTROS"
+        metodo = str(e.metodo_pago)
+        y = _pdf_table_row(
+            c,
+            [
+                e.fecha.strftime("%Y-%m-%d"),
+                concepto,
+                categoria,
+                metodo,
+                _fmt_money(e.monto)
+            ],
+            table_widths,
+            y
+        )
+
+    # Resumen por categoria (top 5)
+    resumen = db.query(
+        MovimientoCaja.categoria,
+        func.sum(MovimientoCaja.monto).label("total")
+    ).filter(
+        MovimientoCaja.caja_id == caja.id,
+        MovimientoCaja.tipo == TipoMovimiento.EGRESO
+    ).group_by(MovimientoCaja.categoria).order_by(func.sum(MovimientoCaja.monto).desc()).limit(5).all()
+
+    y = _ensure_space(c, y, 140, "Cierre de caja (continuacion)")
+    y = _pdf_section(c, "Resumen por categoria", y)
+    for r in resumen:
+        nombre = r.categoria.value if r.categoria else "OTROS"
+        y = _pdf_kv(c, nombre, _fmt_money(r.total or 0), y)
+    c.showPage()
+    c.save()
+    return _pdf_response(buffer, f"cierre_caja_{caja.id}.pdf")
 
 
 # ==================== PAGOS ENDPOINTS ====================
@@ -535,6 +733,104 @@ def _build_movimiento_response(movimiento: MovimientoCaja) -> MovimientoCajaResp
         observaciones=movimiento.observaciones,
         usuario_nombre=movimiento.usuario.nombre_completo,
         created_at=movimiento.created_at
+    )
+
+
+def _pdf_header(c: canvas.Canvas, titulo: str) -> None:
+    _draw_logo(c)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(306, 652, "CEA EDUCAR")
+    c.setFont("Helvetica", 11)
+    c.drawCentredString(306, 636, "Centro de ensenanza automovilistica")
+    c.setFont("Helvetica-Bold", 14)
+    c.drawCentredString(306, 620, titulo)
+
+
+def _draw_logo(c: canvas.Canvas) -> None:
+    logo_path = os.getenv("CEA_LOGO_PATH")
+    if not logo_path:
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", ".."))
+        assets_dir = os.path.join(repo_root, "frontend", "src", "assets")
+        logo_path = os.path.join(assets_dir, "cea_educar_final.png")
+        if not os.path.exists(logo_path) and os.path.isdir(assets_dir):
+            for f in os.listdir(assets_dir):
+                if f.lower().endswith(".png"):
+                    logo_path = os.path.join(assets_dir, f)
+                    break
+    if logo_path and os.path.exists(logo_path):
+        try:
+            logo = ImageReader(logo_path)
+            c.drawImage(logo, 186, 675, width=240, height=120, preserveAspectRatio=True, mask='auto')
+        except Exception:
+            return
+
+
+def _pdf_kv(c: canvas.Canvas, label: str, value, y: int) -> int:
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(120, y, f"{label}:")
+    c.setFont("Helvetica", 10)
+    c.drawString(300, y, str(value))
+    return y - 18
+
+
+def _pdf_section(c: canvas.Canvas, titulo: str, y: int) -> int:
+    titulo = titulo.upper()
+    x = 80
+    width = 452
+    height = 18
+    rect_y = y - 12
+    c.setFillColor(colors.Color(0.95, 0.96, 0.98))
+    c.setStrokeColor(colors.Color(0.88, 0.90, 0.94))
+    c.rect(x, rect_y, width, height, fill=1, stroke=1)
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica-Bold", 11)
+    text_width = c.stringWidth(titulo, "Helvetica-Bold", 11)
+    c.drawString(x + (width - text_width) / 2, y - 8, titulo)
+    return y - 24
+
+
+def _fmt_money(value: Decimal) -> str:
+    try:
+        return f"${value:,.0f}"
+    except Exception:
+        return f"${value}"
+
+
+def _ensure_space(c: canvas.Canvas, y: int, min_y: int, titulo: str) -> int:
+    if y < min_y:
+        c.showPage()
+        _pdf_header(c, titulo)
+        y = 580
+        c.setLineWidth(0.5)
+        c.line(80, y, 532, y)
+        y -= 20
+    return y
+
+
+def _pdf_table_header(c: canvas.Canvas, headers: list, widths: list, y: int) -> int:
+    x = 80
+    c.setFont("Helvetica-Bold", 9)
+    for h, w in zip(headers, widths):
+        c.drawString(x, y, h)
+        x += w
+    return y - 14
+
+
+def _pdf_table_row(c: canvas.Canvas, values: list, widths: list, y: int) -> int:
+    x = 80
+    c.setFont("Helvetica", 9)
+    for v, w in zip(values, widths):
+        c.drawString(x, y, str(v))
+        x += w
+    return y - 14
+
+
+def _pdf_response(buffer: BytesIO, filename: str) -> Response:
+    pdf_bytes = buffer.getvalue()
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'}
     )
 
 

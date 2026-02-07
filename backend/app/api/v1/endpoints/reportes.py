@@ -12,14 +12,16 @@ from app.models.caja import Caja, MovimientoCaja, EstadoCaja, ConceptoEgreso
 from app.models.pago import Pago, DetallePago, MetodoPago, EstadoPago
 from app.models.compromiso_pago import CuotaPago, EstadoCuota
 from app.models.estudiante import Estudiante, EstadoEstudiante
-from app.models.clase import MantenimientoVehiculo
+from app.models.clase import MantenimientoVehiculo, Vehiculo, Instructor
 from app.schemas.reportes import (
     DashboardEjecutivo, KPIDashboard, KPIMetrica,
     GraficoEvolucionIngresos, GraficoMetodosPago,
     GraficoEstudiantesCategorias, GraficoEgresos,
     DatoPunto, DatoCategoria,
     EstudianteRegistrado, EstudiantePago, ReferidoRanking,
-    AlertasOperativas
+    AlertasOperativas, AlertasVencimientosResponse,
+    AlertaDocumentoVehiculo, AlertaDocumentoInstructor, AlertaPin, AlertaPagoVencido, AlertaCompromiso,
+    CierreFinancieroResponse, CierreCajaItem
 )
 
 router = APIRouter()
@@ -40,7 +42,7 @@ def get_dashboard_ejecutivo(
     """
     # Si no se especifican fechas, usar mes actual
     if not fecha_fin:
-        fecha_fin = datetime.now()
+        fecha_fin = datetime.utcnow()
     if not fecha_inicio:
         fecha_inicio = fecha_fin.replace(day=1)
     
@@ -81,7 +83,7 @@ def get_dashboard_ejecutivo(
         ranking_referidos=ranking_referidos,
         lista_estudiantes_registrados=lista_registrados,
         lista_estudiantes_pagos=lista_pagos,
-        fecha_generacion=datetime.now(),
+        fecha_generacion=datetime.utcnow(),
         periodo_inicio=fecha_inicio,
         periodo_fin=fecha_fin
     )
@@ -150,7 +152,218 @@ def get_alertas_operativas(
     )
 
 
+@router.get("/alertas-vencimientos", response_model=AlertasVencimientosResponse)
+def get_alertas_vencimientos(
+    dias: int = Query(30, ge=1, le=365),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_active_user)
+):
+    ahora = datetime.utcnow()
+    fin = ahora + timedelta(days=dias)
+    fin_date = fin.date()
+
+    documentos = []
+    vehiculos = db.query(Vehiculo).all()
+    for v in vehiculos:
+        if v.soat_vencimiento and v.soat_vencimiento <= fin_date:
+            documentos.append(AlertaDocumentoVehiculo(
+                vehiculo_id=v.id,
+                placa=v.placa,
+                documento="SOAT",
+                fecha_vencimiento=datetime.combine(v.soat_vencimiento, datetime.min.time()),
+                dias_restantes=(v.soat_vencimiento - ahora.date()).days
+            ))
+        if v.rtm_vencimiento and v.rtm_vencimiento <= fin_date:
+            documentos.append(AlertaDocumentoVehiculo(
+                vehiculo_id=v.id,
+                placa=v.placa,
+                documento="RTM",
+                fecha_vencimiento=datetime.combine(v.rtm_vencimiento, datetime.min.time()),
+                dias_restantes=(v.rtm_vencimiento - ahora.date()).days
+            ))
+        if v.tecnomecanica_vencimiento and v.tecnomecanica_vencimiento <= fin_date:
+            documentos.append(AlertaDocumentoVehiculo(
+                vehiculo_id=v.id,
+                placa=v.placa,
+                documento="TECNOMECANICA",
+                fecha_vencimiento=datetime.combine(v.tecnomecanica_vencimiento, datetime.min.time()),
+                dias_restantes=(v.tecnomecanica_vencimiento - ahora.date()).days
+            ))
+        if v.seguro_vencimiento and v.seguro_vencimiento <= fin_date:
+            documentos.append(AlertaDocumentoVehiculo(
+                vehiculo_id=v.id,
+                placa=v.placa,
+                documento="SEGURO",
+                fecha_vencimiento=datetime.combine(v.seguro_vencimiento, datetime.min.time()),
+                dias_restantes=(v.seguro_vencimiento - ahora.date()).days
+            ))
+
+    pins = []
+    estudiantes = db.query(Estudiante).all()
+    for est in estudiantes:
+        fecha_pin = _parse_pin_vencimiento(est)
+        if fecha_pin and fecha_pin.date() <= fin_date:
+            pins.append(AlertaPin(
+                estudiante_id=est.id,
+                nombre_completo=est.usuario.nombre_completo,
+                cedula=est.usuario.cedula,
+                fecha_vencimiento=fecha_pin,
+                dias_restantes=(fecha_pin.date() - ahora.date()).days
+            ))
+
+    pagos_vencidos = []
+    pagos = db.query(Pago).filter(
+        Pago.estado == EstadoPago.PENDIENTE,
+        Pago.fecha_vencimiento.isnot(None),
+        Pago.fecha_vencimiento < ahora
+    ).all()
+    for p in pagos:
+        pagos_vencidos.append(AlertaPagoVencido(
+            pago_id=p.id,
+            estudiante_id=p.estudiante_id,
+            nombre_completo=p.estudiante.usuario.nombre_completo if p.estudiante and p.estudiante.usuario else "SIN NOMBRE",
+            monto=p.monto,
+            fecha_vencimiento=p.fecha_vencimiento,
+            dias_mora=(ahora.date() - p.fecha_vencimiento.date()).days
+        ))
+
+    compromisos = []
+    cuotas = db.query(CuotaPago).filter(
+        CuotaPago.estado.in_([EstadoCuota.PENDIENTE, EstadoCuota.PARCIAL]),
+        CuotaPago.fecha_vencimiento >= ahora,
+        CuotaPago.fecha_vencimiento <= fin
+    ).all()
+    for c in cuotas:
+        compromisos.append(AlertaCompromiso(
+            cuota_id=c.id,
+            estudiante_id=c.estudiante_id,
+            nombre_completo=c.estudiante.usuario.nombre_completo if c.estudiante and c.estudiante.usuario else "SIN NOMBRE",
+            saldo_cuota=c.saldo_cuota,
+            fecha_vencimiento=c.fecha_vencimiento,
+            dias_restantes=(c.fecha_vencimiento.date() - ahora.date()).days
+        ))
+
+    documentos_instructor = []
+    instructores = db.query(Instructor).all()
+    for inst in instructores:
+        nombre = inst.usuario.nombre_completo if inst.usuario else "SIN NOMBRE"
+        if inst.licencia_vigencia_hasta and inst.licencia_vigencia_hasta <= fin_date:
+            documentos_instructor.append(AlertaDocumentoInstructor(
+                instructor_id=inst.id,
+                nombre_completo=nombre,
+                documento="LICENCIA",
+                fecha_vencimiento=datetime.combine(inst.licencia_vigencia_hasta, datetime.min.time()),
+                dias_restantes=(inst.licencia_vigencia_hasta - ahora.date()).days
+            ))
+        if inst.certificado_vigencia_hasta and inst.certificado_vigencia_hasta <= fin_date:
+            documentos_instructor.append(AlertaDocumentoInstructor(
+                instructor_id=inst.id,
+                nombre_completo=nombre,
+                documento="CERTIFICADO",
+                fecha_vencimiento=datetime.combine(inst.certificado_vigencia_hasta, datetime.min.time()),
+                dias_restantes=(inst.certificado_vigencia_hasta - ahora.date()).days
+            ))
+
+    return AlertasVencimientosResponse(
+        documentos_vehiculo=sorted(documentos, key=lambda d: d.dias_restantes),
+        documentos_instructor=sorted(documentos_instructor, key=lambda d: d.dias_restantes),
+        pins_por_vencer=sorted(pins, key=lambda p: p.dias_restantes),
+        pagos_vencidos=sorted(pagos_vencidos, key=lambda p: p.dias_mora, reverse=True),
+        compromisos_por_vencer=sorted(compromisos, key=lambda c: c.dias_restantes)
+    )
+
+
+@router.get("/cierre-financiero", response_model=CierreFinancieroResponse)
+def get_cierre_financiero(
+    fecha_inicio: Optional[datetime] = None,
+    fecha_fin: Optional[datetime] = None,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_active_user)
+):
+    if not fecha_fin:
+        fecha_fin = datetime.utcnow()
+    if not fecha_inicio:
+        fecha_inicio = fecha_fin.replace(day=1)
+    fecha_inicio_date = fecha_inicio.date()
+    fecha_fin_date = fecha_fin.date()
+
+    cajas = db.query(Caja).filter(
+        cast(Caja.fecha_apertura, Date) >= fecha_inicio_date,
+        cast(Caja.fecha_apertura, Date) <= fecha_fin_date
+    ).all()
+
+    total_ingresos = sum([_ingresos_caja(c) for c in cajas], Decimal('0'))
+    total_egresos = sum([_egresos_caja(c) for c in cajas], Decimal('0'))
+    total_efectivo = sum([c.total_ingresos_efectivo or Decimal('0') for c in cajas], Decimal('0'))
+    total_transferencias = sum([c.total_ingresos_transferencia or Decimal('0') for c in cajas], Decimal('0'))
+    total_tarjetas = sum([c.total_ingresos_tarjeta or Decimal('0') for c in cajas], Decimal('0'))
+    total_nequi = sum([c.total_nequi or Decimal('0') for c in cajas], Decimal('0'))
+    total_daviplata = sum([c.total_daviplata or Decimal('0') for c in cajas], Decimal('0'))
+    total_transferencia_bancaria = sum([c.total_transferencia_bancaria or Decimal('0') for c in cajas], Decimal('0'))
+    total_tarjeta_debito = sum([c.total_tarjeta_debito or Decimal('0') for c in cajas], Decimal('0'))
+    total_tarjeta_credito = sum([c.total_tarjeta_credito or Decimal('0') for c in cajas], Decimal('0'))
+    total_credismart = sum([c.total_credismart or Decimal('0') for c in cajas], Decimal('0'))
+    total_sistecredito = sum([c.total_sistecredito or Decimal('0') for c in cajas], Decimal('0'))
+
+    total_egresos_efectivo = sum([c.total_egresos_efectivo or Decimal('0') for c in cajas], Decimal('0'))
+    saldo_efectivo_teorico = sum([c.saldo_inicial or Decimal('0') for c in cajas], Decimal('0')) + total_efectivo - total_egresos_efectivo
+
+    cajas_response = [
+        CierreCajaItem(
+            id=c.id,
+            fecha_apertura=c.fecha_apertura,
+            fecha_cierre=c.fecha_cierre,
+            estado=c.estado.value if hasattr(c.estado, "value") else str(c.estado),
+            total_ingresos=_ingresos_caja(c),
+            total_egresos=_egresos_caja(c),
+            diferencia=c.diferencia
+        )
+        for c in cajas
+    ]
+
+    return CierreFinancieroResponse(
+        fecha_inicio=fecha_inicio,
+        fecha_fin=fecha_fin,
+        total_ingresos=total_ingresos,
+        total_egresos=total_egresos,
+        saldo_efectivo_teorico=saldo_efectivo_teorico,
+        total_efectivo=total_efectivo,
+        total_transferencias=total_transferencias,
+        total_tarjetas=total_tarjetas,
+        total_nequi=total_nequi,
+        total_daviplata=total_daviplata,
+        total_transferencia_bancaria=total_transferencia_bancaria,
+        total_tarjeta_debito=total_tarjeta_debito,
+        total_tarjeta_credito=total_tarjeta_credito,
+        total_credismart=total_credismart,
+        total_sistecredito=total_sistecredito,
+        cajas=cajas_response
+    )
+
+
 # ==================== FUNCIONES AUXILIARES ====================
+
+def _ingresos_caja(caja: Caja) -> Decimal:
+    """Total de ingresos considerando todos los métodos."""
+    return (
+        (caja.total_ingresos_efectivo or Decimal('0')) +
+        (caja.total_nequi or Decimal('0')) +
+        (caja.total_daviplata or Decimal('0')) +
+        (caja.total_transferencia_bancaria or Decimal('0')) +
+        (caja.total_tarjeta_debito or Decimal('0')) +
+        (caja.total_tarjeta_credito or Decimal('0')) +
+        (caja.total_credismart or Decimal('0')) +
+        (caja.total_sistecredito or Decimal('0'))
+    )
+
+
+def _egresos_caja(caja: Caja) -> Decimal:
+    """Total de egresos (todos los métodos)."""
+    return (
+        (caja.total_egresos_efectivo or Decimal('0')) +
+        (caja.total_egresos_transferencia or Decimal('0')) +
+        (caja.total_egresos_tarjeta or Decimal('0'))
+    )
 
 def _calcular_kpis(
     db: Session,
@@ -178,13 +391,9 @@ def _calcular_kpis(
     print(f"💼 Cajas encontradas en el período: {len(cajas_periodo)}")
     ingresos_actual = Decimal('0')
     for caja in cajas_periodo:
-        total_caja = (
-            (caja.total_ingresos_efectivo or Decimal('0')) +
-            (caja.total_ingresos_transferencia or Decimal('0')) +
-            (caja.total_ingresos_tarjeta or Decimal('0'))
-        )
+        total_caja = _ingresos_caja(caja)
         ingresos_actual += total_caja
-        print(f"  - Caja ID {caja.id} ({caja.fecha_apertura.date()}): Efectivo=${caja.total_ingresos_efectivo}, Transf=${caja.total_ingresos_transferencia}, Tarj=${caja.total_ingresos_tarjeta}, Total=${total_caja}")
+        print(f"  - Caja ID {caja.id} ({caja.fecha_apertura.date()}): Total=${total_caja}")
     
     print(f"💵 Total ingresos del período: ${ingresos_actual}")
     
@@ -202,11 +411,7 @@ def _calcular_kpis(
         
         ingresos_anterior = Decimal('0')
         for caja in cajas_anterior:
-            ingresos_anterior += (
-                (caja.total_ingresos_efectivo or Decimal('0')) +
-                (caja.total_ingresos_transferencia or Decimal('0')) +
-                (caja.total_ingresos_tarjeta or Decimal('0'))
-            )
+            ingresos_anterior += _ingresos_caja(caja)
         
         if ingresos_anterior > 0:
             cambio_ingresos = float(((ingresos_actual - ingresos_anterior) / ingresos_anterior) * 100)
@@ -215,11 +420,7 @@ def _calcular_kpis(
     # EGRESOS TOTALES (de cajas por fecha de apertura)
     egresos_actual = Decimal('0')
     for caja in cajas_periodo:
-        egresos_actual += (
-            (caja.total_egresos_efectivo or Decimal('0')) +
-            (caja.total_egresos_transferencia or Decimal('0')) +
-            (caja.total_egresos_tarjeta or Decimal('0'))
-        )
+        egresos_actual += _egresos_caja(caja)
     
     egresos_anterior = None
     cambio_egresos = None
@@ -228,11 +429,7 @@ def _calcular_kpis(
     if comparar:
         egresos_anterior = Decimal('0')
         for caja in cajas_anterior:
-            egresos_anterior += (
-                (caja.total_egresos_efectivo or Decimal('0')) +
-                (caja.total_egresos_transferencia or Decimal('0')) +
-                (caja.total_egresos_tarjeta or Decimal('0'))
-            )
+            egresos_anterior += _egresos_caja(caja)
         
         if egresos_anterior > 0:
             cambio_egresos = float(((egresos_actual - egresos_anterior) / egresos_anterior) * 100)
@@ -242,6 +439,13 @@ def _calcular_kpis(
     saldo_pendiente = db.query(func.sum(Estudiante.saldo_pendiente)).filter(
         Estudiante.saldo_pendiente > 0
     ).scalar() or Decimal('0')
+
+    ingreso_neto = ingresos_actual - egresos_actual
+    ingresos_promedio_por_caja = (
+        ingresos_actual / len(cajas_periodo)
+        if len(cajas_periodo) > 0
+        else Decimal('0')
+    )
     
     # MARGEN OPERATIVO
     margen_operativo = 0.0
@@ -262,27 +466,44 @@ def _calcular_kpis(
     # NUEVAS MATRÍCULAS DEL MES
     nuevas_matriculas = db.query(Estudiante).filter(
         and_(
-            Estudiante.fecha_inscripcion >= fecha_inicio,
-            Estudiante.fecha_inscripcion <= fecha_fin
+            cast(Estudiante.fecha_inscripcion, Date) >= fecha_inicio,
+            cast(Estudiante.fecha_inscripcion, Date) <= fecha_fin
+        )
+    ).count()
+
+    activos_periodo = db.query(Estudiante).filter(
+        and_(
+            Estudiante.estado.in_([EstadoEstudiante.INSCRITO, EstadoEstudiante.EN_FORMACION, EstadoEstudiante.LISTO_EXAMEN]),
+            cast(Estudiante.fecha_inscripcion, Date) >= fecha_inicio,
+            cast(Estudiante.fecha_inscripcion, Date) <= fecha_fin
+        )
+    ).count()
+
+    inactivos_periodo = db.query(Estudiante).filter(
+        and_(
+            Estudiante.estado.in_([EstadoEstudiante.GRADUADO, EstadoEstudiante.DESERTOR, EstadoEstudiante.RETIRADO]),
+            cast(Estudiante.fecha_inscripcion, Date) >= fecha_inicio,
+            cast(Estudiante.fecha_inscripcion, Date) <= fecha_fin
         )
     ).count()
     
     # TASA DE DESERCIÓN (simplificada)
-    total_estudiantes = total_activos + total_inactivos
+    total_estudiantes = activos_periodo + inactivos_periodo
     tasa_desercion = 0.0
     if total_estudiantes > 0:
-        tasa_desercion = (total_inactivos / total_estudiantes) * 100
+        tasa_desercion = (inactivos_periodo / total_estudiantes) * 100
     
     # TICKET PROMEDIO
     ticket_promedio = Decimal('0')
-    if total_activos > 0:
-        ticket_promedio = ingresos_actual / total_activos
+    if activos_periodo > 0:
+        ticket_promedio = ingresos_actual / activos_periodo
     
     # DÍAS PROMEDIO DE PAGO (simplificado - calcular de pagos)
     pagos_periodo = db.query(Pago).filter(
         and_(
-            Pago.fecha_pago >= fecha_inicio,
-            Pago.fecha_pago <= fecha_fin
+            Pago.estado == EstadoPago.COMPLETADO,
+            cast(Pago.fecha_pago, Date) >= fecha_inicio,
+            cast(Pago.fecha_pago, Date) <= fecha_fin
         )
     ).all()
     
@@ -290,8 +511,13 @@ def _calcular_kpis(
     count_pagos = 0
     for pago in pagos_periodo:
         estudiante = pago.estudiante
-        if estudiante and estudiante.fecha_inscripcion:
-            dias = (pago.fecha_pago - estudiante.fecha_inscripcion).days
+        if estudiante and estudiante.fecha_inscripcion and pago.fecha_pago:
+            if pago.fecha_vencimiento:
+                dias = (pago.fecha_pago - pago.fecha_vencimiento).days
+            else:
+                dias = (pago.fecha_pago - estudiante.fecha_inscripcion).days
+            if dias < 0:
+                dias = 0
             total_dias += dias
             count_pagos += 1
     
@@ -300,11 +526,36 @@ def _calcular_kpis(
         dias_promedio_pago = total_dias / count_pagos
     
     # TASA DE COBRANZA
-    total_valor_cursos = db.query(func.sum(Estudiante.valor_total_curso)).scalar() or Decimal('0')
-    total_pagado = total_valor_cursos - saldo_pendiente
+    total_valor_cursos = db.query(func.sum(Estudiante.valor_total_curso)).filter(
+        and_(
+            cast(Estudiante.fecha_inscripcion, Date) >= fecha_inicio,
+            cast(Estudiante.fecha_inscripcion, Date) <= fecha_fin
+        )
+    ).scalar() or Decimal('0')
+    saldo_pendiente_periodo = db.query(func.sum(Estudiante.saldo_pendiente)).filter(
+        and_(
+            cast(Estudiante.fecha_inscripcion, Date) >= fecha_inicio,
+            cast(Estudiante.fecha_inscripcion, Date) <= fecha_fin
+        )
+    ).scalar() or Decimal('0')
+    total_pagado = total_valor_cursos - saldo_pendiente_periodo
     tasa_cobranza = 0.0
     if total_valor_cursos > 0:
         tasa_cobranza = float((total_pagado / total_valor_cursos) * 100)
+
+    ahora = datetime.utcnow()
+    pagos_pendientes_periodo = db.query(Pago).filter(
+        and_(
+            Pago.estado == EstadoPago.PENDIENTE,
+            Pago.fecha_vencimiento.isnot(None),
+            cast(Pago.fecha_vencimiento, Date) >= fecha_inicio,
+            cast(Pago.fecha_vencimiento, Date) <= fecha_fin
+        )
+    )
+    pagos_vencidos_periodo = pagos_pendientes_periodo.filter(Pago.fecha_vencimiento < ahora)
+    total_pendientes = pagos_pendientes_periodo.count()
+    total_vencidos = pagos_vencidos_periodo.count()
+    porcentaje_pagos_vencidos = (total_vencidos / total_pendientes) * 100 if total_pendientes > 0 else 0.0
     
     return KPIDashboard(
         ingresos_totales=KPIMetrica(
@@ -319,6 +570,8 @@ def _calcular_kpis(
             cambio_porcentual=cambio_egresos,
             tendencia=tendencia_egresos
         ),
+        ingreso_neto=ingreso_neto,
+        ingresos_promedio_por_caja=ingresos_promedio_por_caja,
         saldo_pendiente=saldo_pendiente,
         margen_operativo=margen_operativo,
         total_estudiantes_activos=total_activos,
@@ -327,7 +580,8 @@ def _calcular_kpis(
         tasa_desercion=tasa_desercion,
         ticket_promedio=ticket_promedio,
         dias_promedio_pago=dias_promedio_pago,
-        tasa_cobranza=tasa_cobranza
+        tasa_cobranza=tasa_cobranza,
+        porcentaje_pagos_vencidos=porcentaje_pagos_vencidos
     )
 
 
@@ -358,9 +612,14 @@ def _grafico_evolucion_ingresos(db: Session, fecha_inicio: date, fecha_fin: date
     resultado = db.query(
         func.to_char(Caja.fecha_apertura, formato_agrupacion).label(label_agrupacion),
         func.sum(
-            Caja.total_ingresos_efectivo +
-            Caja.total_ingresos_transferencia +
-            Caja.total_ingresos_tarjeta
+            func.coalesce(Caja.total_ingresos_efectivo, 0) +
+            func.coalesce(Caja.total_nequi, 0) +
+            func.coalesce(Caja.total_daviplata, 0) +
+            func.coalesce(Caja.total_transferencia_bancaria, 0) +
+            func.coalesce(Caja.total_tarjeta_debito, 0) +
+            func.coalesce(Caja.total_tarjeta_credito, 0) +
+            func.coalesce(Caja.total_credismart, 0) +
+            func.coalesce(Caja.total_sistecredito, 0)
         ).label('total')
     ).filter(
         and_(
@@ -584,6 +843,7 @@ def _lista_estudiantes_pagos(db: Session, fecha_inicio: date, fecha_fin: date) -
     """Lista de estudiantes que realizaron pagos en el período"""
     pagos = db.query(Pago).filter(
         and_(
+            Pago.estado == EstadoPago.COMPLETADO,
             cast(Pago.fecha_pago, Date) >= fecha_inicio,
             cast(Pago.fecha_pago, Date) <= fecha_fin
         )
@@ -617,9 +877,20 @@ def _ranking_referidos(db: Session, fecha_inicio: date, fecha_fin: date) -> list
     
     # Obtener todos los estudiantes referidos en el período (o todos si se requiere vista completa)
     estudiantes_referidos = db.query(Estudiante).filter(
-        Estudiante.origen_cliente == OrigenCliente.REFERIDO,
-        Estudiante.referido_por.isnot(None)
+        and_(
+            Estudiante.origen_cliente == OrigenCliente.REFERIDO,
+            Estudiante.referido_por.isnot(None),
+            cast(Estudiante.fecha_inscripcion, Date) >= fecha_inicio,
+            cast(Estudiante.fecha_inscripcion, Date) <= fecha_fin
+        )
     ).all()
+    
+    # Si no hay datos en el período, mostrar ranking histórico
+    if not estudiantes_referidos:
+        estudiantes_referidos = db.query(Estudiante).filter(
+            Estudiante.origen_cliente == OrigenCliente.REFERIDO,
+            Estudiante.referido_por.isnot(None)
+        ).all()
     
     # Agrupar por referido
     referidos_dict = {}
