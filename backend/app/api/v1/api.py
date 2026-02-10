@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, estudiantes, caja, reportes, instructores, uploads, vehiculos, tarifas, usuarios
+from app.api.v1.endpoints import auth, estudiantes, caja, reportes, instructores, uploads, vehiculos, tarifas, usuarios, caja_fuerte
 
 api_router = APIRouter()
 
@@ -7,6 +7,7 @@ api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["Autenticación"])
 api_router.include_router(estudiantes.router, prefix="/estudiantes", tags=["Estudiantes"])
 api_router.include_router(caja.router, prefix="/caja", tags=["Caja y Pagos"])
+api_router.include_router(caja_fuerte.router, prefix="/caja-fuerte", tags=["Caja Fuerte"])
 api_router.include_router(reportes.router, prefix="/reportes", tags=["Reportes"])
 api_router.include_router(instructores.router, prefix="/instructores", tags=["Instructores"])
 api_router.include_router(uploads.router, prefix="/uploads", tags=["Uploads"])

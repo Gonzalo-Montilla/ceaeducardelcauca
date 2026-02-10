@@ -11,6 +11,8 @@ class UsuarioCreate(BaseModel):
     cedula: str
     telefono: Optional[str] = None
     rol: RolUsuario
+    is_active: Optional[bool] = True
+    permisos_modulos: Optional[list[str]] = None
 
 
 class UsuarioUpdate(BaseModel):
@@ -20,6 +22,7 @@ class UsuarioUpdate(BaseModel):
     telefono: Optional[str] = None
     rol: Optional[RolUsuario] = None
     is_active: Optional[bool] = None
+    permisos_modulos: Optional[list[str]] = None
 
 
 class UsuarioPasswordUpdate(BaseModel):
@@ -44,6 +47,7 @@ class UsuarioResponse(BaseModel):
     is_verified: bool
     created_at: datetime
     last_login: Optional[datetime]
+    permisos_modulos: Optional[list[str]] = None
 
     class Config:
         from_attributes = True

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum as SQLEnum, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -26,6 +26,7 @@ class Usuario(Base):
     cedula = Column(String(20), unique=True, index=True, nullable=False)
     telefono = Column(String(20))
     rol = Column(SQLEnum(RolUsuario), nullable=False)
+    permisos_modulos = Column(JSON, default=list)
     
     # Estado
     is_active = Column(Boolean, default=True, nullable=False)

@@ -13,9 +13,12 @@ from reportlab.lib.utils import ImageReader
 from reportlab.lib import colors
 
 from app.core.database import get_db
+from app.core.config import settings
+from app.core.email import send_email
 from app.api.deps import get_current_active_user, get_admin_or_coordinador_or_cajero
 from app.models.usuario import Usuario
 from app.models.caja import Caja, MovimientoCaja, EstadoCaja, TipoMovimiento
+from app.models.caja_fuerte import CajaFuerte, MovimientoCajaFuerte
 from app.models.pago import Pago, DetallePago, MetodoPago, EstadoPago
 from app.models.estudiante import Estudiante
 from app.schemas.caja import (
@@ -118,10 +121,96 @@ def cerrar_caja(
     caja.observaciones_cierre = cierre_data.observaciones_cierre
     caja.estado = EstadoCaja.CERRADA
     
+    _registrar_ingresos_caja_fuerte_por_cierre(caja, cierre_data.efectivo_fisico, db, current_user)
+
     db.commit()
     db.refresh(caja)
     
     return _build_caja_detalle(caja, db)
+
+
+def _get_or_create_caja_fuerte(db: Session) -> CajaFuerte:
+    caja_fuerte = db.query(CajaFuerte).first()
+    if not caja_fuerte:
+        caja_fuerte = CajaFuerte()
+        db.add(caja_fuerte)
+        db.flush()
+    return caja_fuerte
+
+
+def _apply_caja_fuerte_delta(caja_fuerte: CajaFuerte, metodo: MetodoPago, delta: Decimal):
+    if metodo == MetodoPago.EFECTIVO:
+        caja_fuerte.saldo_efectivo = Decimal(str(caja_fuerte.saldo_efectivo)) + delta
+    elif metodo == MetodoPago.NEQUI:
+        caja_fuerte.saldo_nequi = Decimal(str(caja_fuerte.saldo_nequi)) + delta
+    elif metodo == MetodoPago.DAVIPLATA:
+        caja_fuerte.saldo_daviplata = Decimal(str(caja_fuerte.saldo_daviplata)) + delta
+    elif metodo == MetodoPago.TRANSFERENCIA_BANCARIA:
+        caja_fuerte.saldo_transferencia_bancaria = Decimal(str(caja_fuerte.saldo_transferencia_bancaria)) + delta
+    elif metodo == MetodoPago.TARJETA_DEBITO:
+        caja_fuerte.saldo_tarjeta_debito = Decimal(str(caja_fuerte.saldo_tarjeta_debito)) + delta
+    elif metodo == MetodoPago.TARJETA_CREDITO:
+        caja_fuerte.saldo_tarjeta_credito = Decimal(str(caja_fuerte.saldo_tarjeta_credito)) + delta
+    elif metodo == MetodoPago.CREDISMART:
+        caja_fuerte.saldo_credismart = Decimal(str(caja_fuerte.saldo_credismart)) + delta
+    elif metodo == MetodoPago.SISTECREDITO:
+        caja_fuerte.saldo_sistecredito = Decimal(str(caja_fuerte.saldo_sistecredito)) + delta
+
+
+def _registrar_ingresos_caja_fuerte_por_cierre(
+    caja: Caja,
+    efectivo_entregado: Decimal,
+    db: Session,
+    current_user: Usuario
+):
+    caja_fuerte = _get_or_create_caja_fuerte(db)
+
+    def registrar(metodo: MetodoPago, monto: Decimal, concepto: str):
+        if monto is None or Decimal(str(monto)) <= 0:
+            return
+        mov = MovimientoCajaFuerte(
+            caja_fuerte_id=caja_fuerte.id,
+            caja_id=caja.id,
+            tipo=TipoMovimiento.INGRESO,
+            metodo_pago=metodo,
+            concepto=concepto,
+            categoria="CIERRE_CAJA",
+            monto=Decimal(str(monto)),
+            fecha=datetime.utcnow(),
+            observaciones=f"Ingreso automático por cierre de caja #{caja.id}",
+            usuario_id=current_user.id,
+        )
+        _apply_caja_fuerte_delta(caja_fuerte, metodo, Decimal(str(monto)))
+        db.add(mov)
+
+    registrar(MetodoPago.EFECTIVO, efectivo_entregado, f"CIERRE CAJA #{caja.id} - EFECTIVO")
+
+
+def _registrar_ingreso_caja_fuerte_por_pago(
+    pago: Pago,
+    metodo: MetodoPago,
+    monto: Decimal,
+    db: Session,
+    current_user: Usuario
+):
+    if metodo == MetodoPago.EFECTIVO:
+        return
+    caja_fuerte = _get_or_create_caja_fuerte(db)
+    concepto = f"PAGO #{pago.id} - {metodo.value}"
+    mov = MovimientoCajaFuerte(
+        caja_fuerte_id=caja_fuerte.id,
+        caja_id=pago.caja_id,
+        tipo=TipoMovimiento.INGRESO,
+        metodo_pago=metodo,
+        concepto=concepto,
+        categoria="PAGO_ESTUDIANTE",
+        monto=Decimal(str(monto)),
+        fecha=datetime.utcnow(),
+        observaciones=f"Ingreso digital por pago estudiante #{pago.estudiante_id}",
+        usuario_id=current_user.id,
+    )
+    _apply_caja_fuerte_delta(caja_fuerte, metodo, Decimal(str(monto)))
+    db.add(mov)
 
 
 @router.get("/dashboard", response_model=DashboardCaja)
@@ -233,50 +322,8 @@ def get_recibo_pago_pdf(
     db.refresh(pago, ['detalles_pago', 'estudiante', 'usuario'])
     estudiante = pago.estudiante
 
-    buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=letter)
-    _pdf_header(c, "Recibo de pago")
-    y = 580
-    c.setLineWidth(0.5)
-    c.line(80, y, 532, y)
-    y -= 20
-
-    y = _pdf_section(c, "Datos del pago", y)
-    y = _pdf_kv(c, "ID pago", pago.id, y)
-    y = _pdf_kv(c, "Fecha", pago.fecha_pago.strftime("%Y-%m-%d %H:%M"), y)
-    y = _pdf_kv(c, "Concepto", pago.concepto, y)
-    y = _pdf_kv(c, "Monto", _fmt_money(pago.monto), y)
-    metodo = pago.metodo_pago.value if pago.metodo_pago else "MIXTO"
-    y = _pdf_kv(c, "Metodo", metodo, y)
-    if pago.referencia_pago:
-        y = _pdf_kv(c, "Referencia", pago.referencia_pago, y)
-
-    y -= 6
-    y = _pdf_section(c, "Estudiante", y)
-    y = _pdf_kv(c, "Nombre", estudiante.usuario.nombre_completo if estudiante and estudiante.usuario else "N/A", y)
-    y = _pdf_kv(c, "Cedula", estudiante.usuario.cedula if estudiante and estudiante.usuario else "N/A", y)
-    y = _pdf_kv(c, "Matricula", estudiante.matricula_numero if estudiante else "N/A", y)
-    if estudiante and estudiante.saldo_pendiente and estudiante.saldo_pendiente > 0:
-        y = _pdf_kv(c, "Saldo pendiente", _fmt_money(estudiante.saldo_pendiente), y)
-
-    if pago.es_pago_mixto and pago.detalles_pago:
-        y -= 6
-        y = _pdf_section(c, "Detalle pago mixto", y)
-        for d in pago.detalles_pago:
-            referencia = f" ({d.referencia})" if d.referencia else ""
-            y = _pdf_kv(
-                c,
-                d.metodo_pago.value,
-                f"{_fmt_money(d.monto)}{referencia}",
-                y
-            )
-
-    y -= 6
-    y = _pdf_section(c, "Atendido por", y)
-    y = _pdf_kv(c, "Usuario", pago.usuario.nombre_completo if pago.usuario else "N/A", y)
-    c.showPage()
-    c.save()
-    return _pdf_response(buffer, f"recibo_pago_{pago.id}.pdf")
+    pdf_bytes = _build_pago_pdf_bytes(pago)
+    return _pdf_response(BytesIO(pdf_bytes), f"recibo_pago_{pago.id}.pdf")
 
 
 @router.get("/egresos/{egreso_id}/recibo-pdf")
@@ -487,9 +534,23 @@ def registrar_pago(
                 
                 # Actualizar totales de caja según método
                 _actualizar_caja_por_metodo(caja_abierta, detalle.metodo_pago, detalle.monto)
+                _registrar_ingreso_caja_fuerte_por_pago(
+                    nuevo_pago,
+                    detalle.metodo_pago,
+                    detalle.monto,
+                    db,
+                    current_user
+                )
         else:
             # Pago simple - actualizar caja según método único
             _actualizar_caja_por_metodo(caja_abierta, pago_data.metodo_pago, pago_data.monto)
+            _registrar_ingreso_caja_fuerte_por_pago(
+                nuevo_pago,
+                pago_data.metodo_pago,
+                pago_data.monto,
+                db,
+                current_user
+            )
         
         # Actualizar saldo del estudiante
         if estudiante.saldo_pendiente:
@@ -500,6 +561,8 @@ def registrar_pago(
         
         # Cargar explícitamente las relaciones necesarias
         db.refresh(nuevo_pago, ['detalles_pago', 'estudiante', 'usuario'])
+
+        _enviar_recibo_pago(nuevo_pago)
         
         return _build_pago_response(nuevo_pago)
         
@@ -666,6 +729,97 @@ def _build_caja_resumen(caja: Caja, db: Session) -> CajaResumen:
         num_pagos=num_pagos,
         num_egresos=num_egresos
     )
+
+
+def _build_pago_pdf_bytes(pago: Pago) -> bytes:
+    estudiante = pago.estudiante
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    _pdf_header(c, "Recibo de pago")
+    y = 580
+    c.setLineWidth(0.5)
+    c.line(80, y, 532, y)
+    y -= 20
+
+    y = _pdf_section(c, "Datos del pago", y)
+    y = _pdf_kv(c, "ID pago", pago.id, y)
+    y = _pdf_kv(c, "Fecha", pago.fecha_pago.strftime("%Y-%m-%d %H:%M"), y)
+    y = _pdf_kv(c, "Concepto", pago.concepto, y)
+    y = _pdf_kv(c, "Monto", _fmt_money(pago.monto), y)
+    metodo = pago.metodo_pago.value if pago.metodo_pago else "MIXTO"
+    y = _pdf_kv(c, "Metodo", metodo, y)
+    if pago.referencia_pago:
+        y = _pdf_kv(c, "Referencia", pago.referencia_pago, y)
+
+    y -= 6
+    y = _pdf_section(c, "Estudiante", y)
+    y = _pdf_kv(c, "Nombre", estudiante.usuario.nombre_completo if estudiante and estudiante.usuario else "N/A", y)
+    y = _pdf_kv(c, "Cedula", estudiante.usuario.cedula if estudiante and estudiante.usuario else "N/A", y)
+    y = _pdf_kv(c, "Matricula", estudiante.matricula_numero if estudiante else "N/A", y)
+    if estudiante and estudiante.saldo_pendiente and estudiante.saldo_pendiente > 0:
+        y = _pdf_kv(c, "Saldo pendiente", _fmt_money(estudiante.saldo_pendiente), y)
+
+    if pago.es_pago_mixto and pago.detalles_pago:
+        y -= 6
+        y = _pdf_section(c, "Detalle pago mixto", y)
+        for d in pago.detalles_pago:
+            referencia = f" ({d.referencia})" if d.referencia else ""
+            y = _pdf_kv(
+                c,
+                d.metodo_pago.value,
+                f"{_fmt_money(d.monto)}{referencia}",
+                y
+            )
+
+    y -= 6
+    y = _pdf_section(c, "Atendido por", y)
+    y = _pdf_kv(c, "Usuario", pago.usuario.nombre_completo if pago.usuario else "N/A", y)
+    c.showPage()
+    c.save()
+    return buffer.getvalue()
+
+
+def _enviar_recibo_pago(pago: Pago) -> None:
+    if not pago or not pago.estudiante or not pago.estudiante.usuario:
+        return
+
+    estudiante = pago.estudiante
+    saldo = estudiante.saldo_pendiente or Decimal("0")
+    saldo_linea = f"Saldo pendiente: {_fmt_money(saldo)}" if saldo > 0 else "Saldo pendiente: $0"
+    referencia = pago.referencia_pago if pago.referencia_pago else "N/A"
+    metodo = pago.metodo_pago.value if pago.metodo_pago else "MIXTO"
+
+    subject = "Recibo de pago - CEA EDUCAR"
+    body = (
+        f"Hola {estudiante.usuario.nombre_completo},\n\n"
+        f"Matricula: {estudiante.matricula_numero or 'N/A'}\n"
+        f"Cedula: {estudiante.usuario.cedula}\n\n"
+        "Gracias por tu pago. Adjuntamos el recibo en PDF.\n\n"
+        "Resumen del pago:\n"
+        f"- Fecha: {pago.fecha_pago.strftime('%Y-%m-%d %H:%M')}\n"
+        f"- Monto: {_fmt_money(pago.monto)}\n"
+        f"- Concepto: {pago.concepto}\n"
+        f"- Metodo: {metodo}\n"
+        f"- Referencia: {referencia}\n\n"
+        f"{saldo_linea}\n\n"
+        "Si tienes dudas o necesitas soporte, contáctanos:\n"
+        f"{settings.HABEAS_CONTACTO} | {settings.HABEAS_CORREO}\n\n"
+        "Gracias por confiar en nosotros.\n\n"
+        "CEA EDUCAR\n"
+        f"{settings.HABEAS_RAZON_SOCIAL}\n"
+        f"NIT {settings.HABEAS_NIT}\n"
+    )
+
+    pdf_bytes = _build_pago_pdf_bytes(pago)
+    filename = f"recibo_pago_{pago.id}.pdf"
+    enviado = send_email(
+        estudiante.usuario.email,
+        subject,
+        body,
+        attachment=(filename, pdf_bytes, "application/pdf")
+    )
+    if not enviado:
+        logger.warning("No se pudo enviar recibo de pago a %s", estudiante.usuario.email)
 
 
 def _build_caja_detalle(caja: Caja, db: Session) -> CajaDetalle:

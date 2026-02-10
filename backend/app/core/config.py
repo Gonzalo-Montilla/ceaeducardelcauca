@@ -21,6 +21,21 @@ class Settings(BaseSettings):
     
     # CORS
     BACKEND_CORS_ORIGINS: list = ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
+
+    # Email (SMTP)
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM_NAME: str = "CEA EDUCAR"
+    SMTP_USE_TLS: bool = True
+
+    # Habeas Data
+    HABEAS_RAZON_SOCIAL: str = "ESCUELA DE AUTOMOVILISMO EDUCAR DEL CAUCA SAS"
+    HABEAS_NIT: str = "901463869-8"
+    HABEAS_CONTACTO: str = "+57 314 3005442"
+    HABEAS_CORREO: str = "ceaeducardelcaucasas@gmail.com"
+    HABEAS_POLITICA_URL: Optional[str] = None
     
     class Config:
         env_file = ".env"

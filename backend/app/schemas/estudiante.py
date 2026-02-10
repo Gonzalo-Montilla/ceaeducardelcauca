@@ -35,6 +35,7 @@ class EstudianteCreate(EstudianteBase):
     cedula: str
     telefono: str
     foto_base64: str  # Foto en base64
+    autorizacion_tratamiento: bool
 
     @field_validator('nombre_completo')
     @classmethod
@@ -69,6 +70,13 @@ class EstudianteCreate(EstudianteBase):
         if len(value) > 3_000_000:
             raise ValueError('La foto es demasiado grande')
         return value
+
+    @field_validator('autorizacion_tratamiento')
+    @classmethod
+    def validate_autorizacion(cls, v: bool) -> bool:
+        if v is not True:
+            raise ValueError('Debe aceptar el tratamiento de datos personales')
+        return v
 
 
 class EstudianteUpdate(BaseModel):

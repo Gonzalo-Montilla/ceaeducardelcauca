@@ -7,6 +7,7 @@ from decimal import Decimal
 from io import BytesIO
 import os
 import base64
+import logging
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
@@ -14,6 +15,8 @@ from reportlab.lib import colors
 from app.core.database import get_db
 from app.core.security import get_password_hash
 from app.core.precios import calcular_precio, obtener_categoria_licencia
+from app.core.config import settings
+from app.core.email import send_email
 from app.models.usuario import Usuario, RolUsuario
 from app.models.estudiante import Estudiante, EstadoEstudiante, CategoriaLicencia, OrigenCliente, TipoServicio
 from app.models.pago import Pago, MetodoPago, EstadoPago
@@ -30,6 +33,7 @@ from app.schemas.estudiante import (
 from app.api.deps import get_current_active_user, get_admin_or_coordinador_or_cajero, require_role
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=EstudianteResponse, status_code=status.HTTP_201_CREATED)
@@ -97,11 +101,28 @@ def create_estudiante(
             foto_url=estudiante_data.foto_base64,  # Guardar base64 temporalmente
             estado=EstadoEstudiante.PROSPECTO  # Prospecto hasta que se defina servicio
         )
+        nuevo_estudiante.datos_adicionales = {
+            "habeas_data": {
+                "aceptado": True,
+                "aceptado_en": datetime.utcnow().isoformat(),
+                "correo_enviado": False
+            }
+        }
         db.add(nuevo_estudiante)
         db.flush()
         
         db.commit()
         db.refresh(nuevo_estudiante)
+
+        enviado = _enviar_habeas_data(nuevo_estudiante)
+        if enviado:
+            datos = dict(nuevo_estudiante.datos_adicionales or {})
+            habeas = dict(datos.get("habeas_data", {}))
+            if habeas:
+                habeas["correo_enviado"] = True
+                datos["habeas_data"] = habeas
+                nuevo_estudiante.datos_adicionales = datos
+                db.commit()
         
         return _build_estudiante_response(nuevo_estudiante, db)
         
@@ -351,9 +372,9 @@ def definir_servicio(
         
         # 5. Asignar horas teóricas y prácticas según la categoría
         horas_map = {
-            CategoriaLicencia.A2: {"teoricas": 20, "practicas": 16},
-            CategoriaLicencia.B1: {"teoricas": 40, "practicas": 30},
-            CategoriaLicencia.C1: {"teoricas": 40, "practicas": 30},
+            CategoriaLicencia.A2: {"teoricas": 28, "practicas": 15},
+            CategoriaLicencia.B1: {"teoricas": 30, "practicas": 20},
+            CategoriaLicencia.C1: {"teoricas": 36, "practicas": 30},
         }
         
         if estudiante.categoria in horas_map:
@@ -379,6 +400,8 @@ def definir_servicio(
         
         db.commit()
         db.refresh(estudiante)
+
+        _enviar_contrato_definir_servicio(estudiante)
         
         return _build_estudiante_response(estudiante, db)
         
@@ -435,8 +458,9 @@ def acreditar_horas(
 
     datos = dict(estudiante.datos_adicionales or {})
     historial = list(datos.get("clases_historial", []))
+    fecha_iso = datetime.utcnow().isoformat()
     historial.append({
-        "fecha": datetime.utcnow().isoformat(),
+        "fecha": fecha_iso,
         "tipo": payload.tipo,
         "horas": payload.horas,
         "observaciones": payload.observaciones,
@@ -450,10 +474,17 @@ def acreditar_horas(
 
     db.commit()
     db.refresh(estudiante)
+
+    _enviar_acreditacion_horas(estudiante, payload.tipo, payload.horas, fecha_iso)
     return _build_estudiante_response(estudiante, db)
 
 
 def _build_contrato_pdf(estudiante: Estudiante) -> Response:
+    pdf_bytes = _build_contrato_pdf_bytes(estudiante)
+    return _pdf_response(BytesIO(pdf_bytes), f"contrato_{estudiante.matricula_numero or estudiante.id}.pdf")
+
+
+def _build_contrato_pdf_bytes(estudiante: Estudiante) -> bytes:
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
@@ -600,7 +631,117 @@ def _build_contrato_pdf(estudiante: Estudiante) -> Response:
 
     c.showPage()
     c.save()
-    return _pdf_response(buffer, f"contrato_{estudiante.matricula_numero or estudiante.id}.pdf")
+    return buffer.getvalue()
+
+
+def _enviar_habeas_data(estudiante: Estudiante) -> bool:
+    if not estudiante or not estudiante.usuario:
+        return False
+    nombre = estudiante.usuario.nombre_completo
+    email = estudiante.usuario.email
+    subject = "Autorizacion de tratamiento de datos personales - CEA EDUCAR"
+    politica = f"Politica: {settings.HABEAS_POLITICA_URL}" if settings.HABEAS_POLITICA_URL else ""
+    body = (
+        f"Hola {nombre},\n\n"
+        "Gracias por tu registro. Confirmamos la autorizacion previa, expresa e informada "
+        "para el tratamiento de tus datos personales conforme a la Ley 1581 de 2012.\n\n"
+        f"Matricula: {estudiante.matricula_numero or 'N/A'}\n"
+        f"Cedula: {estudiante.usuario.cedula}\n\n"
+        "Responsable: {razon}\n"
+        "NIT: {nit}\n"
+        "Contacto: {contacto}\n"
+        "Correo: {correo}\n"
+        "{politica}\n\n"
+        "Finalidades:\n"
+        "- Gestion del proceso de matricula y formacion.\n"
+        "- Administracion academica y financiera.\n"
+        "- Contacto y notificaciones.\n"
+        "- Cumplimiento de obligaciones legales y contractuales.\n\n"
+        "Derechos del titular: conocer, actualizar, rectificar, suprimir y revocar la autorizacion.\n"
+        "Puedes ejercerlos a traves del correo indicado.\n\n"
+        "CEA EDUCAR\n"
+    ).format(
+        razon=settings.HABEAS_RAZON_SOCIAL,
+        nit=settings.HABEAS_NIT,
+        contacto=settings.HABEAS_CONTACTO,
+        correo=settings.HABEAS_CORREO,
+        politica=politica
+    )
+
+    enviado = send_email(email, subject, body)
+    if not enviado:
+        logger.warning("No se pudo enviar correo de habeas data a %s", email)
+    return enviado
+
+
+def _enviar_contrato_definir_servicio(estudiante: Estudiante) -> None:
+    if not estudiante or not estudiante.usuario:
+        return
+
+    subject = "Contrato de aprendizaje - CEA EDUCAR"
+    body = (
+        f"Hola {estudiante.usuario.nombre_completo},\n\n"
+        "Te confirmamos que tu servicio fue definido exitosamente en CEA EDUCAR.\n"
+        "Adjunto encontraras el Contrato de Aprendizaje correspondiente a tu proceso.\n\n"
+        f"Matricula: {estudiante.matricula_numero or 'N/A'}\n"
+        f"Cedula: {estudiante.usuario.cedula}\n"
+        f"Categoria: {estudiante.categoria.value if estudiante.categoria else 'N/A'}\n"
+        f"Tipo de servicio: {estudiante.tipo_servicio.value if estudiante.tipo_servicio else 'N/A'}\n"
+        f"Fecha de inscripcion: {estudiante.fecha_inscripcion.strftime('%Y-%m-%d') if estudiante.fecha_inscripcion else 'N/A'}\n\n"
+        "Si tienes dudas o necesitas alguna actualizacion, puedes contactarnos a:\n"
+        f"{settings.HABEAS_CONTACTO} | {settings.HABEAS_CORREO}\n\n"
+        "Atentamente,\n"
+        "CEA EDUCAR\n"
+        f"{settings.HABEAS_RAZON_SOCIAL}\n"
+        f"NIT {settings.HABEAS_NIT}\n"
+    )
+
+    pdf_bytes = _build_contrato_pdf_bytes(estudiante)
+    filename = f"contrato_{estudiante.matricula_numero or estudiante.id}.pdf"
+    enviado = send_email(
+        estudiante.usuario.email,
+        subject,
+        body,
+        attachment=(filename, pdf_bytes, "application/pdf")
+    )
+    if not enviado:
+        logger.warning("No se pudo enviar contrato a %s", estudiante.usuario.email)
+
+
+def _enviar_acreditacion_horas(estudiante: Estudiante, tipo: str, horas: int, fecha_iso: str) -> None:
+    if not estudiante or not estudiante.usuario:
+        return
+    tipo_label = "Teoria" if tipo == "TEORICA" else "Practica"
+    if tipo == "TEORICA":
+        pendientes = max((estudiante.horas_teoricas_requeridas or 0) - (estudiante.horas_teoricas_completadas or 0), 0)
+        progreso = f"{estudiante.horas_teoricas_completadas}/{estudiante.horas_teoricas_requeridas}"
+    else:
+        pendientes = max((estudiante.horas_practicas_requeridas or 0) - (estudiante.horas_practicas_completadas or 0), 0)
+        progreso = f"{estudiante.horas_practicas_completadas}/{estudiante.horas_practicas_requeridas}"
+
+    subject = "Actualizacion de horas acreditadas - CEA EDUCAR"
+    body = (
+        f"Hola {estudiante.usuario.nombre_completo},\n\n"
+        "Te informamos que se acreditaron horas en tu proceso de formacion:\n\n"
+        "Detalle de la acreditacion\n"
+        f"- Tipo: {tipo_label}\n"
+        f"- Horas acreditadas: {horas}\n"
+        f"- Fecha y hora: {fecha_iso}\n\n"
+        "Estado actual\n"
+        f"- Matricula: {estudiante.matricula_numero or 'N/A'}\n"
+        f"- Cedula: {estudiante.usuario.cedula}\n"
+        f"- Progreso {tipo_label}: {progreso}\n"
+        f"- Horas pendientes de {tipo_label}: {pendientes}\n\n"
+        "Si tienes alguna duda, puedes contactarnos en:\n"
+        f"{settings.HABEAS_CONTACTO} | {settings.HABEAS_CORREO}\n\n"
+        "Gracias por tu compromiso.\n\n"
+        "CEA EDUCAR\n"
+        f"{settings.HABEAS_RAZON_SOCIAL}\n"
+        f"NIT {settings.HABEAS_NIT}\n"
+    )
+    enviado = send_email(estudiante.usuario.email, subject, body)
+    if not enviado:
+        logger.warning("No se pudo enviar notificacion de horas a %s", estudiante.usuario.email)
 
 
 def _draw_contrato_header(c: canvas.Canvas) -> None:

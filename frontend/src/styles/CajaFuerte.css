@@ -1,0 +1,238 @@
+.caja-fuerte-container {
+  padding: 2rem;
+  max-width: 1600px;
+  margin: 0 auto;
+  background: var(--bg);
+  min-height: 100vh;
+}
+
+.caja-fuerte-resumen {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.resumen-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.resumen-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+}
+
+.resumen-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.resumen-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef2ff;
+  color: var(--primary);
+}
+
+.resumen-icon.success {
+  background: #dcfce7;
+  color: var(--success);
+}
+
+.resumen-icon.primary {
+  background: #dbeafe;
+  color: var(--primary);
+}
+
+.resumen-icon.warning {
+  background: #fef3c7;
+  color: var(--warning);
+}
+
+.resumen-card h3 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.resumen-valor {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.resumen-subdetalle {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detalle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #475569;
+}
+
+.detalle-row strong {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.caja-fuerte-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.caja-fuerte-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 16px;
+}
+
+.caja-fuerte-section h2 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.form-grid input,
+.form-grid select,
+.filtros input,
+.filtros select {
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.section-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.inventario-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.inventario-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  background: var(--surface-2);
+}
+
+.denom-control {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 70px;
+  justify-content: flex-end;
+}
+
+.denom-control input {
+  width: 48px;
+  text-align: center;
+}
+
+.inventario-item.readonly {
+  background: var(--surface-2);
+  justify-content: space-between;
+}
+
+.inventario-item .cantidad {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.inventario-item .denom {
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 56px;
+}
+
+.inventario-total {
+  margin-top: 12px;
+  font-weight: 700;
+}
+
+.mov-denoms {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.mov-denoms h3 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.filtros {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.tabla-movimientos table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tabla-movimientos th,
+.tabla-movimientos td {
+  border-bottom: 1px solid var(--border);
+  padding: 10px;
+  text-align: left;
+  font-size: 14px;
+}
+
+.tabla-movimientos thead th {
+  background: var(--surface-2);
+  color: var(--text-secondary);
+}
+
+.tabla-movimientos .acciones {
+  display: flex;
+  gap: 8px;
+}
+
+.no-data {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 16px;
+}

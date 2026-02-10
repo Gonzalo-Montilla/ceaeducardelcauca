@@ -6,7 +6,7 @@ from typing import List, Optional
 from app.core.database import get_db
 from app.core.security import get_password_hash
 from app.api.deps import get_admin_or_gerente
-from app.models.usuario import Usuario
+from app.models.usuario import Usuario, RolUsuario
 from app.schemas.usuario import UsuarioCreate, UsuarioUpdate, UsuarioPasswordUpdate, UsuarioResponse
 
 
@@ -19,7 +19,7 @@ def listar_usuarios(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_admin_or_gerente)
 ):
-    query = db.query(Usuario)
+    query = db.query(Usuario).filter(Usuario.rol != RolUsuario.ESTUDIANTE)
     if search:
         term = f"%{search.strip()}%"
         query = query.filter(
@@ -63,8 +63,9 @@ def crear_usuario(
         cedula=payload.cedula,
         telefono=payload.telefono,
         rol=payload.rol,
-        is_active=True,
-        is_verified=False
+        is_active=payload.is_active if payload.is_active is not None else True,
+        is_verified=False,
+        permisos_modulos=payload.permisos_modulos
     )
     db.add(nuevo)
     db.commit()
