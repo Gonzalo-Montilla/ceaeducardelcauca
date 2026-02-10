@@ -150,6 +150,55 @@ export const Reportes = () => {
 
   const COLORES_METODOS = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
+  const downloadCSV = (filename: string, rows: (string | number)[][]) => {
+    const escape = (value: string | number) => {
+      const str = String(value ?? '');
+      if (str.includes('"') || str.includes(',') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    const csv = rows.map((row) => row.map(escape).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const exportarCSV = () => {
+    if (!dashboard) return;
+    const rows: (string | number)[][] = [
+      ['Reportes Gerenciales'],
+      ['Generado', new Date().toLocaleString('es-CO')],
+      [],
+      ['KPI', 'Valor'],
+      ['Ingresos Totales', kpis.ingresos_totales.valor_actual],
+      ['Egresos Totales', kpis.egresos_totales.valor_actual],
+      ['Saldo Pendiente', kpis.saldo_pendiente],
+      ['Margen Operativo', kpis.margen_operativo],
+      ['Ticket Promedio', kpis.ticket_promedio],
+      ['Tasa de Cobranza', kpis.tasa_cobranza],
+      ['Estudiantes Activos', kpis.estudiantes_activos],
+      ['Nuevas Matrículas', kpis.nuevas_matriculas],
+      [],
+      ['Ingresos por periodo'],
+      ['Periodo', 'Ingresos']
+    ];
+    datosIngresosLinea.forEach((d) => rows.push([d.mes, d.ingresos]));
+    rows.push([]);
+    rows.push(['Métodos de pago', 'Monto', 'Porcentaje']);
+    datosMetodosPago.forEach((d) => rows.push([d.nombre, d.valor, d.porcentaje]));
+    rows.push([]);
+    rows.push(['Egresos por categoría', 'Monto']);
+    datosEgresos.forEach((d) => rows.push([d.categoria, d.monto]));
+    downloadCSV(`reportes_${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  };
+
   return (
     <div className="reportes-container">
       {/* Header */}
@@ -161,10 +210,16 @@ export const Reportes = () => {
             <p>Dashboard ejecutivo con métricas clave del negocio</p>
           </div>
         </div>
-        <button className="btn-exportar" disabled>
-          <Download size={18} />
-          Exportar PDF
-        </button>
+        <div className="reportes-actions">
+          <button className="btn-exportar secondary" onClick={exportarCSV}>
+            <Download size={18} />
+            Exportar CSV
+          </button>
+          <button className="btn-exportar" disabled>
+            <Download size={18} />
+            Exportar PDF
+          </button>
+        </div>
       </div>
 
       {/* Filtros */}

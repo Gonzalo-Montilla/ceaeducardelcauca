@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Car, Plus, Search, X, Pencil, Trash2, Eye } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import { uploadsAPI, vehiculosAPI } from '../services/api';
 import '../styles/Vehiculos.css';
 import { useNavigate } from 'react-router-dom';
@@ -192,16 +193,17 @@ export const Vehiculos = () => {
 
   return (
     <div className="vehiculos-container">
-      <div className="vehiculos-header">
-        <div className="header-title">
-          <Car size={28} />
-          <h1>Vehículos</h1>
-        </div>
-        <button className="btn-primary" onClick={abrirModalNuevo}>
-          <Plus size={18} />
-          Nuevo Vehículo
-        </button>
-      </div>
+      <PageHeader
+        title="Vehículos"
+        subtitle="Gestión del parque automotor"
+        icon={<Car size={20} />}
+        actions={
+          <button className="btn-nuevo" onClick={abrirModalNuevo}>
+            <Plus size={18} />
+            Nuevo Vehículo
+          </button>
+        }
+      />
 
       <div className="vehiculos-filtros">
         <div className="search-box">

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Search, Clock, User } from 'lucide-react';
+import { Search, Clock, User, Calendar, Download } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import { estudiantesAPI } from '../services/api';
 import '../styles/Clases.css';
 
@@ -42,7 +43,7 @@ export const Clases = () => {
       setLoading(true);
       setError('');
       const data = await estudiantesAPI.getByCedula(cedula.trim());
-      setEstudiante(data);
+      setEstudiante(data as Estudiante);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'No se encontró el estudiante');
       setEstudiante(null);
@@ -66,7 +67,7 @@ export const Clases = () => {
         observaciones: observaciones.trim() || null
       });
       const actualizado = await estudiantesAPI.getByCedula(estudiante.cedula);
-      setEstudiante(actualizado as any);
+      setEstudiante(actualizado as Estudiante);
       setObservaciones('');
       setHoras('1');
     } catch (err: any) {
@@ -76,18 +77,77 @@ export const Clases = () => {
     }
   };
 
+  const downloadCSV = (filename: string, rows: (string | number)[][]) => {
+    const escape = (value: string | number) => {
+      const str = String(value ?? '');
+      if (str.includes('"') || str.includes(',') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    const csv = rows.map((row) => row.map(escape).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const exportClasesCSV = () => {
+    if (!estudiante) return;
+    const historial = estudiante.clases_historial || [];
+    const rows: (string | number)[][] = [
+      ['Estudiante', estudiante.nombre_completo],
+      ['Cédula', estudiante.cedula],
+      ['Email', estudiante.email],
+      ['Teléfono', estudiante.telefono],
+      [],
+      ['Fecha', 'Tipo', 'Horas', 'Observaciones']
+    ];
+    historial.forEach((h) => {
+      rows.push([
+        new Date(h.fecha).toLocaleString('es-CO'),
+        h.tipo,
+        h.horas,
+        h.observaciones || ''
+      ]);
+    });
+    downloadCSV(`clases_${estudiante.cedula}_${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  };
+
   return (
     <div className="clases-container">
-      <h1>Clases</h1>
+      <PageHeader
+        title="Clases"
+        subtitle="Programación y acreditación de horas"
+        icon={<Calendar size={20} />}
+        actions={
+          <button
+            className="btn-nuevo"
+            onClick={exportClasesCSV}
+            disabled={!estudiante || !(estudiante.clases_historial || []).length}
+          >
+            <Download size={16} /> Exportar CSV
+          </button>
+        }
+      />
 
-      <div className="clases-busqueda">
-        <input
-          type="text"
-          placeholder="Buscar por cédula"
-          value={cedula}
-          onChange={(e) => setCedula(e.target.value.replace(/\D/g, ''))}
-        />
-        <button className="btn-primary" onClick={buscar} disabled={loading}>
+      <div className="search-section clases-busqueda">
+        <div className="search-box">
+          <Search size={18} className="search-icon" />
+          <input
+            type="text"
+            placeholder="Buscar por cédula"
+            value={cedula}
+            onChange={(e) => setCedula(e.target.value.replace(/\D/g, ''))}
+            className="search-input"
+          />
+        </div>
+        <button className="btn-nuevo btn-search" onClick={buscar} disabled={loading}>
           <Search size={16} /> Buscar
         </button>
       </div>

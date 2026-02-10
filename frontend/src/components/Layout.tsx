@@ -16,7 +16,8 @@ import {
   Shield,
   Bell,
   ClipboardList,
-  Menu
+  Menu,
+  Wallet
 } from 'lucide-react';
 import { RolUsuario } from '../types';
 import logo from '../assets/cea_educar_final.png';
@@ -38,24 +39,27 @@ export const Layout = ({ children }: LayoutProps) => {
 
   const adminRoles = [RolUsuario.ADMIN, RolUsuario.COORDINADOR, RolUsuario.GERENTE];
   const menuItems = [
-    { path: '/dashboard', icon: Home, label: 'Dashboard', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO] },
-    { path: '/nuevo-estudiante', icon: UserPlus, label: 'Nuevo Estudiante', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO] },
-    { path: '/estudiantes', icon: Users, label: 'Estudiantes', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO] },
-    { path: '/caja', icon: DollarSign, label: 'Caja / Pagos', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO] },
-    { path: '/historial-cajas', icon: History, label: 'Historial de Cajas', roles: adminRoles },
-    { path: '/reportes', icon: FileText, label: 'Reportes', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE] },
-    { path: '/alertas', icon: Bell, label: 'Alertas', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO, RolUsuario.COORDINADOR] },
-    { path: '/cierre-financiero', icon: ClipboardList, label: 'Cierre Financiero', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE] },
-    { path: '/instructores', icon: UserCheck, label: 'Instructores', roles: adminRoles },
-    { path: '/vehiculos', icon: Car, label: 'Vehículos', roles: adminRoles },
-    { path: '/clases', icon: Calendar, label: 'Programar Clases', roles: [RolUsuario.INSTRUCTOR, RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR] },
-    { path: '/usuarios', icon: Shield, label: 'Usuarios', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE] },
-    { path: '/tarifas', icon: GraduationCap, label: 'Tarifas', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE] },
+    { path: '/dashboard', icon: Home, label: 'Dashboard', moduleId: 'dashboard', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO] },
+    { path: '/nuevo-estudiante', icon: UserPlus, label: 'Nuevo Estudiante', moduleId: 'nuevo_estudiante', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO] },
+    { path: '/estudiantes', icon: Users, label: 'Estudiantes', moduleId: 'estudiantes', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO] },
+    { path: '/caja', icon: DollarSign, label: 'Caja / Pagos', moduleId: 'caja', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO] },
+    { path: '/caja-fuerte', icon: Wallet, label: 'Caja Fuerte', moduleId: 'caja_fuerte', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE] },
+    { path: '/historial-cajas', icon: History, label: 'Historial de Cajas', moduleId: 'historial_cajas', roles: adminRoles },
+    { path: '/reportes', icon: FileText, label: 'Reportes', moduleId: 'reportes', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE] },
+    { path: '/alertas', icon: Bell, label: 'Alertas', moduleId: 'alertas', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO, RolUsuario.COORDINADOR] },
+    { path: '/cierre-financiero', icon: ClipboardList, label: 'Cierre Financiero', moduleId: 'cierre_financiero', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE] },
+    { path: '/instructores', icon: UserCheck, label: 'Instructores', moduleId: 'instructores', roles: adminRoles },
+    { path: '/vehiculos', icon: Car, label: 'Vehículos', moduleId: 'vehiculos', roles: adminRoles },
+    { path: '/clases', icon: Calendar, label: 'Programar Clases', moduleId: 'clases', roles: [RolUsuario.INSTRUCTOR, RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR] },
+    { path: '/usuarios', icon: Shield, label: 'Usuarios', moduleId: 'usuarios', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE] },
+    { path: '/tarifas', icon: GraduationCap, label: 'Tarifas', moduleId: 'tarifas', roles: [RolUsuario.ADMIN, RolUsuario.GERENTE] },
   ];
 
   const allowedItems = menuItems.filter((item) => {
-    if (!item.roles) return true;
     if (!user?.rol) return false;
+    if (user?.permisos_modulos && user.permisos_modulos.length > 0) {
+      return user.permisos_modulos.includes(item.moduleId);
+    }
     return item.roles.includes(user.rol as RolUsuario);
   });
 

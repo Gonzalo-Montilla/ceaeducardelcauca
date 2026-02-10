@@ -9,6 +9,13 @@
   margin-bottom: 16px;
 }
 
+.alertas-header h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
 .alertas-filter {
   display: flex;
   align-items: center;
@@ -27,6 +34,12 @@
   padding: 16px;
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.alertas-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
 }
 
 .alertas-list {

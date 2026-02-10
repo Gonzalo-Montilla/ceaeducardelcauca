@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { Bell } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import { reportesAPI } from '../services/api';
 import '../styles/Alertas.css';
 
@@ -77,19 +79,23 @@ const Alertas = () => {
 
   return (
     <div className="alertas-container">
-      <div className="alertas-header">
-        <h2>Vencimientos y alertas</h2>
-        <div className="alertas-filter">
-          <label>Ventana:</label>
-          <select value={dias} onChange={(e) => setDias(Number(e.target.value))}>
-            <option value={7}>7 días</option>
-            <option value={15}>15 días</option>
-            <option value={30}>30 días</option>
-            <option value={60}>60 días</option>
-            <option value={90}>90 días</option>
-          </select>
-        </div>
-      </div>
+      <PageHeader
+        title="Vencimientos y alertas"
+        subtitle="Control de alertas por vencimiento"
+        icon={<Bell size={20} />}
+        actions={
+          <div className="alertas-filter">
+            <label>Ventana:</label>
+            <select value={dias} onChange={(e) => setDias(Number(e.target.value))}>
+              <option value={7}>7 días</option>
+              <option value={15}>15 días</option>
+              <option value={30}>30 días</option>
+              <option value={60}>60 días</option>
+              <option value={90}>90 días</option>
+            </select>
+          </div>
+        }
+      />
 
       {loading && <div className="alertas-loading">Cargando alertas...</div>}
       {error && <div className="alertas-error">{error}</div>}

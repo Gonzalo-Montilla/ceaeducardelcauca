@@ -13,8 +13,10 @@ import {
   FileText,
   AlertTriangle,
   CreditCard,
-  ArrowRight
+  ArrowRight,
+  Home
 } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import { reportesAPI } from '../services/api';
 import '../styles/Dashboard.css';
 
@@ -68,10 +70,11 @@ export const Dashboard = () => {
 
   return (
     <>
-      <div className="welcome-section">
-        <h2>Bienvenido, {user?.nombre_completo}</h2>
-        <p className="welcome-subtitle">Panel de control - CEA EDUCAR</p>
-      </div>
+      <PageHeader
+        title={`Bienvenido, ${user?.nombre_completo || ''}`}
+        subtitle="Panel de control - CEA EDUCAR"
+        icon={<Home size={20} />}
+      />
 
       <div className="stats-grid">
         <div className="stat-card stat-card-blue">

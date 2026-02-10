@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { History, Search, X, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import { cajaAPI } from '../services/api';
 import '../styles/HistorialCajas.css';
 
@@ -148,13 +149,11 @@ export const HistorialCajas = () => {
 
   return (
     <div className="historial-cajas-container">
-      <div className="historial-header">
-        <div className="header-title-section">
-          <History size={32} />
-          <h1>Historial de Cajas</h1>
-        </div>
-        <p className="header-subtitle">Consulta todas las cajas cerradas</p>
-      </div>
+      <PageHeader
+        title="Historial de Cajas"
+        subtitle="Consulta todas las cajas cerradas"
+        icon={<History size={20} />}
+      />
 
       {/* Filtros */}
       <div className="filtros-section">

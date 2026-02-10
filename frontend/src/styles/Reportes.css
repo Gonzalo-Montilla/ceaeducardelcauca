@@ -57,6 +57,24 @@
   transition: all 0.2s;
 }
 
+.reportes-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-exportar.secondary {
+  background: var(--surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.btn-exportar.secondary:hover:not(:disabled) {
+  background: var(--surface-2);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
 .btn-exportar:hover:not(:disabled) {
   background: var(--primary-600);
   transform: translateY(-2px);

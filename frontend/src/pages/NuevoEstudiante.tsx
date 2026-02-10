@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { estudiantesAPI } from '../services/api';
-import { Camera, RotateCcw, Check } from 'lucide-react';
+import { Camera, RotateCcw, Check, UserPlus } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import '../styles/NuevoEstudiante.css';
 
 export const NuevoEstudiante = () => {
@@ -10,6 +11,7 @@ export const NuevoEstudiante = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [aceptaHabeas, setAceptaHabeas] = useState(false);
   const MAX_IMAGE_SIZE_MB = 2;
   const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
   const MAX_BASE64_LENGTH = 3_000_000;
@@ -183,6 +185,10 @@ export const NuevoEstudiante = () => {
       setError('La imagen es demasiado grande. Usa una más liviana.');
       return;
     }
+    if (!aceptaHabeas) {
+      setError('Debes aceptar el tratamiento de datos personales');
+      return;
+    }
 
     setIsLoading(true);
 
@@ -215,7 +221,8 @@ export const NuevoEstudiante = () => {
         contacto_emergencia_telefono: telefonoEmergenciaLimpio || null,
         
         // Foto en base64
-        foto_base64: fotoCapturada
+        foto_base64: fotoCapturada,
+        autorizacion_tratamiento: aceptaHabeas
       };
       
       // Llamar a la API
@@ -248,10 +255,11 @@ export const NuevoEstudiante = () => {
 
   return (
     <div className="nuevo-estudiante-container">
-      <div className="form-header">
-        <h1>Registro de Nuevo Estudiante</h1>
-        <p>Complete todos los datos del estudiante</p>
-      </div>
+      <PageHeader
+        title="Registro de Nuevo Estudiante"
+        subtitle="Complete todos los datos del estudiante"
+        icon={<UserPlus size={20} />}
+      />
 
       <form onSubmit={handleSubmit} className="estudiante-form">
         {/* Fotografía del Estudiante */}
@@ -572,6 +580,20 @@ export const NuevoEstudiante = () => {
         </div>
 
         {error && <div className="error-message">{error}</div>}
+
+        <div className="habeas-section">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={aceptaHabeas}
+              onChange={(e) => setAceptaHabeas(e.target.checked)}
+            />
+            Autorizo el tratamiento de mis datos personales conforme a la Ley 1581 de 2012.
+          </label>
+          <p className="habeas-text">
+            Se enviará un correo con el aviso de privacidad y los canales para ejercer tus derechos.
+          </p>
+        </div>
 
         {/* Botones */}
         <div className="form-actions">

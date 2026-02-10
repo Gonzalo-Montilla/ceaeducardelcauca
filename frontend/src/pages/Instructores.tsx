@@ -5,6 +5,7 @@ import {
   UserCheck, Search, Plus, Eye, Star, Phone, Award, 
   AlertCircle, Filter, X, AlertTriangle, Clock, ChevronDown
 } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import { InstructorForm } from '../components/InstructorForm';
 import '../styles/Instructores.css';
 import '../styles/InstructorForm.css';
@@ -165,14 +166,17 @@ export const Instructores = () => {
 
   return (
     <div className="instructores-container">
-      {/* Header */}
-      <div className="instructores-header">
-        <h1>Instructores</h1>
-        <button className="btn-primary" onClick={handleNuevoInstructor}>
-          <Plus size={20} />
-          Nuevo Instructor
-        </button>
-      </div>
+      <PageHeader
+        title="Instructores"
+        subtitle="Gestión de instructores y estados"
+        icon={<UserCheck size={20} />}
+        actions={
+          <button className="btn-nuevo" onClick={handleNuevoInstructor}>
+            <Plus size={20} />
+            Nuevo Instructor
+          </button>
+        }
+      />
 
       {/* Búsqueda y Filtros */}
       <div className="instructores-filtros">

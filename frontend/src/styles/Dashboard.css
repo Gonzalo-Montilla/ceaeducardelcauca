@@ -3,20 +3,7 @@
 }
 
 .welcome-section {
-  margin-bottom: 24px;
-}
-
-.welcome-section h2 {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 8px;
-}
-
-.welcome-subtitle {
-  font-size: 14px;
-  color: var(--text-secondary);
-  font-weight: 500;
+  display: none;
 }
 
 /* Stats grid moderno */

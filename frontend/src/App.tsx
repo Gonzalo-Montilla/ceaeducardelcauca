@@ -7,6 +7,7 @@ import { NuevoEstudiante } from './pages/NuevoEstudiante';
 import { Estudiantes } from './pages/Estudiantes';
 import { EstudianteDetalle } from './pages/EstudianteDetalle';
 import { Caja } from './pages/Caja';
+import CajaFuerte from './pages/CajaFuerte';
 import { HistorialCajas } from './pages/HistorialCajas';
 import { Reportes } from './pages/Reportes';
 import Alertas from './pages/Alertas';
@@ -20,12 +21,40 @@ import { Usuarios } from './pages/Usuarios';
 import { Clases } from './pages/Clases';
 import { RolUsuario } from './types';
 
-const getHomeRoute = (rol?: RolUsuario) => {
-  if (rol === RolUsuario.INSTRUCTOR) return '/clases';
+const MODULE_PATHS: Record<string, string> = {
+  dashboard: '/dashboard',
+  nuevo_estudiante: '/nuevo-estudiante',
+  estudiantes: '/estudiantes',
+  caja: '/caja',
+  caja_fuerte: '/caja-fuerte',
+  historial_cajas: '/historial-cajas',
+  reportes: '/reportes',
+  alertas: '/alertas',
+  cierre_financiero: '/cierre-financiero',
+  instructores: '/instructores',
+  vehiculos: '/vehiculos',
+  clases: '/clases',
+  usuarios: '/usuarios',
+  tarifas: '/tarifas'
+};
+
+const getHomeRoute = (user?: { rol?: RolUsuario; permisos_modulos?: string[] }) => {
+  if (user?.permisos_modulos && user.permisos_modulos.length > 0) {
+    const first = user.permisos_modulos.find((m) => MODULE_PATHS[m]);
+    if (first) return MODULE_PATHS[first];
+  }
+  if (user?.rol === RolUsuario.INSTRUCTOR) return '/clases';
   return '/dashboard';
 };
 
-const RoleRoute = ({ children, roles }: { children: React.ReactNode; roles: RolUsuario[] }) => {
+const hasModuleAccess = (user: any, moduleId: string, roles: RolUsuario[]) => {
+  if (user?.permisos_modulos && user.permisos_modulos.length > 0) {
+    return user.permisos_modulos.includes(moduleId);
+  }
+  return roles.includes(user?.rol);
+};
+
+const RoleRoute = ({ children, roles, moduleId }: { children: React.ReactNode; roles: RolUsuario[]; moduleId: string }) => {
   const { isAuthenticated, isLoading, user } = useAuth();
   if (isLoading) {
     return <div>Cargando...</div>;
@@ -33,8 +62,8 @@ const RoleRoute = ({ children, roles }: { children: React.ReactNode; roles: RolU
   if (!isAuthenticated) {
     return <Navigate to="/login" />;
   }
-  if (!user || !roles.includes(user.rol)) {
-    return <Navigate to={getHomeRoute(user?.rol)} />;
+  if (!user || !hasModuleAccess(user, moduleId, roles)) {
+    return <Navigate to={getHomeRoute(user || undefined)} />;
   }
   return <>{children}</>;
 };
@@ -44,7 +73,7 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
   if (isLoading) {
     return <div>Cargando...</div>;
   }
-  return !isAuthenticated ? <>{children}</> : <Navigate to={getHomeRoute(user?.rol)} />;
+  return !isAuthenticated ? <>{children}</> : <Navigate to={getHomeRoute(user || undefined)} />;
 };
 
 const HomeRedirect = () => {
@@ -55,7 +84,7 @@ const HomeRedirect = () => {
   if (!isAuthenticated) {
     return <Navigate to="/login" />;
   }
-  return <Navigate to={getHomeRoute(user?.rol)} />;
+  return <Navigate to={getHomeRoute(user || undefined)} />;
 };
 
 function AppRoutes() {
@@ -72,7 +101,7 @@ function AppRoutes() {
       <Route
         path="/dashboard"
         element={
-          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO]}>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO]} moduleId="dashboard">
             <Layout>
               <Dashboard />
             </Layout>
@@ -82,7 +111,7 @@ function AppRoutes() {
       <Route
         path="/nuevo-estudiante"
         element={
-          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO]}>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO]} moduleId="nuevo_estudiante">
             <Layout>
               <NuevoEstudiante />
             </Layout>
@@ -92,7 +121,7 @@ function AppRoutes() {
       <Route
         path="/estudiantes"
         element={
-          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO]}>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO]} moduleId="estudiantes">
             <Layout>
               <Estudiantes />
             </Layout>
@@ -102,7 +131,7 @@ function AppRoutes() {
       <Route
         path="/estudiantes/:id"
         element={
-          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO]}>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO]} moduleId="estudiantes">
             <Layout>
               <EstudianteDetalle />
             </Layout>
@@ -112,7 +141,7 @@ function AppRoutes() {
       <Route
         path="/caja"
         element={
-          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO]}>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO]} moduleId="caja">
             <Layout>
               <Caja />
             </Layout>
@@ -120,9 +149,19 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/caja-fuerte"
+        element={
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE]} moduleId="caja_fuerte">
+            <Layout>
+              <CajaFuerte />
+            </Layout>
+          </RoleRoute>
+        }
+      />
+      <Route
         path="/historial-cajas"
         element={
-          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]}>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]} moduleId="historial_cajas">
             <Layout>
               <HistorialCajas />
             </Layout>
@@ -132,7 +171,7 @@ function AppRoutes() {
       <Route
         path="/reportes"
         element={
-          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE]}>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE]} moduleId="reportes">
             <Layout>
               <Reportes />
             </Layout>
@@ -142,7 +181,7 @@ function AppRoutes() {
       <Route
         path="/alertas"
         element={
-          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO, RolUsuario.COORDINADOR]}>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.CAJERO, RolUsuario.COORDINADOR]} moduleId="alertas">
             <Layout>
               <Alertas />
             </Layout>
@@ -152,7 +191,7 @@ function AppRoutes() {
       <Route
         path="/cierre-financiero"
         element={
-          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE]}>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE]} moduleId="cierre_financiero">
             <Layout>
               <CierreFinanciero />
             </Layout>
@@ -162,7 +201,7 @@ function AppRoutes() {
       <Route
         path="/instructores"
         element={
-          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]}>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]} moduleId="instructores">
             <Layout>
               <Instructores />
             </Layout>
@@ -172,7 +211,7 @@ function AppRoutes() {
       <Route
         path="/instructores/:id"
         element={
-          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]}>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]} moduleId="instructores">
             <Layout>
               <InstructorDetalle />
             </Layout>
@@ -182,7 +221,7 @@ function AppRoutes() {
       <Route
         path="/tarifas"
         element={
-          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE]}>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE]} moduleId="tarifas">
             <Layout>
               <Tarifas />
             </Layout>
@@ -192,7 +231,7 @@ function AppRoutes() {
       <Route
         path="/usuarios"
         element={
-          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE]}>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE]} moduleId="usuarios">
             <Layout>
               <Usuarios />
             </Layout>
@@ -202,7 +241,7 @@ function AppRoutes() {
       <Route
         path="/vehiculos"
         element={
-          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]}>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]} moduleId="vehiculos">
             <Layout>
               <Vehiculos />
             </Layout>
@@ -212,7 +251,7 @@ function AppRoutes() {
       <Route
         path="/vehiculos/:id"
         element={
-          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]}>
+          <RoleRoute roles={[RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]} moduleId="vehiculos">
             <Layout>
               <VehiculoDetalle />
             </Layout>
@@ -222,7 +261,7 @@ function AppRoutes() {
       <Route
         path="/clases"
         element={
-          <RoleRoute roles={[RolUsuario.INSTRUCTOR, RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]}>
+          <RoleRoute roles={[RolUsuario.INSTRUCTOR, RolUsuario.ADMIN, RolUsuario.GERENTE, RolUsuario.COORDINADOR]} moduleId="clases">
             <Layout>
               <Clases />
             </Layout>

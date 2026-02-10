@@ -115,25 +115,25 @@
 }
 
 .btn-cancel {
-  padding: 0.75rem 1.5rem;
-  background: white;
-  border: 1px solid #ddd;
+  padding: 0.75rem 1.25rem;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
   border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
   transition: all 0.2s;
+  color: #334155;
 }
 
 .btn-cancel:hover {
-  background: #f8f9fa;
-  border-color: #999;
+  background: #eef2f7;
 }
 
 .btn-primary {
-  padding: 0.75rem 1.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 0.75rem 1.25rem;
+  background: #3b82f6;
   color: white;
-  border: none;
+  border: 1px solid #2563eb;
   border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
@@ -141,8 +141,7 @@
 }
 
 .btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  background: #2563eb;
 }
 
 .btn-primary:disabled {

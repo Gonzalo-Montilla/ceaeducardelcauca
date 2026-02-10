@@ -62,6 +62,7 @@ export interface Usuario {
   is_verified: boolean;
   created_at: string;
   last_login?: string;
+  permisos_modulos?: string[];
 }
 
 export interface Estudiante {

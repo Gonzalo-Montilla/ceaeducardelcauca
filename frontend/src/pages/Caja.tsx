@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Search, DollarSign, TrendingUp, TrendingDown, AlertCircle, Plus, X, ChevronDown } from 'lucide-react';
+import { Search, DollarSign, TrendingUp, TrendingDown, AlertCircle, Plus, X, ChevronDown, Download } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import { cajaAPI } from '../services/api';
 import '../styles/Caja.css';
 
@@ -93,6 +94,58 @@ export const Caja = () => {
   const [cerrandoCaja, setCerrandoCaja] = useState(false);
 
   const soloDigitos = (value: string) => value.replace(/\D/g, '');
+
+  const downloadCSV = (filename: string, rows: (string | number)[][]) => {
+    const escape = (value: string | number) => {
+      const str = String(value ?? '');
+      if (str.includes('"') || str.includes(',') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+    const csv = rows.map((row) => row.map(escape).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const exportCajaCSV = () => {
+    if (!cajaActual) return;
+    const rows = [
+      ['Caja y Pagos'],
+      ['ID Caja', cajaActual.id],
+      ['Fecha Apertura', new Date(cajaActual.fecha_apertura).toLocaleString('es-CO')],
+      ['Usuario Apertura', cajaActual.usuario_apertura],
+      [],
+      ['Totales'],
+      ['Saldo Inicial', cajaActual.saldo_inicial],
+      ['Ingresos Totales', cajaActual.total_ingresos],
+      ['Egresos Totales', cajaActual.total_egresos],
+      ['Saldo Efectivo en Caja', cajaActual.saldo_efectivo_caja],
+      [],
+      ['Ingresos por método'],
+      ['Efectivo', cajaActual.total_ingresos_efectivo],
+      ['Nequi', cajaActual.total_nequi],
+      ['Daviplata', cajaActual.total_daviplata],
+      ['Transferencia', cajaActual.total_transferencia_bancaria],
+      ['Tarjeta Débito', cajaActual.total_tarjeta_debito],
+      ['Tarjeta Crédito', cajaActual.total_tarjeta_credito],
+      ['Credismart', cajaActual.total_credismart],
+      ['Sistecrédito', cajaActual.total_sistecredito],
+      [],
+      ['Egresos por método'],
+      ['Efectivo', cajaActual.total_egresos_efectivo],
+      ['Transferencia', cajaActual.total_egresos_transferencia],
+      ['Tarjeta', cajaActual.total_egresos_tarjeta]
+    ];
+    downloadCSV(`caja_${cajaActual.id}_${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  };
   
   useEffect(() => {
     cargarCajaActual();
@@ -393,9 +446,16 @@ export const Caja = () => {
   
   return (
     <div className="caja-container">
-      <div className="caja-header">
-        <h1>Caja y Pagos</h1>
-      </div>
+      <PageHeader
+        title="Caja y Pagos"
+        subtitle="Registro de ingresos, egresos y pagos"
+        icon={<DollarSign size={20} />}
+        actions={
+          <button className="btn-nuevo" onClick={exportCajaCSV} disabled={!cajaActual}>
+            <Download size={16} /> Exportar CSV
+          </button>
+        }
+      />
       
       {/* =========================== CAJA FÍSICA =========================== */}
       <div className="seccion-caja-fisica">

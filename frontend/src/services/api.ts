@@ -1,13 +1,18 @@
 import axios from 'axios';
 import type { LoginRequest, RegisterRequest, TokenResponse, Usuario, Estudiante } from '../types';
 
-const API_URL = 'http://localhost:8000/api/v1';
+const RAW_API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
+const API_URL = RAW_API_URL.endsWith('/api/v1')
+  ? RAW_API_URL
+  : `${RAW_API_URL.replace(/\/$/, '')}/api/v1`;
+const HEALTH_URL = API_URL.replace(/\/api\/v1$/, '') + '/health';
 
 const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 15000,
 });
 
 // Interceptor para agregar token a las peticiones
@@ -55,6 +60,14 @@ export const authAPI = {
     const response = await api.post<TokenResponse>('/auth/login', data);
     return response.data;
   },
+  checkHealth: async (): Promise<boolean> => {
+    try {
+      await axios.get(HEALTH_URL, { timeout: 3000 });
+      return true;
+    } catch {
+      return false;
+    }
+  },
 
   register: async (data: RegisterRequest): Promise<Usuario> => {
     const response = await api.post<Usuario>('/auth/register', data);
@@ -95,8 +108,8 @@ export const estudiantesAPI = {
     return response.data;
   },
 
-  getByCedula: async (cedula: string): Promise<Estudiante> => {
-    const response = await api.get<Estudiante>(`/estudiantes/cedula/${cedula}`);
+  getByCedula: async (cedula: string): Promise<any> => {
+    const response = await api.get(`/estudiantes/cedula/${cedula}`);
     return response.data;
   },
 
@@ -206,6 +219,61 @@ export const cajaAPI = {
     if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
     const query = queryParams.toString();
     const response = await api.get(`/caja/historial${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+};
+
+// Caja Fuerte endpoints
+export const cajaFuerteAPI = {
+  getResumen: async (): Promise<any> => {
+    const response = await api.get('/caja-fuerte/resumen');
+    return response.data;
+  },
+
+  getMovimientos: async (params?: { skip?: number; limit?: number; tipo?: string; metodo_pago?: string; fecha_inicio?: string; fecha_fin?: string }): Promise<any> => {
+    const queryParams = new URLSearchParams();
+    if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString());
+    if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
+    if (params?.tipo) queryParams.append('tipo', params.tipo);
+    if (params?.metodo_pago) queryParams.append('metodo_pago', params.metodo_pago);
+    if (params?.fecha_inicio) queryParams.append('fecha_inicio', params.fecha_inicio);
+    if (params?.fecha_fin) queryParams.append('fecha_fin', params.fecha_fin);
+    const query = queryParams.toString();
+    const response = await api.get(`/caja-fuerte/movimientos${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+
+  crearMovimiento: async (data: any): Promise<any> => {
+    const response = await api.post('/caja-fuerte/movimientos', data);
+    return response.data;
+  },
+
+  actualizarMovimiento: async (id: number, data: any): Promise<any> => {
+    const response = await api.put(`/caja-fuerte/movimientos/${id}`, data);
+    return response.data;
+  },
+
+  eliminarMovimiento: async (id: number, inventario?: any): Promise<any> => {
+    if (inventario) {
+      const response = await api.post(`/caja-fuerte/movimientos/${id}/eliminar`, inventario);
+      return response.data;
+    }
+    const response = await api.delete(`/caja-fuerte/movimientos/${id}`);
+    return response.data;
+  },
+
+  getInventario: async (): Promise<any> => {
+    const response = await api.get('/caja-fuerte/inventario');
+    return response.data;
+  },
+
+  updateInventario: async (data: any): Promise<any> => {
+    const response = await api.put('/caja-fuerte/inventario', data);
+    return response.data;
+  },
+
+  getMovimientoReciboPdf: async (id: number): Promise<Blob> => {
+    const response = await api.get(`/caja-fuerte/movimientos/${id}/recibo-pdf`, { responseType: 'blob' });
     return response.data;
   },
 };

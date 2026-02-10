@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { estudiantesAPI } from '../services/api';
-import { Search, UserPlus, Eye, Settings, ChevronDown } from 'lucide-react';
+import { Search, UserPlus, Eye, Settings, ChevronDown, Users } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import { DefinirServicioModal } from '../components/DefinirServicioModal';
 import '../styles/Estudiantes.css';
 
@@ -146,18 +147,17 @@ export const Estudiantes = () => {
 
   return (
     <div className="estudiantes-container">
-      <div className="page-header">
-        <div className="header-content">
-          <h1>Estudiantes</h1>
-          <button 
-            className="btn-nuevo"
-            onClick={() => navigate('/nuevo-estudiante')}
-          >
+      <PageHeader
+        title="Estudiantes"
+        subtitle="Gestión de estudiantes y matrículas"
+        icon={<Users size={20} />}
+        actions={
+          <button className="btn-nuevo" onClick={() => navigate('/nuevo-estudiante')}>
             <UserPlus size={20} />
             Nuevo Estudiante
           </button>
-        </div>
-      </div>
+        }
+      />
 
       <div className="search-section">
         <div className="search-box">

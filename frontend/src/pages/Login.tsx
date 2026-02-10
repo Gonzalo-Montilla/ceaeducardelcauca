@@ -1,12 +1,15 @@
 import { useState, FormEvent } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { authAPI } from '../services/api';
 import logo from '../assets/cea_educar_final.png';
 import '../styles/Login.css';
 
 export const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
@@ -18,6 +21,11 @@ export const Login = () => {
     setIsLoading(true);
 
     try {
+      const healthy = await authAPI.checkHealth();
+      if (!healthy) {
+        setError('No se pudo conectar al servidor. Verifica que el backend esté activo.');
+        return;
+      }
       await login(email, password);
       navigate('/dashboard');
     } catch (err: any) {
@@ -52,15 +60,25 @@ export const Login = () => {
 
           <div className="form-group">
             <label htmlFor="password">Contraseña</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={isLoading}
-              placeholder="••••••••"
-            />
+            <div className="password-field">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={isLoading}
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                className="toggle-password"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
           {error && <div className="error-message">{error}</div>}

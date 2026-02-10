@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { ClipboardList } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import { reportesAPI } from '../services/api';
 import '../styles/CierreFinanciero.css';
 
@@ -97,19 +99,23 @@ const CierreFinanciero = () => {
 
   return (
     <div className="cierre-container">
-      <div className="cierre-header">
-        <h2>Cierre financiero</h2>
-        <div className="cierre-actions">
-          <div className="cierre-fechas">
-            <label>Inicio</label>
-            <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
-            <label>Fin</label>
-            <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
+      <PageHeader
+        title="Cierre financiero"
+        subtitle="Consolidado financiero por periodo"
+        icon={<ClipboardList size={20} />}
+        actions={
+          <div className="cierre-actions">
+            <div className="cierre-fechas">
+              <label>Inicio</label>
+              <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
+              <label>Fin</label>
+              <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
+            </div>
+            <button className="btn" onClick={cargar}>Actualizar</button>
+            <button className="btn-outline" onClick={exportarCSV} disabled={!data}>Exportar CSV</button>
           </div>
-          <button className="btn" onClick={cargar}>Actualizar</button>
-          <button className="btn-outline" onClick={exportarCSV} disabled={!data}>Exportar CSV</button>
-        </div>
-      </div>
+        }
+      />
 
       {loading && <div className="cierre-loading">Cargando cierre...</div>}
       {error && <div className="cierre-error">{error}</div>}

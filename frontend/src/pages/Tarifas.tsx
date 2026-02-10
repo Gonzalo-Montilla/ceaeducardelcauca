@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, GraduationCap } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import { tarifasAPI } from '../services/api';
 import '../styles/Tarifas.css';
 
@@ -114,12 +115,16 @@ export const Tarifas = () => {
 
   return (
     <div className="tarifas-container">
-      <div className="tarifas-header">
-        <h1>Tarifas</h1>
-        <button className="btn-primary" onClick={abrirNueva}>
-          <Plus size={16} /> Nueva Tarifa
-        </button>
-      </div>
+      <PageHeader
+        title="Tarifas"
+        subtitle="Administración de precios por servicio"
+        icon={<GraduationCap size={20} />}
+        actions={
+          <button className="btn-nuevo" onClick={abrirNueva}>
+            <Plus size={16} /> Nueva Tarifa
+          </button>
+        }
+      />
 
       {error && <div className="error-message">{error}</div>}
 

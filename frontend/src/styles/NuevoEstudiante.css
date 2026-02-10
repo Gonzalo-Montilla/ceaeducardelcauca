@@ -344,6 +344,21 @@
   margin-bottom: 20px;
 }
 
+/* Habeas data */
+.habeas-section {
+  margin-top: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.habeas-text {
+  margin: 6px 0 0 26px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 /* Form actions */
 .form-actions {
   display: flex;

@@ -10,7 +10,7 @@
 
 .caja-header h1 {
   font-size: 28px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
   margin: 0;
 }
@@ -188,9 +188,9 @@
 .seccion-caja-fisica {
   margin-bottom: 32px;
   padding: 24px;
-  background: #f0fdf4;
+  background: #f8fafc;
   border-radius: var(--radius-lg);
-  border: 1px solid #22c55e;
+  border: 1px solid #e2e8f0;
 }
 
 .metodos-digitales-section {
@@ -242,11 +242,11 @@
   border-radius: 8px;
   transition: all 0.2s;
   justify-content: space-between;
-  background: rgba(255, 255, 255, 0.5);
+  background: #f8fafc;
 }
 
 .section-title-main.collapsable:hover {
-  background: rgba(255, 255, 255, 0.9);
+  background: #f1f5f9;
   transform: translateY(-1px);
 }
 
@@ -453,13 +453,13 @@
 .creditos-section {
   margin-bottom: 24px;
   padding: 20px;
-  background: #fffbeb;
+  background: #f8fafc;
   border-radius: 12px;
-  border: 2px solid #fbbf24;
+  border: 1px solid #e2e8f0;
 }
 
 .metodo-card-total {
-  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+  background: #1d4ed8;
   border-radius: 12px;
   padding: 16px;
   display: flex;
@@ -501,9 +501,9 @@
 .resumen-general {
   margin-bottom: 32px;
   padding: 24px;
-  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  background: #f8fafc;
   border-radius: 16px;
-  border: 2px solid #8b5cf6;
+  border: 1px solid #e2e8f0;
 }
 
 .stat-summary {
@@ -1234,6 +1234,39 @@
   justify-content: flex-end;
   padding: 16px 24px;
   border-top: 1px solid #e5e7eb;
+}
+
+.modal-footer .btn-secondary,
+.modal-footer .btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 120px;
+  transition: all 0.2s;
+}
+
+.modal-footer .btn-secondary {
+  background: #f8fafc;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+
+.modal-footer .btn-secondary:hover:not(:disabled) {
+  background: #eef2f7;
+}
+
+.modal-footer .btn-danger {
+  background: #dc2626;
+  color: #fff;
+  border: 1px solid #b91c1c;
+}
+
+.modal-footer .btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
 }
 
 /* Responsive */

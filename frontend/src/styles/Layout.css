@@ -31,20 +31,20 @@
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding: 14px 12px;
+  padding: 18px 12px;
   border-bottom: 1px solid var(--border);
 }
 
 .sidebar-logo-img {
-  width: 140px;
-  height: 140px;
+  width: 200px;
+  height: 200px;
   object-fit: contain;
   max-width: 100%;
 }
 
 .sidebar.expanded .sidebar-logo-img {
-  width: 140px;
-  height: 140px;
+  width: 200px;
+  height: 200px;
 }
 
 .sidebar.collapsed .sidebar-logo-img {

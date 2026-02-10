@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, KeyRound } from 'lucide-react';
+import { Plus, Pencil, KeyRound, Shield } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import { usuariosAPI } from '../services/api';
 import { RolUsuario } from '../types';
 import '../styles/Usuarios.css';
@@ -14,6 +15,7 @@ interface UsuarioItem {
   is_active: boolean;
   created_at: string;
   last_login?: string;
+  permisos_modulos?: string[];
 }
 
 const roles = [
@@ -22,6 +24,23 @@ const roles = [
   RolUsuario.COORDINADOR,
   RolUsuario.CAJERO,
   RolUsuario.INSTRUCTOR
+];
+
+const MODULOS = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'nuevo_estudiante', label: 'Nuevo Estudiante' },
+  { id: 'estudiantes', label: 'Estudiantes' },
+  { id: 'caja', label: 'Caja / Pagos' },
+  { id: 'caja_fuerte', label: 'Caja Fuerte' },
+  { id: 'historial_cajas', label: 'Historial de Cajas' },
+  { id: 'reportes', label: 'Reportes' },
+  { id: 'alertas', label: 'Alertas' },
+  { id: 'cierre_financiero', label: 'Cierre Financiero' },
+  { id: 'instructores', label: 'Instructores' },
+  { id: 'vehiculos', label: 'Vehículos' },
+  { id: 'clases', label: 'Clases' },
+  { id: 'usuarios', label: 'Usuarios' },
+  { id: 'tarifas', label: 'Tarifas' }
 ];
 
 export const Usuarios = () => {
@@ -41,6 +60,7 @@ export const Usuarios = () => {
   const [telefono, setTelefono] = useState('');
   const [rol, setRol] = useState<RolUsuario>(RolUsuario.CAJERO);
   const [activo, setActivo] = useState(true);
+  const [permisosModulos, setPermisosModulos] = useState<string[]>([]);
   const [newPassword, setNewPassword] = useState('');
 
   const cargarUsuarios = async () => {
@@ -69,6 +89,7 @@ export const Usuarios = () => {
     setTelefono('');
     setRol(RolUsuario.CAJERO);
     setActivo(true);
+    setPermisosModulos([]);
     setShowModal(true);
   };
 
@@ -81,6 +102,7 @@ export const Usuarios = () => {
     setTelefono(u.telefono || '');
     setRol(u.rol);
     setActivo(u.is_active);
+    setPermisosModulos(u.permisos_modulos || []);
     setShowModal(true);
   };
 
@@ -95,6 +117,10 @@ export const Usuarios = () => {
       setError('Completa los campos obligatorios');
       return;
     }
+    if (activo && permisosModulos.length === 0) {
+      setError('Selecciona al menos un módulo para habilitar acceso');
+      return;
+    }
     try {
       if (editando) {
         await usuariosAPI.update(editando.id, {
@@ -103,7 +129,8 @@ export const Usuarios = () => {
           cedula,
           telefono: telefono || null,
           rol,
-          is_active: activo
+          is_active: activo,
+          permisos_modulos: permisosModulos
         });
       } else {
         if (!password) {
@@ -116,7 +143,9 @@ export const Usuarios = () => {
           nombre_completo: nombre,
           cedula,
           telefono: telefono || null,
-          rol
+          rol,
+          is_active: activo,
+          permisos_modulos: permisosModulos
         });
       }
       setShowModal(false);
@@ -142,20 +171,27 @@ export const Usuarios = () => {
 
   return (
     <div className="usuarios-container">
-      <div className="usuarios-header">
-        <h1>Usuarios</h1>
-        <div className="usuarios-actions">
+      <PageHeader
+        title="Usuarios"
+        subtitle="Operadores y permisos del sistema"
+        icon={<Shield size={20} />}
+        actions={
+          <button className="btn-nuevo" onClick={abrirNuevo}>
+            <Plus size={16} /> Nuevo
+          </button>
+        }
+      />
+
+      <div className="search-section">
+        <div className="search-box">
           <input
-            className="input-search"
+            className="search-input"
             placeholder="Buscar por nombre, email o cédula"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <button className="btn-secondary" onClick={cargarUsuarios}>Buscar</button>
-          <button className="btn-primary" onClick={abrirNuevo}>
-            <Plus size={16} /> Nuevo
-          </button>
         </div>
+        <button className="btn-nuevo btn-search" onClick={cargarUsuarios}>Buscar</button>
       </div>
 
       {error && <div className="error-message">{error}</div>}
@@ -255,11 +291,32 @@ export const Usuarios = () => {
                 </select>
               </div>
               <div className="form-group">
-                <label>Estado</label>
-                <select value={activo ? '1' : '0'} onChange={(e) => setActivo(e.target.value === '1')}>
-                  <option value="1">Activo</option>
-                  <option value="0">Inactivo</option>
+                <label>Acceso al sistema</label>
+                <select value={activo ? 'SI' : 'NO'} onChange={(e) => setActivo(e.target.value === 'SI')}>
+                  <option value="SI">Habilitado</option>
+                  <option value="NO">Bloqueado</option>
                 </select>
+              </div>
+              <div className="form-group">
+                <label>Permisos por módulo</label>
+                <div className="modulos-grid">
+                  {MODULOS.map((m) => (
+                    <label key={m.id} className="modulo-item">
+                      <input
+                        type="checkbox"
+                        checked={permisosModulos.includes(m.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setPermisosModulos((prev) => [...prev, m.id]);
+                          } else {
+                            setPermisosModulos((prev) => prev.filter((x) => x !== m.id));
+                          }
+                        }}
+                      />
+                      <span>{m.label}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="modal-footer">
