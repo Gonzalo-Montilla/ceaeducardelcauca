@@ -20,7 +20,13 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 10080  # 7 días
     
     # CORS
-    BACKEND_CORS_ORIGINS: list = ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
+    BACKEND_CORS_ORIGINS: list = [
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+    ]
 
     # Email (SMTP)
     SMTP_HOST: str = "smtp.gmail.com"
