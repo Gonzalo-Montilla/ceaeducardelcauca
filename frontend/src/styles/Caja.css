@@ -280,7 +280,7 @@
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   cursor: pointer;
   font-size: 14px;
   color: #374151;
@@ -288,9 +288,75 @@
 }
 
 .checkbox-label input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   cursor: pointer;
+  accent-color: var(--primary);
+}
+
+.pago-form .checkbox-label {
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.pago-form .checkbox-label input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  transform: scale(1.1);
+}
+
+.pago-mixto-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  color: #1f2937;
+}
+
+.pago-mixto-label input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1px;
+  height: 1px;
+  left: -9999px;
+}
+
+.pago-mixto-label .checkbox-custom {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 2px solid #cbd5e1;
+  background: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.pago-mixto-label .checkbox-custom::after {
+  content: "";
+  width: 6px;
+  height: 12px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform 0.2s;
+}
+
+.pago-mixto-label input[type="checkbox"]:checked + .checkbox-custom {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.pago-mixto-label input[type="checkbox"]:checked + .checkbox-custom::after {
+  transform: rotate(45deg) scale(1);
+}
+
+.pago-mixto-label .checkbox-text {
+  font-weight: 600;
 }
 
 .checkbox-label span {
@@ -939,6 +1005,8 @@
   border-radius: 12px;
   padding: 20px;
   background: #f9fafb;
+  width: 100%;
+  max-width: 820px;
 }
 
 .estudiante-header {

@@ -242,7 +242,7 @@ export const Usuarios = () => {
       )}
 
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+      <div className="modal-overlay">
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{editando ? 'Editar usuario' : 'Nuevo usuario'}</h3>
@@ -328,7 +328,7 @@ export const Usuarios = () => {
       )}
 
       {showPassModal && passUsuario && (
-        <div className="modal-overlay" onClick={() => setShowPassModal(false)}>
+      <div className="modal-overlay">
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Resetear contraseña</h3>

@@ -272,7 +272,7 @@ export const HistorialCajas = () => {
 
       {/* Modal de detalle */}
       {showDetalleModal && cajaSeleccionada && (
-        <div className="modal-overlay" onClick={() => setShowDetalleModal(false)}>
+      <div className="modal-overlay">
           <div className="modal-content-historial" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header-historial">
               <h2>Detalle de Caja #{cajaSeleccionada.id}</h2>

@@ -17,7 +17,10 @@ export const NuevoEstudiante = () => {
   const MAX_BASE64_LENGTH = 3_000_000;
 
   // Datos personales
-  const [nombreCompleto, setNombreCompleto] = useState('');
+  const [primerNombre, setPrimerNombre] = useState('');
+  const [segundoNombre, setSegundoNombre] = useState('');
+  const [primerApellido, setPrimerApellido] = useState('');
+  const [segundoApellido, setSegundoApellido] = useState('');
   const [cedula, setCedula] = useState('');
   const [fechaNacimiento, setFechaNacimiento] = useState('');
   const [email, setEmail] = useState('');
@@ -198,7 +201,10 @@ export const NuevoEstudiante = () => {
         // Datos de usuario
         email: email.trim(),
         password: cedula, // Usar cédula como contraseña inicial
-        nombre_completo: nombreCompleto.trim(),
+        primer_nombre: primerNombre.trim(),
+        segundo_nombre: segundoNombre.trim() || null,
+        primer_apellido: primerApellido.trim(),
+        segundo_apellido: segundoApellido.trim() || null,
         cedula: cedulaLimpia,
         telefono: telefonoLimpio,
         
@@ -338,13 +344,44 @@ export const NuevoEstudiante = () => {
           <h2>Datos Personales</h2>
           <div className="form-grid">
             <div className="form-group">
-              <label htmlFor="nombreCompleto">Nombre Completo *</label>
+              <label htmlFor="primerNombre">Primer Nombre *</label>
               <input
-                id="nombreCompleto"
+                id="primerNombre"
                 type="text"
-                value={nombreCompleto}
-                onChange={(e) => setNombreCompleto(e.target.value.toUpperCase())}
+                value={primerNombre}
+                onChange={(e) => setPrimerNombre(e.target.value.toUpperCase())}
                 required
+                style={{ textTransform: 'uppercase' }}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="segundoNombre">Segundo Nombre</label>
+              <input
+                id="segundoNombre"
+                type="text"
+                value={segundoNombre}
+                onChange={(e) => setSegundoNombre(e.target.value.toUpperCase())}
+                style={{ textTransform: 'uppercase' }}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="primerApellido">Primer Apellido *</label>
+              <input
+                id="primerApellido"
+                type="text"
+                value={primerApellido}
+                onChange={(e) => setPrimerApellido(e.target.value.toUpperCase())}
+                required
+                style={{ textTransform: 'uppercase' }}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="segundoApellido">Segundo Apellido</label>
+              <input
+                id="segundoApellido"
+                type="text"
+                value={segundoApellido}
+                onChange={(e) => setSegundoApellido(e.target.value.toUpperCase())}
                 style={{ textTransform: 'uppercase' }}
               />
             </div>
@@ -602,7 +639,10 @@ export const NuevoEstudiante = () => {
             className="btn-secondary"
             onClick={() => {
               const hayCambios = Boolean(
-                nombreCompleto ||
+                primerNombre ||
+                segundoNombre ||
+                primerApellido ||
+                segundoApellido ||
                 cedula ||
                 fechaNacimiento ||
                 email ||

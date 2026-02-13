@@ -16,6 +16,7 @@ interface Estudiante {
   foto_url?: string;
   matricula_numero?: string;
   categoria?: string;
+  tipo_servicio?: string;
   estado: string;
   fecha_inscripcion: string;
   saldo_pendiente?: number;
@@ -78,6 +79,20 @@ export const Estudiantes = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const getServicioLabel = (tipoServicio?: string, categoria?: string) => {
+    const map: Record<string, string> = {
+      LICENCIA_A2: 'Licencia A2',
+      LICENCIA_B1: 'Licencia B1',
+      LICENCIA_C1: 'Licencia C1',
+      COMBO_A2_B1: 'Combo A2 + B1',
+      COMBO_A2_C1: 'Combo A2 + C1',
+      CERTIFICADO_MOTO: 'Certificado Moto',
+      CERTIFICADO_B1: 'Certificado B1',
+      CERTIFICADO_C1: 'Certificado C1'
+    };
+    return map[tipoServicio || ''] || (categoria ? `Licencia ${categoria}` : 'N/A');
   };
 
   const formatearFecha = (fecha: string) => {
@@ -248,12 +263,10 @@ export const Estudiantes = () => {
                     <span className="label">Inscripción:</span>
                     <span className="value">{formatearFecha(estudiante.fecha_inscripcion)}</span>
                   </div>
-                  {estudiante.categoria && (
-                    <div className="info-row">
-                      <span className="label">Licencia:</span>
-                      <span className="value">{estudiante.categoria}</span>
-                    </div>
-                  )}
+                  <div className="info-row">
+                    <span className="label">Servicio:</span>
+                    <span className="value">{getServicioLabel(estudiante.tipo_servicio, estudiante.categoria)}</span>
+                  </div>
                   {estudiante.saldo_pendiente !== undefined && (
                     <div className="info-row">
                       <span className="label">Saldo:</span>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { estudiantesAPI } from '../services/api';
+import { estudiantesAPI, tarifasAPI } from '../services/api';
 import { 
   ArrowLeft, 
   User, 
@@ -13,6 +13,7 @@ import {
   Edit,
   Download,
   BookOpen,
+  PlusCircle,
   Car as CarIcon,
   AlertCircle
 } from 'lucide-react';
@@ -84,11 +85,23 @@ export const EstudianteDetalle = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [showEditModal, setShowEditModal] = useState(false);
+  const [contratoPreviewUrl, setContratoPreviewUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [editError, setEditError] = useState('');
   const [editFotoBase64, setEditFotoBase64] = useState<string | null>(null);
+  const [showAmpliarModal, setShowAmpliarModal] = useState(false);
+  const [ampliarError, setAmpliarError] = useState('');
+  const [ampliarSaving, setAmpliarSaving] = useState(false);
+  const [tarifas, setTarifas] = useState<any[]>([]);
+  const [servicioAdicional, setServicioAdicional] = useState('');
+  const [comboTipo, setComboTipo] = useState('');
+  const [valorCombo, setValorCombo] = useState('');
+  const [observacionesCombo, setObservacionesCombo] = useState('');
   const [editForm, setEditForm] = useState({
-    nombre_completo: '',
+    primer_nombre: '',
+    segundo_nombre: '',
+    primer_apellido: '',
+    segundo_apellido: '',
     email: '',
     cedula: '',
     telefono: '',
@@ -112,6 +125,16 @@ export const EstudianteDetalle = () => {
     cargarEstudiante();
   }, [id]);
 
+  useEffect(() => {
+    if (!showAmpliarModal || !comboTipo) return;
+    if (estudiante?.origen_cliente === 'DIRECTO') {
+      const minimo = calcularPrecioMinimo(comboTipo);
+      if (minimo && valorCombo !== minimo.toString()) {
+        setValorCombo(minimo.toString());
+      }
+    }
+  }, [showAmpliarModal, comboTipo, tarifas, estudiante?.origen_cliente, valorCombo]);
+
   const cargarEstudiante = async () => {
     try {
       setIsLoading(true);
@@ -125,25 +148,36 @@ export const EstudianteDetalle = () => {
     }
   };
 
-  const handleDescargarContrato = async () => {
+  const handleVerContrato = async () => {
     if (!id) return;
     try {
       const pdfBlob = await estudiantesAPI.getContratoPdf(Number(id));
       const fileUrl = URL.createObjectURL(pdfBlob);
-      const link = document.createElement('a');
-      link.href = fileUrl;
-      const filename = estudiante?.matricula_numero
-        ? `contrato_${estudiante.matricula_numero}.pdf`
-        : `contrato_${id}.pdf`;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(fileUrl);
+      setContratoPreviewUrl(fileUrl);
     } catch (err) {
       console.error('Error al descargar contrato:', err);
-      alert('No se pudo descargar el contrato');
+      alert('No se pudo cargar el contrato');
     }
+  };
+
+  const cerrarContratoPreview = () => {
+    if (contratoPreviewUrl) {
+      URL.revokeObjectURL(contratoPreviewUrl);
+    }
+    setContratoPreviewUrl(null);
+  };
+
+  const descargarContrato = () => {
+    if (!contratoPreviewUrl) return;
+    const link = document.createElement('a');
+    link.href = contratoPreviewUrl;
+    const filename = estudiante?.matricula_numero
+      ? `contrato_${estudiante.matricula_numero}.pdf`
+      : `contrato_${id}.pdf`;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   };
 
   const formatearFecha = (fecha: string) => {
@@ -163,10 +197,154 @@ export const EstudianteDetalle = () => {
     }).format(valor);
   };
 
+  const calcularPrecioMinimo = (tipo: string) => {
+    const tarifa = tarifas.find((t) => t.tipo_servicio === tipo && t.activo);
+    if (!tarifa) return 0;
+    const base = Number(tarifa.precio_base || 0);
+    const practica = Number(tarifa.costo_practica || 0);
+    const esCertificado = ['CERTIFICADO_B1', 'CERTIFICADO_C1'].includes(tipo);
+    return esCertificado ? base + practica : base;
+  };
+
+  const getServicioActualLabel = () => {
+    const map: Record<string, string> = {
+      LICENCIA_A2: 'Licencia A2 (Moto)',
+      LICENCIA_B1: 'Licencia B1 (Automóvil)',
+      LICENCIA_C1: 'Licencia C1 (Camioneta)',
+      COMBO_A2_B1: 'Combo A2 + B1',
+      COMBO_A2_C1: 'Combo A2 + C1',
+      CERTIFICADO_MOTO: 'Certificado Moto',
+      CERTIFICADO_B1: 'Certificado B1',
+      CERTIFICADO_C1: 'Certificado C1'
+    };
+    return map[estudiante?.tipo_servicio || ''] || (estudiante?.tipo_servicio || 'N/A');
+  };
+
+  const getOpcionesAdicional = () => {
+    const actual = estudiante?.tipo_servicio;
+    if (actual === 'LICENCIA_A2') {
+      return [
+        { value: 'B1', label: 'B1' },
+        { value: 'C1', label: 'C1' }
+      ];
+    }
+    if (actual === 'LICENCIA_B1') {
+      return [{ value: 'A2', label: 'A2' }];
+    }
+    if (actual === 'LICENCIA_C1') {
+      return [{ value: 'A2', label: 'A2' }];
+    }
+    return [];
+  };
+
+  const calcularComboTipo = (adicional: string) => {
+    const actual = estudiante?.tipo_servicio;
+    if (actual === 'LICENCIA_A2' && adicional === 'B1') return 'COMBO_A2_B1';
+    if (actual === 'LICENCIA_A2' && adicional === 'C1') return 'COMBO_A2_C1';
+    if (actual === 'LICENCIA_B1' && adicional === 'A2') return 'COMBO_A2_B1';
+    if (actual === 'LICENCIA_C1' && adicional === 'A2') return 'COMBO_A2_C1';
+    return '';
+  };
+
+  const totalAbonado = (estudiante?.valor_total_curso || 0) - (estudiante?.saldo_pendiente || 0);
+  const valorComboNumero = parseInt(valorCombo || '0', 10) || 0;
+  const nuevoSaldo = Math.max(valorComboNumero - totalAbonado, 0);
+
+  const splitNombre = (fullName?: string) => {
+    const partes = (fullName || '').trim().split(/\s+/).filter(Boolean);
+    const [primerNombre, segundoNombre, primerApellido, ...resto] = partes;
+    return {
+      primer_nombre: primerNombre || '',
+      segundo_nombre: segundoNombre || '',
+      primer_apellido: primerApellido || '',
+      segundo_apellido: resto.length ? resto.join(' ') : ''
+    };
+  };
+
+  const abrirAmpliarServicio = async () => {
+    setAmpliarError('');
+    setServicioAdicional('');
+    setComboTipo('');
+    setValorCombo('');
+    setObservacionesCombo('');
+    setShowAmpliarModal(true);
+    if (!tarifas.length) {
+      try {
+        const data = await tarifasAPI.getAll();
+        setTarifas(data || []);
+      } catch (err) {
+        console.error('Error al cargar tarifas:', err);
+      }
+    }
+  };
+
+  const handleServicioAdicionalChange = (value: string) => {
+    setServicioAdicional(value);
+    const tipo = calcularComboTipo(value);
+    setComboTipo(tipo);
+    if (!tipo) {
+      setValorCombo('');
+      return;
+    }
+    const minimo = calcularPrecioMinimo(tipo);
+    if (estudiante?.origen_cliente === 'DIRECTO') {
+      setValorCombo(minimo ? minimo.toString() : '');
+    } else {
+      setValorCombo('');
+    }
+  };
+
+  const handleGuardarAmpliacion = async () => {
+    if (!id || !estudiante) return;
+    setAmpliarError('');
+
+    if (!comboTipo) {
+      setAmpliarError('Seleccione el servicio adicional para calcular el combo');
+      return;
+    }
+
+    const minimo = calcularPrecioMinimo(comboTipo);
+    if (estudiante.origen_cliente === 'DIRECTO' && minimo <= 0) {
+      setAmpliarError('No hay tarifa definida para este combo');
+      return;
+    }
+
+    if (estudiante.origen_cliente === 'REFERIDO') {
+      if (!valorCombo) {
+        setAmpliarError('Debe ingresar el valor del combo');
+        return;
+      }
+      if (minimo > 0 && parseInt(valorCombo, 10) < minimo) {
+        setAmpliarError(`El valor no puede ser menor a ${formatearMoneda(minimo)}`);
+        return;
+      }
+    }
+
+    setAmpliarSaving(true);
+    try {
+      await estudiantesAPI.ampliarServicio(Number(id), {
+        tipo_servicio_nuevo: comboTipo,
+        valor_total_curso: estudiante.origen_cliente === 'REFERIDO' ? parseInt(valorCombo, 10) : null,
+        observaciones: observacionesCombo || null
+      });
+      await cargarEstudiante();
+      setShowAmpliarModal(false);
+    } catch (err: any) {
+      console.error('Error al ampliar servicio:', err);
+      setAmpliarError(err.response?.data?.detail || 'Error al ampliar el servicio');
+    } finally {
+      setAmpliarSaving(false);
+    }
+  };
+
   const abrirEditar = () => {
     if (!estudiante) return;
+    const nombres = splitNombre(estudiante.nombre_completo);
     setEditForm({
-      nombre_completo: estudiante.nombre_completo || '',
+      primer_nombre: nombres.primer_nombre,
+      segundo_nombre: nombres.segundo_nombre,
+      primer_apellido: nombres.primer_apellido,
+      segundo_apellido: nombres.segundo_apellido,
       email: estudiante.email || '',
       cedula: estudiante.cedula || '',
       telefono: estudiante.telefono || '',
@@ -213,7 +391,10 @@ export const EstudianteDetalle = () => {
     setEditError('');
     try {
       const payload: any = {
-        nombre_completo: editForm.nombre_completo.trim(),
+        primer_nombre: editForm.primer_nombre.trim(),
+        segundo_nombre: editForm.segundo_nombre.trim() || null,
+        primer_apellido: editForm.primer_apellido.trim(),
+        segundo_apellido: editForm.segundo_apellido.trim() || null,
         email: editForm.email.trim(),
         cedula: editForm.cedula.trim(),
         telefono: editForm.telefono.trim(),
@@ -280,7 +461,7 @@ export const EstudianteDetalle = () => {
   return (
     <div className="estudiante-detalle-container">
       {showEditModal && (
-        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+      <div className="modal-overlay">
           <div className="modal-container" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Editar Estudiante</h2>
@@ -291,11 +472,35 @@ export const EstudianteDetalle = () => {
             <form className="modal-form" onSubmit={(e) => e.preventDefault()}>
               {editError && <div className="error-message">{editError}</div>}
               <div className="form-group">
-                <label>Nombre completo</label>
+                <label>Primer Nombre</label>
                 <input
                   className="form-input"
-                  value={editForm.nombre_completo}
-                  onChange={(e) => handleEditChange('nombre_completo', e.target.value)}
+                  value={editForm.primer_nombre}
+                  onChange={(e) => handleEditChange('primer_nombre', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Segundo Nombre</label>
+                <input
+                  className="form-input"
+                  value={editForm.segundo_nombre}
+                  onChange={(e) => handleEditChange('segundo_nombre', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Primer Apellido</label>
+                <input
+                  className="form-input"
+                  value={editForm.primer_apellido}
+                  onChange={(e) => handleEditChange('primer_apellido', e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Segundo Apellido</label>
+                <input
+                  className="form-input"
+                  value={editForm.segundo_apellido}
+                  onChange={(e) => handleEditChange('segundo_apellido', e.target.value)}
                 />
               </div>
               <div className="form-group">
@@ -469,6 +674,116 @@ export const EstudianteDetalle = () => {
           </div>
         </div>
       )}
+      {showAmpliarModal && (
+        <div className="modal-overlay">
+          <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Ampliar Servicio a Combo</h2>
+              <button className="btn-close" onClick={() => setShowAmpliarModal(false)}>
+                ✕
+              </button>
+            </div>
+            <form className="modal-form" onSubmit={(e) => e.preventDefault()}>
+              {ampliarError && <div className="error-message">{ampliarError}</div>}
+              <div className="form-group">
+                <label>Servicio actual</label>
+                <input className="form-input readonly" readOnly value={getServicioActualLabel()} />
+              </div>
+              <div className="form-group">
+                <label>Servicio adicional *</label>
+                <select
+                  className="form-select"
+                  value={servicioAdicional}
+                  onChange={(e) => handleServicioAdicionalChange(e.target.value)}
+                  required
+                >
+                  <option value="">Seleccione</option>
+                  {getOpcionesAdicional().map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Combo resultante</label>
+                <input
+                  className="form-input readonly"
+                  readOnly
+                  value={
+                    comboTipo === 'COMBO_A2_B1'
+                      ? 'Combo A2 + B1'
+                      : comboTipo === 'COMBO_A2_C1'
+                      ? 'Combo A2 + C1'
+                      : ''
+                  }
+                  placeholder="Seleccione servicio adicional"
+                />
+              </div>
+              <div className="form-group">
+                <label>Valor total del combo *</label>
+                {estudiante.origen_cliente === 'REFERIDO' && comboTipo && (
+                  <small className="help-text">
+                    Mínimo permitido: {formatearMoneda(calcularPrecioMinimo(comboTipo))}
+                  </small>
+                )}
+                <input
+                  className={`form-input ${estudiante.origen_cliente === 'DIRECTO' ? 'readonly' : ''}`}
+                  value={valorCombo}
+                  onChange={(e) => setValorCombo(e.target.value.replace(/\D/g, ''))}
+                  readOnly={estudiante.origen_cliente === 'DIRECTO'}
+                  placeholder="Ingrese el valor"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Total abonado</label>
+                <input className="form-input readonly" readOnly value={formatearMoneda(totalAbonado)} />
+              </div>
+              <div className="form-group">
+                <label>Nuevo saldo pendiente</label>
+                <input className="form-input readonly" readOnly value={formatearMoneda(nuevoSaldo)} />
+              </div>
+              <div className="form-group">
+                <label>Observaciones</label>
+                <textarea
+                  className="form-textarea"
+                  rows={3}
+                  value={observacionesCombo}
+                  onChange={(e) => setObservacionesCombo(e.target.value.toUpperCase())}
+                  placeholder="OBSERVACIONES (OPCIONAL)"
+                />
+              </div>
+              <div className="modal-footer" style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn-outline" onClick={() => setShowAmpliarModal(false)}>
+                  Cancelar
+                </button>
+                <button type="button" className="btn" onClick={handleGuardarAmpliacion} disabled={ampliarSaving}>
+                  {ampliarSaving ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {contratoPreviewUrl && (
+        <div className="pdf-preview-modal">
+          <div className="pdf-preview-content" onClick={(e) => e.stopPropagation()}>
+            <div className="pdf-preview-header">
+              <h3>Contrato del Estudiante</h3>
+              <div className="pdf-preview-actions">
+                <button className="btn-descargar" onClick={descargarContrato}>
+                  <Download size={18} /> Descargar
+                </button>
+                <button className="btn-cerrar" onClick={cerrarContratoPreview}>
+                  ✕
+                </button>
+              </div>
+            </div>
+            <div className="pdf-preview-body">
+              <iframe src={contratoPreviewUrl} title="Contrato" />
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="detalle-header">
         <button className="btn-back" onClick={() => navigate('/estudiantes')}>
@@ -478,8 +793,8 @@ export const EstudianteDetalle = () => {
           <button className="btn-action" onClick={abrirEditar}>
             <Edit size={18} /> Editar
           </button>
-          <button className="btn-action" onClick={handleDescargarContrato}>
-            <Download size={18} /> Descargar Contrato
+          <button className="btn-action" onClick={handleVerContrato}>
+            <FileText size={18} /> Ver Contrato
           </button>
         </div>
       </div>
@@ -583,8 +898,8 @@ export const EstudianteDetalle = () => {
             <h2><FileText size={20} /> Información Académica</h2>
             <div className="info-rows">
               <div className="info-row">
-                <span className="label">Categoría de Licencia:</span>
-                <span className="value badge-categoria">{estudiante.categoria}</span>
+                <span className="label">Servicio actual:</span>
+                <span className="value badge-categoria">{getServicioActualLabel()}</span>
               </div>
               <div className="info-row">
                 <span className="label">Fecha de Inscripción:</span>
@@ -607,6 +922,13 @@ export const EstudianteDetalle = () => {
                 <span className="progreso-text">{estudiante.progreso_practico.toFixed(0)}%</span>
               </div>
             </div>
+            {['LICENCIA_A2', 'LICENCIA_B1', 'LICENCIA_C1'].includes(estudiante.tipo_servicio || '') && (
+              <div className="acciones-academicas">
+                <button className="btn-ampliar" onClick={abrirAmpliarServicio}>
+                  <PlusCircle size={18} /> Ampliar servicio a combo
+                </button>
+              </div>
+            )}
           </div>
         )}
 

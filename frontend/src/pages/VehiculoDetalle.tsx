@@ -14,8 +14,12 @@ interface Vehiculo {
   color?: string;
   cilindraje?: string;
   vin?: string;
+  numero_motor?: string;
+  numero_chasis?: string;
   foto_url?: string;
   kilometraje_actual?: number;
+  responsable_instructor_id?: number | null;
+  responsable_nombre?: string | null;
   is_active: boolean;
 }
 
@@ -238,6 +242,9 @@ export const VehiculoDetalle = () => {
     lines.push(`Tipo,${data.vehiculo.tipo || ''}`);
     lines.push(`Marca,${data.vehiculo.marca || ''}`);
     lines.push(`Modelo,${data.vehiculo.modelo || ''}`);
+    lines.push(`Responsable,${data.vehiculo.responsable_nombre || ''}`);
+    lines.push(`Numero Motor,${data.vehiculo.numero_motor || ''}`);
+    lines.push(`Numero Chasis,${data.vehiculo.numero_chasis || ''}`);
     lines.push('');
     lines.push('RESUMEN COMBUSTIBLE');
     lines.push('Total KM,Total Galones,Consumo Promedio (km/gal),Costo Total,Costo por KM');
@@ -287,6 +294,8 @@ export const VehiculoDetalle = () => {
         <body>
           <h1>Hoja de Vida - ${data.vehiculo.placa}</h1>
           <p><strong>Tipo:</strong> ${data.vehiculo.tipo || ''} | <strong>Marca:</strong> ${data.vehiculo.marca || ''} | <strong>Modelo:</strong> ${data.vehiculo.modelo || ''}</p>
+          <p><strong>Responsable:</strong> ${data.vehiculo.responsable_nombre || ''}</p>
+          <p><strong>Número de Motor:</strong> ${data.vehiculo.numero_motor || ''} | <strong>Número de Chasis:</strong> ${data.vehiculo.numero_chasis || ''}</p>
           <h2>Resumen combustible</h2>
           <p>Total KM: ${data.resumen.total_km.toFixed(0)} | Galones: ${data.resumen.total_galones.toFixed(2)} | Consumo: ${data.resumen.consumo_promedio.toFixed(2)} km/gal</p>
           <p>Costo total: ${data.resumen.costo_total.toFixed(0)} | Costo/km: ${data.resumen.costo_por_km.toFixed(0)}</p>
@@ -484,10 +493,13 @@ export const VehiculoDetalle = () => {
         <div className="vehiculo-info-right">
           <div><strong>Marca/Modelo:</strong> {vehiculo.marca || '-'} {vehiculo.modelo || ''}</div>
           <div><strong>Tipo:</strong> {vehiculo.tipo || '-'}</div>
+          <div><strong>Responsable:</strong> {vehiculo.responsable_nombre || '-'}</div>
           <div><strong>Año:</strong> {vehiculo.año || '-'}</div>
           <div><strong>Color:</strong> {vehiculo.color || '-'}</div>
           <div><strong>Cilindraje:</strong> {vehiculo.cilindraje || '-'}</div>
           <div><strong>VIN:</strong> {vehiculo.vin || '-'}</div>
+          <div><strong>Número de Motor:</strong> {vehiculo.numero_motor || '-'}</div>
+          <div><strong>Número de Chasis:</strong> {vehiculo.numero_chasis || '-'}</div>
           <div><strong>Kilometraje actual:</strong> {vehiculo.kilometraje_actual || '-'}</div>
           <div><strong>Estado:</strong> {vehiculo.is_active ? 'Activo' : 'Inactivo'}</div>
         </div>
@@ -844,7 +856,7 @@ export const VehiculoDetalle = () => {
 
       {/* Modal adjunto */}
       {showAdjuntoModal && (
-        <div className="modal-overlay" onClick={() => setShowAdjuntoModal(false)}>
+      <div className="modal-overlay">
           <div className="modal-box modal-adjunto" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{adjuntoNombre || 'Adjunto'}</h3>
@@ -863,7 +875,7 @@ export const VehiculoDetalle = () => {
 
       {/* Modal mantenimiento */}
       {showMantModal && (
-        <div className="modal-overlay" onClick={() => setShowMantModal(false)}>
+      <div className="modal-overlay">
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Registrar mantenimiento/falla</h3>
@@ -933,7 +945,7 @@ export const VehiculoDetalle = () => {
 
       {/* Modal repuesto */}
       {showRepModal && mantenimientoSeleccionado && (
-        <div className="modal-overlay" onClick={() => setShowRepModal(false)}>
+      <div className="modal-overlay">
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Agregar repuesto</h3>
@@ -967,7 +979,7 @@ export const VehiculoDetalle = () => {
 
       {/* Modal combustible */}
       {showCombModal && (
-        <div className="modal-overlay" onClick={() => setShowCombModal(false)}>
+      <div className="modal-overlay">
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Registrar combustible</h3>

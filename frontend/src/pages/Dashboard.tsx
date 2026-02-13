@@ -6,7 +6,6 @@ import {
   TrendingUp,
   BookOpen,
   DollarSign,
-  Award,
   Database,
   CheckCircle,
   RefreshCw,
@@ -66,8 +65,6 @@ export const Dashboard = () => {
     }).format(valor);
   };
 
-  const formatearPorcentaje = (valor: number) => `${valor.toFixed(1)}%`;
-
   return (
     <>
       <PageHeader
@@ -123,29 +120,6 @@ export const Dashboard = () => {
             </p>
             <h3>Saldo Pendiente</h3>
           </div>
-        </div>
-      </div>
-
-      <div className="info-panel dashboard-panel">
-        <div className="panel-header">
-          <h3><FileText size={18} style={{ display: 'inline', marginRight: '8px' }} /> Resumen Operativo</h3>
-        </div>
-        <div className="panel-body">
-          {loading && <p><RefreshCw size={16} style={{ display: 'inline', marginRight: '8px', color: '#3b82f6' }} /> Cargando métricas...</p>}
-          {error && <p><AlertTriangle size={16} style={{ display: 'inline', marginRight: '8px', color: '#f59e0b' }} /> {error}</p>}
-          {!loading && !error && kpis && (
-            <>
-              <p><CheckCircle size={16} style={{ display: 'inline', marginRight: '8px', color: '#10b981' }} /> Tasa de cobranza: {formatearPorcentaje(kpis.tasa_cobranza)}</p>
-              <p><Award size={16} style={{ display: 'inline', marginRight: '8px', color: '#8b5cf6' }} /> Ticket promedio: {formatearMoneda(parseFloat(kpis.ticket_promedio))}</p>
-              <p><TrendingUp size={16} style={{ display: 'inline', marginRight: '8px', color: '#22c55e' }} /> Margen operativo: {formatearPorcentaje(kpis.margen_operativo)}</p>
-              <p><DollarSign size={16} style={{ display: 'inline', marginRight: '8px', color: '#2563eb' }} /> Ingreso neto: {formatearMoneda(parseFloat(kpis.ingreso_neto))}</p>
-              <p><Database size={16} style={{ display: 'inline', marginRight: '8px', color: '#0ea5e9' }} /> Ingreso promedio por caja: {formatearMoneda(parseFloat(kpis.ingresos_promedio_por_caja))}</p>
-              <p><AlertTriangle size={16} style={{ display: 'inline', marginRight: '8px', color: '#f59e0b' }} /> % pagos vencidos: {formatearPorcentaje(kpis.porcentaje_pagos_vencidos)}</p>
-            </>
-          )}
-          {!loading && !error && !kpis && (
-            <p><RefreshCw size={16} style={{ display: 'inline', marginRight: '8px', color: '#3b82f6' }} /> Sin datos para el período actual</p>
-          )}
         </div>
       </div>
 

@@ -609,7 +609,7 @@ export const InstructorDetalle = () => {
 
       {/* Modal de Vista Previa PDF */}
       {pdfPreview && (
-        <div className="pdf-preview-modal" onClick={cerrarVistaPrevia}>
+      <div className="pdf-preview-modal">
           <div className="pdf-preview-content" onClick={(e) => e.stopPropagation()}>
             <div className="pdf-preview-header">
               <h3>{pdfPreview.nombre}</h3>

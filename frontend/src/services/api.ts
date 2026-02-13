@@ -127,7 +127,18 @@ export const estudiantesAPI = {
     return response.data;
   },
 
-  acreditarHoras: async (id: number, data: { tipo: string; horas: number; observaciones?: string | null }): Promise<Estudiante> => {
+  ampliarServicio: async (
+    id: number,
+    data: { tipo_servicio_nuevo: string; valor_total_curso?: number | null; observaciones?: string | null }
+  ): Promise<Estudiante> => {
+    const response = await api.put<Estudiante>(`/estudiantes/${id}/ampliar-servicio`, data);
+    return response.data;
+  },
+
+  acreditarHoras: async (
+    id: number,
+    data: { tipo: string; horas: number; observaciones?: string | null; instructor_id?: number | null; vehiculo_id?: number | null }
+  ): Promise<Estudiante> => {
     const response = await api.post<Estudiante>(`/estudiantes/${id}/acreditar-horas`, data);
     return response.data;
   },

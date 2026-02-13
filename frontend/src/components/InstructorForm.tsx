@@ -283,7 +283,7 @@ export const InstructorForm = ({ instructor, onClose, onSuccess }: InstructorFor
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay">
       <div className="modal-content-large" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>

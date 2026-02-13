@@ -407,7 +407,7 @@ export const Caja = () => {
         </div>
         
         {showAbrirCaja && (
-          <div className="modal-overlay" onClick={() => setShowAbrirCaja(false)}>
+      <div className="modal-overlay">
             <div className="modal-box" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
                 <h3>Abrir Caja</h3>
@@ -785,7 +785,7 @@ export const Caja = () => {
                 
                 {/* Toggle para pago mixto */}
                 <div className="form-group">
-                  <label className="checkbox-label">
+                  <label className="checkbox-label pago-mixto-label">
                     <input
                       type="checkbox"
                       checked={esPagoMixto}
@@ -798,7 +798,8 @@ export const Caja = () => {
                         }
                       }}
                     />
-                    <span>Pago Mixto (varios métodos)</span>
+                    <span className="checkbox-custom" aria-hidden="true"></span>
+                    <span className="checkbox-text">Pago Mixto (varios métodos)</span>
                   </label>
                 </div>
                 
@@ -918,7 +919,7 @@ export const Caja = () => {
       
       {/* Modal Egreso */}
       {showEgreso && (
-        <div className="modal-overlay" onClick={() => setShowEgreso(false)}>
+      <div className="modal-overlay">
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Registrar Egreso</h3>
@@ -988,7 +989,7 @@ export const Caja = () => {
       
       {/* Modal Cerrar Caja - Arqueo */}
       {showCerrarCaja && cajaActual && (
-        <div className="modal-overlay" onClick={() => setShowCerrarCaja(false)}>
+      <div className="modal-overlay">
           <div className="modal-box modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>📋 Arqueo y Cierre de Caja</h3>

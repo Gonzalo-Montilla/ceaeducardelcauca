@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Search, Clock, User, Calendar, Download } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
-import { estudiantesAPI } from '../services/api';
+import { estudiantesAPI, instructoresAPI, vehiculosAPI } from '../services/api';
 import '../styles/Clases.css';
 
 interface Estudiante {
@@ -25,6 +25,10 @@ interface Estudiante {
     horas: number;
     observaciones?: string;
     usuario_id?: number;
+      instructor_id?: number;
+      instructor_nombre?: string;
+      vehiculo_id?: number;
+      vehiculo_label?: string;
   }[];
 }
 
@@ -34,8 +38,18 @@ export const Clases = () => {
   const [tipo, setTipo] = useState('TEORICA');
   const [horas, setHoras] = useState('1');
   const [observaciones, setObservaciones] = useState('');
+  const [instructorId, setInstructorId] = useState('');
+  const [vehiculoId, setVehiculoId] = useState('');
+  const [instructores, setInstructores] = useState<any[]>([]);
+  const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const getErrorMessage = (err: any, fallback: string) => {
+    const detail = err?.response?.data?.detail;
+    if (Array.isArray(detail)) return fallback;
+    return detail || fallback;
+  };
 
   const buscar = async () => {
     if (!cedula.trim()) return;
@@ -44,11 +58,25 @@ export const Clases = () => {
       setError('');
       const data = await estudiantesAPI.getByCedula(cedula.trim());
       setEstudiante(data as Estudiante);
+      await cargarListas();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'No se encontró el estudiante');
+      setError(getErrorMessage(err, 'No se encontró el estudiante'));
       setEstudiante(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const cargarListas = async () => {
+    try {
+      const [inst, veh] = await Promise.all([
+        instructoresAPI.getAll({ estado: 'ACTIVO', limit: 100 }),
+        vehiculosAPI.getAll({ activo: true, limit: 100 })
+      ]);
+      setInstructores(inst.items || []);
+      setVehiculos(veh.items || []);
+    } catch (err: any) {
+      setError(getErrorMessage(err, 'No se pudieron cargar instructores o vehículos'));
     }
   };
 
@@ -58,20 +86,32 @@ export const Clases = () => {
       setError('Las horas deben ser mayores a 0');
       return;
     }
+    if (!instructorId) {
+      setError('Selecciona instructor');
+      return;
+    }
+    if (tipo === 'PRACTICA' && !vehiculoId) {
+      setError('Selecciona vehículo');
+      return;
+    }
     try {
       setLoading(true);
       setError('');
       await estudiantesAPI.acreditarHoras(estudiante.id, {
         tipo,
         horas: parseInt(horas),
-        observaciones: observaciones.trim() || null
+        observaciones: observaciones.trim() || null,
+        instructor_id: Number(instructorId),
+        vehiculo_id: tipo === 'PRACTICA' ? Number(vehiculoId) : null
       });
       const actualizado = await estudiantesAPI.getByCedula(estudiante.cedula);
       setEstudiante(actualizado as Estudiante);
       setObservaciones('');
       setHoras('1');
+      setInstructorId('');
+      setVehiculoId('');
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Error al acreditar horas');
+      setError(getErrorMessage(err, 'Error al acreditar horas'));
     } finally {
       setLoading(false);
     }
@@ -193,11 +233,42 @@ export const Clases = () => {
           <div className="clases-form">
             <div className="form-group">
               <label>Tipo de clase</label>
-              <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+              <select
+                value={tipo}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setTipo(next);
+                  if (next !== 'PRACTICA') setVehiculoId('');
+                }}
+              >
                 <option value="TEORICA">Teórica</option>
                 <option value="PRACTICA">Práctica</option>
               </select>
             </div>
+            <div className="form-group">
+              <label>Instructor</label>
+              <select value={instructorId} onChange={(e) => setInstructorId(e.target.value)}>
+                <option value="">Selecciona instructor</option>
+                {instructores.map((inst) => (
+                  <option key={inst.id} value={inst.id}>
+                    {inst.nombre_completo}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {tipo === 'PRACTICA' && (
+              <div className="form-group">
+                <label>Vehículo</label>
+                <select value={vehiculoId} onChange={(e) => setVehiculoId(e.target.value)}>
+                  <option value="">Selecciona vehículo</option>
+                  {vehiculos.map((veh) => (
+                    <option key={veh.id} value={veh.id}>
+                      {veh.placa} - {veh.marca} {veh.modelo}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="form-group">
               <label>Horas a acreditar</label>
               <input type="number" min="1" value={horas} onChange={(e) => setHoras(e.target.value)} />
@@ -225,6 +296,10 @@ export const Clases = () => {
                       </div>
                       <div className="historial-fecha">
                         {new Date(h.fecha).toLocaleString('es-CO')}
+                      </div>
+                      <div className="historial-obs">
+                        {h.instructor_nombre && <span>Instructor: {h.instructor_nombre}</span>}
+                        {h.vehiculo_label && <span> • Vehículo: {h.vehiculo_label}</span>}
                       </div>
                       {h.observaciones && <div className="historial-obs">Obs: {h.observaciones}</div>}
                     </div>

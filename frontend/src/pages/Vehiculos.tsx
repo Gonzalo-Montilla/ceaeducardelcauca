@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Car, Plus, Search, X, Pencil, Trash2, Eye } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
-import { uploadsAPI, vehiculosAPI } from '../services/api';
+import { instructoresAPI, uploadsAPI, vehiculosAPI } from '../services/api';
 import '../styles/Vehiculos.css';
 import { useNavigate } from 'react-router-dom';
 
@@ -15,8 +15,12 @@ interface Vehiculo {
   color?: string;
   cilindraje?: string;
   vin?: string;
+  numero_motor?: string;
+  numero_chasis?: string;
   foto_url?: string;
   kilometraje_actual?: number;
+  responsable_instructor_id?: number | null;
+  responsable_nombre?: string | null;
   is_active: boolean;
 }
 
@@ -47,9 +51,13 @@ export const Vehiculos = () => {
   const [color, setColor] = useState('');
   const [cilindraje, setCilindraje] = useState('');
   const [vin, setVin] = useState('');
+  const [numeroMotor, setNumeroMotor] = useState('');
+  const [numeroChasis, setNumeroChasis] = useState('');
   const [kilometrajeActual, setKilometrajeActual] = useState('');
   const [fotoUrl, setFotoUrl] = useState('');
   const [fotoArchivo, setFotoArchivo] = useState<File | null>(null);
+  const [responsableId, setResponsableId] = useState('');
+  const [instructores, setInstructores] = useState<any[]>([]);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -68,6 +76,18 @@ export const Vehiculos = () => {
     }
     cargarVehiculos();
   }, [paginaActual, busquedaDebounced, filtroActivo]);
+
+  useEffect(() => {
+    const cargarInstructores = async () => {
+      try {
+        const data = await instructoresAPI.getAll({ estado: 'ACTIVO', limit: 100 });
+        setInstructores(data.items || []);
+      } catch (err) {
+        console.error('Error al cargar instructores:', err);
+      }
+    };
+    cargarInstructores();
+  }, []);
 
   const cargarVehiculos = async () => {
     try {
@@ -101,9 +121,12 @@ export const Vehiculos = () => {
     setColor('');
     setCilindraje('');
     setVin('');
+    setNumeroMotor('');
+    setNumeroChasis('');
     setKilometrajeActual('');
     setFotoUrl('');
     setFotoArchivo(null);
+    setResponsableId('');
     setMostrarModal(true);
   };
 
@@ -118,9 +141,12 @@ export const Vehiculos = () => {
     setColor(vehiculo.color || '');
     setCilindraje(vehiculo.cilindraje || '');
     setVin(vehiculo.vin || '');
+    setNumeroMotor((vehiculo as any).numero_motor || '');
+    setNumeroChasis((vehiculo as any).numero_chasis || '');
     setKilometrajeActual(vehiculo.kilometraje_actual ? String(vehiculo.kilometraje_actual) : '');
     setFotoUrl(vehiculo.foto_url || '');
     setFotoArchivo(null);
+    setResponsableId(vehiculo.responsable_instructor_id ? String(vehiculo.responsable_instructor_id) : '');
     setMostrarModal(true);
   };
 
@@ -156,8 +182,11 @@ export const Vehiculos = () => {
       color: color ? color.toUpperCase() : null,
       cilindraje: cilindraje || null,
       vin: vin || null,
+      numero_motor: numeroMotor || null,
+      numero_chasis: numeroChasis || null,
       kilometraje_actual: kilometrajeActual ? parseInt(kilometrajeActual) : null,
-      foto_url: fotoUrl || null
+      foto_url: fotoUrl || null,
+      responsable_instructor_id: responsableId ? parseInt(responsableId, 10) : null
     };
     try {
       if (vehiculoEditar) {
@@ -246,6 +275,7 @@ export const Vehiculos = () => {
                   <th>Marca</th>
                   <th>Modelo</th>
                   <th>Año</th>
+                  <th>Responsable</th>
                   <th>Estado</th>
                   <th>Acciones</th>
                 </tr>
@@ -258,6 +288,7 @@ export const Vehiculos = () => {
                     <td>{vehiculo.marca || '-'}</td>
                     <td>{vehiculo.modelo || '-'}</td>
                     <td>{vehiculo.año || '-'}</td>
+                    <td>{vehiculo.responsable_nombre || '-'}</td>
                     <td>
                       <span className={`badge ${vehiculo.is_active ? 'badge-activo' : 'badge-inactivo'}`}>
                         {vehiculo.is_active ? 'Activo' : 'Inactivo'}
@@ -297,7 +328,7 @@ export const Vehiculos = () => {
       )}
 
       {mostrarModal && (
-        <div className="modal-overlay" onClick={() => setMostrarModal(false)}>
+      <div className="modal-overlay">
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{vehiculoEditar ? 'Editar Vehículo' : 'Nuevo Vehículo'}</h3>
@@ -350,6 +381,17 @@ export const Vehiculos = () => {
                 <input value={modelo} onChange={(e) => setModelo(e.target.value.toUpperCase())} />
               </div>
               <div className="form-group">
+                <label>Responsable</label>
+                <select value={responsableId} onChange={(e) => setResponsableId(e.target.value)}>
+                  <option value="">Sin responsable</option>
+                  {instructores.map((inst) => (
+                    <option key={inst.id} value={inst.id}>
+                      {inst.nombre_completo}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
                 <label>Año</label>
                 <input
                   type="number"
@@ -362,6 +404,14 @@ export const Vehiculos = () => {
               <div className="form-group">
                 <label>VIN</label>
                 <input value={vin} onChange={(e) => setVin(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Número de Motor</label>
+                <input value={numeroMotor} onChange={(e) => setNumeroMotor(e.target.value.toUpperCase())} />
+              </div>
+              <div className="form-group">
+                <label>Número de Chasis</label>
+                <input value={numeroChasis} onChange={(e) => setNumeroChasis(e.target.value.toUpperCase())} />
               </div>
               <div className="form-group">
                 <label>Kilometraje Actual</label>

@@ -16,6 +16,9 @@ interface DefinirServicioModalProps {
 }
 
 export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: DefinirServicioModalProps) => {
+  const [modoServicio, setModoServicio] = useState<'PRIMERA_VEZ' | 'RECATEGORIZACION'>('PRIMERA_VEZ');
+  const [categoriaActual, setCategoriaActual] = useState('');
+  const [categoriaNueva, setCategoriaNueva] = useState('');
   const [tipoServicio, setTipoServicio] = useState('');
   const [categoria, setCategoria] = useState('');
   const [origenCliente, setOrigenCliente] = useState('DIRECTO');
@@ -57,11 +60,16 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
     return esCertificado ? base + practica : base;
   };
 
+  const categoriasLicencia = [
+    { value: 'A2', label: 'A2' },
+    { value: 'B1', label: 'B1' },
+    { value: 'C1', label: 'C1' }
+  ];
+
   const tiposServicio = [
     { value: 'LICENCIA_A2', label: 'Licencia A2 (Moto)', categoria: 'A2' },
     { value: 'LICENCIA_B1', label: 'Licencia B1 (Automóvil)', categoria: 'B1' },
     { value: 'LICENCIA_C1', label: 'Licencia C1 (Camioneta)', categoria: 'C1' },
-    { value: 'RECATEGORIZACION_C1', label: 'Recategorización C1', categoria: 'C1' },
     { value: 'COMBO_A2_B1', label: 'Combo A2 + B1', categoria: 'A2,B1' },
     { value: 'COMBO_A2_C1', label: 'Combo A2 + C1', categoria: 'A2,C1' },
     { value: 'CERTIFICADO_MOTO', label: 'Certificado Moto', categoria: 'A2' },
@@ -69,20 +77,54 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
     { value: 'CERTIFICADO_C1', label: 'Certificado C1', categoria: 'C1' },
   ];
 
-  const handleTipoServicioChange = (tipo: string) => {
+  const categoriaToTipo = (categoriaValue: string) => {
+    const mapa: Record<string, string> = {
+      A2: 'LICENCIA_A2',
+      B1: 'LICENCIA_B1',
+      C1: 'LICENCIA_C1'
+    };
+    return mapa[categoriaValue] || '';
+  };
+
+  const setTipoYPrecio = (tipo: string, categoriaSeleccionada: string) => {
     setTipoServicio(tipo);
+    setCategoria(categoriaSeleccionada);
+    if (origenCliente === 'DIRECTO') {
+      const minimo = calcularPrecioMinimo(tipo);
+      setValorTotal(minimo ? minimo.toString() : '');
+    } else {
+      setValorTotal('');
+    }
+  };
+
+  const handleTipoServicioChange = (tipo: string) => {
     const servicioSeleccionado = tiposServicio.find(s => s.value === tipo);
-    if (servicioSeleccionado) {
-      setCategoria(servicioSeleccionado.categoria);
-      
-      // Si es cliente directo, establecer precio base
-      if (origenCliente === 'DIRECTO') {
-        const minimo = calcularPrecioMinimo(tipo);
-        setValorTotal(minimo ? minimo.toString() : '');
-      } else {
-        // Si es referido, dejar en blanco para ingreso manual
-        setValorTotal('');
-      }
+    if (!servicioSeleccionado) {
+      setTipoServicio('');
+      setCategoria('');
+      return;
+    }
+    setTipoYPrecio(tipo, servicioSeleccionado.categoria);
+  };
+
+  const handleModoServicioChange = (modo: 'PRIMERA_VEZ' | 'RECATEGORIZACION') => {
+    setModoServicio(modo);
+    setCategoriaActual('');
+    setCategoriaNueva('');
+    setTipoServicio('');
+    setCategoria('');
+    setValorTotal('');
+  };
+
+  const handleCategoriaNuevaChange = (value: string) => {
+    setCategoriaNueva(value);
+    const tipo = categoriaToTipo(value);
+    if (tipo) {
+      setTipoYPrecio(tipo, value);
+    } else {
+      setTipoServicio('');
+      setCategoria('');
+      setValorTotal('');
     }
   };
 
@@ -107,6 +149,16 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
       setError('Por favor complete todos los campos obligatorios');
       return;
     }
+    if (modoServicio === 'RECATEGORIZACION') {
+      if (!categoriaActual || !categoriaNueva) {
+        setError('Debe seleccionar la categoría actual y la nueva');
+        return;
+      }
+      if (categoriaActual === categoriaNueva) {
+        setError('La nueva categoría debe ser diferente a la actual');
+        return;
+      }
+    }
 
     const minimo = calcularPrecioMinimo(tipoServicio);
     if (origenCliente === 'DIRECTO' && minimo <= 0) {
@@ -130,6 +182,9 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
       // Llamar al endpoint para definir el servicio
       await estudiantesAPI.definirServicio(estudiante.id, {
         tipo_servicio: tipoServicio,
+        es_recategorizacion: modoServicio === 'RECATEGORIZACION',
+        categoria_actual: modoServicio === 'RECATEGORIZACION' ? categoriaActual : null,
+        categoria_nueva: modoServicio === 'RECATEGORIZACION' ? categoriaNueva : null,
         origen_cliente: origenCliente,
         valor_total_curso: origenCliente === 'REFERIDO' ? parseInt(valorTotal) : null,
         referido_por: origenCliente === 'REFERIDO' ? referidoPor : null,
@@ -164,7 +219,7 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay">
       <div className="modal-container" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Definir Servicio</h2>
@@ -190,20 +245,88 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
           {error && <div className="error-message">{error}</div>}
 
           <div className="form-group">
-            <label>Tipo de Servicio *</label>
-            <select
-              value={tipoServicio}
-              onChange={(e) => handleTipoServicioChange(e.target.value)}
-              required
-              className="form-select"
-            >
-              <option value="">Seleccione un servicio</option>
-              {tiposServicio.map(servicio => (
-                <option key={servicio.value} value={servicio.value}>
-                  {servicio.label}
-                </option>
-              ))}
-            </select>
+            <label>Tipo de Solicitud *</label>
+            <div className="radio-group">
+              <label className="radio-label">
+                <input
+                  type="radio"
+                  value="PRIMERA_VEZ"
+                  checked={modoServicio === 'PRIMERA_VEZ'}
+                  onChange={() => handleModoServicioChange('PRIMERA_VEZ')}
+                />
+                <span>Primera Vez</span>
+              </label>
+              <label className="radio-label">
+                <input
+                  type="radio"
+                  value="RECATEGORIZACION"
+                  checked={modoServicio === 'RECATEGORIZACION'}
+                  onChange={() => handleModoServicioChange('RECATEGORIZACION')}
+                />
+                <span>Recategorización</span>
+              </label>
+            </div>
+          </div>
+
+          {modoServicio === 'RECATEGORIZACION' ? (
+            <div className="form-group">
+              <label>Categoría Actual *</label>
+              <select
+                value={categoriaActual}
+                onChange={(e) => setCategoriaActual(e.target.value)}
+                required
+                className="form-select"
+              >
+                <option value="">Seleccione la categoría actual</option>
+                {categoriasLicencia.map((cat) => (
+                  <option key={cat.value} value={cat.value}>
+                    {cat.label}
+                  </option>
+                ))}
+              </select>
+              <label style={{ marginTop: '12px' }}>Nueva Categoría *</label>
+              <select
+                value={categoriaNueva}
+                onChange={(e) => handleCategoriaNuevaChange(e.target.value)}
+                required
+                className="form-select"
+              >
+                <option value="">Seleccione la nueva categoría</option>
+                {categoriasLicencia.map((cat) => (
+                  <option key={cat.value} value={cat.value}>
+                    {cat.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="form-group">
+              <label>Tipo de Servicio *</label>
+              <select
+                value={tipoServicio}
+                onChange={(e) => handleTipoServicioChange(e.target.value)}
+                required
+                className="form-select"
+              >
+                <option value="">Seleccione un servicio</option>
+                {tiposServicio.map(servicio => (
+                  <option key={servicio.value} value={servicio.value}>
+                    {servicio.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="form-group">
+            <label>Categoría de Licencia</label>
+            <input
+              type="text"
+              value={categoria}
+              readOnly
+              className="form-input readonly"
+              placeholder="Se asigna automáticamente"
+            />
           </div>
 
           <div className="form-group">
@@ -256,17 +379,6 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
               </div>
             </div>
           )}
-
-          <div className="form-group">
-            <label>Categoría de Licencia</label>
-            <input
-              type="text"
-              value={categoria}
-              readOnly
-              className="form-input readonly"
-              placeholder="Se asigna automáticamente"
-            />
-          </div>
 
           <div className="form-group">
             <label>Valor Total del Curso *</label>

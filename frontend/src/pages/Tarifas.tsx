@@ -170,7 +170,7 @@ export const Tarifas = () => {
       )}
 
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+      <div className="modal-overlay">
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{editando ? 'Editar Tarifa' : 'Nueva Tarifa'}</h3>
