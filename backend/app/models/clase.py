@@ -121,9 +121,12 @@ class Vehiculo(Base):
     color = Column(String(30))
     cilindraje = Column(String(30))
     vin = Column(String(50))
+    numero_motor = Column(String(50))
+    numero_chasis = Column(String(50))
     foto_url = Column(Text)
     kilometraje_actual = Column(Integer)
     is_active = Column(Integer, default=1)
+    responsable_instructor_id = Column(Integer, ForeignKey("instructores.id"))
     
     # Documentación (vencimientos)
     soat_vencimiento = Column(Date)
@@ -141,9 +144,16 @@ class Vehiculo(Base):
     clases = relationship("Clase", back_populates="vehiculo")
     mantenimientos = relationship("MantenimientoVehiculo", back_populates="vehiculo")
     combustibles = relationship("CombustibleVehiculo", back_populates="vehiculo")
+    responsable_instructor = relationship("Instructor")
     
     def __repr__(self):
         return f"<Vehiculo {self.placa} - {self.tipo}>"
+
+    @property
+    def responsable_nombre(self) -> str:
+        if self.responsable_instructor and self.responsable_instructor.usuario:
+            return self.responsable_instructor.usuario.nombre_completo
+        return ""
 
 
 class MantenimientoVehiculo(Base):

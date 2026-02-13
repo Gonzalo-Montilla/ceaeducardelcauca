@@ -14,8 +14,11 @@ class VehiculoBase(BaseModel):
     color: Optional[str] = None
     cilindraje: Optional[str] = None
     vin: Optional[str] = None
+    numero_motor: Optional[str] = None
+    numero_chasis: Optional[str] = None
     foto_url: Optional[str] = None
     kilometraje_actual: Optional[int] = None
+    responsable_instructor_id: Optional[int] = None
 
 
 class VehiculoCreate(VehiculoBase):
@@ -59,8 +62,11 @@ class VehiculoUpdate(BaseModel):
     color: Optional[str] = None
     cilindraje: Optional[str] = None
     vin: Optional[str] = None
+    numero_motor: Optional[str] = None
+    numero_chasis: Optional[str] = None
     foto_url: Optional[str] = None
     kilometraje_actual: Optional[int] = None
+    responsable_instructor_id: Optional[int] = None
 
     @field_validator('placa')
     @classmethod
@@ -102,8 +108,12 @@ class VehiculoResponse(BaseModel):
     color: Optional[str]
     cilindraje: Optional[str]
     vin: Optional[str]
+    numero_motor: Optional[str]
+    numero_chasis: Optional[str]
     foto_url: Optional[str]
     kilometraje_actual: Optional[int]
+    responsable_instructor_id: Optional[int] = None
+    responsable_nombre: Optional[str] = None
     soat_vencimiento: Optional[date] = None
     rtm_vencimiento: Optional[date] = None
     tecnomecanica_vencimiento: Optional[date] = None

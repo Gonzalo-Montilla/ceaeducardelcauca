@@ -8,7 +8,10 @@ import json
 data = {
     "email": "test@example.com",
     "password": "12345678",
-    "nombre_completo": "TEST USUARIO",
+    "primer_nombre": "TEST",
+    "segundo_nombre": "USUARIO",
+    "primer_apellido": "EJEMPLO",
+    "segundo_apellido": "PRUEBA",
     "cedula": "12345678",
     "telefono": "3001234567",
     "fecha_nacimiento": "1990-01-01",

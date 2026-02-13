@@ -20,6 +20,7 @@ from app.core.email import send_email
 from app.models.usuario import Usuario, RolUsuario
 from app.models.estudiante import Estudiante, EstadoEstudiante, CategoriaLicencia, OrigenCliente, TipoServicio
 from app.models.pago import Pago, MetodoPago, EstadoPago
+from app.models.clase import Instructor, Vehiculo, EstadoInstructor
 from app.models.compromiso_pago import CompromisoPago, CuotaPago, FrecuenciaPago, EstadoCuota
 from app.schemas.estudiante import (
     EstudianteCreate,
@@ -28,6 +29,7 @@ from app.schemas.estudiante import (
     EstudianteListItem,
     EstudiantesListResponse,
     DefinirServicioRequest,
+    AmpliarServicioRequest,
     AcreditarHorasRequest
 )
 from app.api.deps import get_current_active_user, get_admin_or_coordinador_or_cajero, require_role
@@ -62,10 +64,20 @@ def create_estudiante(
     
     try:
         # 1. Crear Usuario
+        nombre_completo = estudiante_data.nombre_completo
+        if not nombre_completo:
+            partes = [
+                estudiante_data.primer_nombre,
+                estudiante_data.segundo_nombre,
+                estudiante_data.primer_apellido,
+                estudiante_data.segundo_apellido
+            ]
+            nombre_completo = " ".join([p for p in partes if p and p.strip()])
+
         nuevo_usuario = Usuario(
             email=estudiante_data.email,
             password_hash=get_password_hash(estudiante_data.password),
-            nombre_completo=estudiante_data.nombre_completo,
+            nombre_completo=nombre_completo,
             cedula=estudiante_data.cedula,
             telefono=estudiante_data.telefono,
             rol=RolUsuario.ESTUDIANTE,
@@ -106,6 +118,12 @@ def create_estudiante(
                 "aceptado": True,
                 "aceptado_en": datetime.utcnow().isoformat(),
                 "correo_enviado": False
+            },
+            "nombres": {
+                "primer_nombre": estudiante_data.primer_nombre,
+                "segundo_nombre": estudiante_data.segundo_nombre,
+                "primer_apellido": estudiante_data.primer_apellido,
+                "segundo_apellido": estudiante_data.segundo_apellido
             }
         }
         db.add(nuevo_estudiante)
@@ -187,6 +205,7 @@ def list_estudiantes(
             telefono=est.usuario.telefono,
             foto_url=est.foto_url,
             matricula_numero=est.matricula_numero,
+            tipo_servicio=est.tipo_servicio,
             categoria=est.categoria,
             estado=est.estado,
             fecha_inscripcion=est.fecha_inscripcion,
@@ -259,9 +278,39 @@ def update_estudiante(
     # Actualizar solo los campos proporcionados
     update_data = estudiante_data.model_dump(exclude_unset=True)
     user_fields = {}
+
+    nombre_parts = {}
+    for field in ["primer_nombre", "segundo_nombre", "primer_apellido", "segundo_apellido"]:
+        if field in update_data:
+            nombre_parts[field] = update_data.pop(field)
+
     for field in ["nombre_completo", "email", "telefono", "cedula"]:
         if field in update_data:
             user_fields[field] = update_data.pop(field)
+
+    if nombre_parts:
+        datos = dict(estudiante.datos_adicionales or {})
+        nombres_actuales = dict(datos.get("nombres", {}))
+        merged = {
+            "primer_nombre": nombres_actuales.get("primer_nombre"),
+            "segundo_nombre": nombres_actuales.get("segundo_nombre"),
+            "primer_apellido": nombres_actuales.get("primer_apellido"),
+            "segundo_apellido": nombres_actuales.get("segundo_apellido")
+        }
+        merged.update(nombre_parts)
+
+        nombre_completo = " ".join([
+            p for p in [
+                merged.get("primer_nombre"),
+                merged.get("segundo_nombre"),
+                merged.get("primer_apellido"),
+                merged.get("segundo_apellido")
+            ] if p
+        ])
+        if nombre_completo:
+            user_fields["nombre_completo"] = nombre_completo
+            datos["nombres"] = merged
+            estudiante.datos_adicionales = datos
     foto_base64 = update_data.pop("foto_base64", None)
 
     for field, value in update_data.items():
@@ -329,19 +378,49 @@ def definir_servicio(
             detail="Estudiante no encontrado"
         )
     
-    # Validar que sea un prospecto
-    if estudiante.estado != EstadoEstudiante.PROSPECTO:
+    # Validar que sea un prospecto si NO es recategorización
+    if not servicio_data.es_recategorizacion and estudiante.estado != EstadoEstudiante.PROSPECTO:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Solo se puede definir servicio a estudiantes en estado PROSPECTO"
         )
     
     try:
+        # 0. Recategorización: validar categorías y ajustar tipo de servicio
+        if servicio_data.es_recategorizacion:
+            if not servicio_data.categoria_actual or not servicio_data.categoria_nueva:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Debe seleccionar la categoría actual y la nueva categoría"
+                )
+            if servicio_data.categoria_actual == servicio_data.categoria_nueva:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="La nueva categoría debe ser diferente a la actual"
+                )
+
+            categoria_to_tipo = {
+                CategoriaLicencia.A2: TipoServicio.LICENCIA_A2,
+                CategoriaLicencia.B1: TipoServicio.LICENCIA_B1,
+                CategoriaLicencia.C1: TipoServicio.LICENCIA_C1
+            }
+            if servicio_data.categoria_nueva not in categoria_to_tipo:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="La recategorización solo está disponible para A2, B1 o C1"
+                )
+
+            servicio_data.tipo_servicio = categoria_to_tipo[servicio_data.categoria_nueva]
+
         # 1. Asignar tipo de servicio
+        categoria_anterior = estudiante.categoria
         estudiante.tipo_servicio = servicio_data.tipo_servicio
         
         # 2. Determinar la categoría basada en el tipo de servicio
-        estudiante.categoria = obtener_categoria_licencia(servicio_data.tipo_servicio)
+        if servicio_data.es_recategorizacion:
+            estudiante.categoria = servicio_data.categoria_nueva
+        else:
+            estudiante.categoria = obtener_categoria_licencia(servicio_data.tipo_servicio)
         
         # 3. Asignar origen del cliente
         estudiante.origen_cliente = servicio_data.origen_cliente
@@ -380,6 +459,23 @@ def definir_servicio(
         if estudiante.categoria in horas_map:
             estudiante.horas_teoricas_requeridas = horas_map[estudiante.categoria]["teoricas"]
             estudiante.horas_practicas_requeridas = horas_map[estudiante.categoria]["practicas"]
+
+        if servicio_data.es_recategorizacion:
+            datos = dict(estudiante.datos_adicionales or {})
+            recats = list(datos.get("recategorizaciones", []))
+            recats.append({
+                "categoria_anterior": str(categoria_anterior) if categoria_anterior else None,
+                "categoria_nueva": str(servicio_data.categoria_nueva),
+                "fecha": datetime.utcnow().isoformat(),
+                "tipo_servicio": str(servicio_data.tipo_servicio),
+                "origen_cliente": str(servicio_data.origen_cliente)
+            })
+            datos["recategorizaciones"] = recats
+            datos["recategorizacion_actual"] = {
+                "categoria_actual": str(servicio_data.categoria_actual),
+                "categoria_nueva": str(servicio_data.categoria_nueva)
+            }
+            estudiante.datos_adicionales = datos
         else:
             # Para certificados y combos, usar valores por defecto
             estudiante.horas_teoricas_requeridas = 0
@@ -459,12 +555,32 @@ def acreditar_horas(
     datos = dict(estudiante.datos_adicionales or {})
     historial = list(datos.get("clases_historial", []))
     fecha_iso = datetime.utcnow().isoformat()
+    instructor_nombre = None
+    vehiculo_label = None
+    if payload.instructor_id:
+        instructor = db.query(Instructor).filter(Instructor.id == payload.instructor_id).first()
+        if instructor and instructor.estado == EstadoInstructor.ACTIVO:
+            instructor_nombre = instructor.usuario.nombre_completo if instructor.usuario else None
+        else:
+            raise HTTPException(status_code=400, detail="Instructor no activo o no encontrado")
+
+    if payload.vehiculo_id:
+        vehiculo = db.query(Vehiculo).filter(Vehiculo.id == payload.vehiculo_id).first()
+        if vehiculo and vehiculo.is_active == 1:
+            vehiculo_label = f"{vehiculo.placa} - {vehiculo.marca} {vehiculo.modelo}"
+        else:
+            raise HTTPException(status_code=400, detail="Vehículo no activo o no encontrado")
+
     historial.append({
         "fecha": fecha_iso,
         "tipo": payload.tipo,
         "horas": payload.horas,
         "observaciones": payload.observaciones,
-        "usuario_id": current_user.id
+        "usuario_id": current_user.id,
+        "instructor_id": payload.instructor_id,
+        "instructor_nombre": instructor_nombre,
+        "vehiculo_id": payload.vehiculo_id,
+        "vehiculo_label": vehiculo_label
     })
     datos["clases_historial"] = historial
     estudiante.datos_adicionales = datos
@@ -476,6 +592,114 @@ def acreditar_horas(
     db.refresh(estudiante)
 
     _enviar_acreditacion_horas(estudiante, payload.tipo, payload.horas, fecha_iso)
+    return _build_estudiante_response(estudiante, db)
+
+
+@router.put("/{estudiante_id}/ampliar-servicio", response_model=EstudianteResponse)
+def ampliar_servicio(
+    estudiante_id: int,
+    servicio_data: AmpliarServicioRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
+):
+    """
+    Ampliar servicio del estudiante a combo (ej. A2 -> A2+B1)
+    - Recalcula valor total y saldo pendiente con base en abonos previos
+    """
+    estudiante = db.query(Estudiante).filter(Estudiante.id == estudiante_id).first()
+
+    if not estudiante:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Estudiante no encontrado"
+        )
+
+    if not estudiante.tipo_servicio or estudiante.valor_total_curso is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El estudiante no tiene un servicio definido"
+        )
+
+    if estudiante.tipo_servicio in [TipoServicio.COMBO_A2_B1, TipoServicio.COMBO_A2_C1]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El estudiante ya tiene un combo asignado"
+        )
+
+    allowed = []
+    if estudiante.tipo_servicio == TipoServicio.LICENCIA_A2:
+        allowed = [TipoServicio.COMBO_A2_B1, TipoServicio.COMBO_A2_C1]
+    elif estudiante.tipo_servicio == TipoServicio.LICENCIA_B1:
+        allowed = [TipoServicio.COMBO_A2_B1]
+    elif estudiante.tipo_servicio == TipoServicio.LICENCIA_C1:
+        allowed = [TipoServicio.COMBO_A2_C1]
+
+    if servicio_data.tipo_servicio_nuevo not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La ampliacion solicitada no es valida para el servicio actual"
+        )
+
+    precio_minimo = calcular_precio(servicio_data.tipo_servicio_nuevo, db=db)
+    if estudiante.origen_cliente == OrigenCliente.DIRECTO:
+        nuevo_valor_total = precio_minimo
+    else:
+        if servicio_data.valor_total_curso is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El valor_total_curso es obligatorio para clientes referidos"
+            )
+        if servicio_data.valor_total_curso < precio_minimo:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"El valor total no puede ser menor a {precio_minimo}"
+            )
+        nuevo_valor_total = servicio_data.valor_total_curso
+
+    valor_anterior = Decimal(str(estudiante.valor_total_curso or 0))
+    saldo_anterior = Decimal(str(estudiante.saldo_pendiente or 0))
+    total_abonado = valor_anterior - saldo_anterior
+    if total_abonado < 0:
+        total_abonado = Decimal("0")
+
+    nuevo_saldo = nuevo_valor_total - total_abonado
+    if nuevo_saldo < 0:
+        nuevo_saldo = Decimal("0")
+
+    tipo_anterior = estudiante.tipo_servicio
+    estudiante.tipo_servicio = servicio_data.tipo_servicio_nuevo
+    estudiante.categoria = obtener_categoria_licencia(servicio_data.tipo_servicio_nuevo)
+    estudiante.valor_total_curso = nuevo_valor_total
+    estudiante.saldo_pendiente = nuevo_saldo
+
+    horas_map = {
+        CategoriaLicencia.A2: {"teoricas": 28, "practicas": 15},
+        CategoriaLicencia.B1: {"teoricas": 30, "practicas": 20},
+        CategoriaLicencia.C1: {"teoricas": 36, "practicas": 30},
+    }
+    if estudiante.categoria in horas_map:
+        estudiante.horas_teoricas_requeridas = horas_map[estudiante.categoria]["teoricas"]
+        estudiante.horas_practicas_requeridas = horas_map[estudiante.categoria]["practicas"]
+
+    datos = dict(estudiante.datos_adicionales or {})
+    ampliaciones = list(datos.get("ampliaciones_servicio", []))
+    ampliaciones.append({
+        "tipo_anterior": str(tipo_anterior),
+        "tipo_nuevo": str(servicio_data.tipo_servicio_nuevo),
+        "valor_anterior": str(valor_anterior),
+        "valor_nuevo": str(nuevo_valor_total),
+        "saldo_anterior": str(saldo_anterior),
+        "saldo_nuevo": str(nuevo_saldo),
+        "total_abonado": str(total_abonado),
+        "fecha": datetime.utcnow().isoformat(),
+        "observaciones": servicio_data.observaciones
+    })
+    datos["ampliaciones_servicio"] = ampliaciones
+    estudiante.datos_adicionales = datos
+
+    db.commit()
+    db.refresh(estudiante)
+
     return _build_estudiante_response(estudiante, db)
 
 
@@ -611,14 +835,18 @@ def _build_contrato_pdf_bytes(estudiante: Estudiante) -> bytes:
 
     # Certificacion y categoria
     y = _draw_section_bar(c, "MIN-TRANSPORTE", y)
-    y = _draw_checkbox_row(
+    datos = dict(estudiante.datos_adicionales or {})
+    is_recategorizacion = bool(datos.get("recategorizacion_actual"))
+    seleccion_cert = "Recategorizar" if is_recategorizacion else "Obtener por primera vez"
+    y = _draw_certificacion_row(c, y, seleccion_cert)
+    y = _draw_boxed_checkbox_row(
         c,
         y,
         ["A2", "B1", "C1"],
         estudiante.categoria.value if estudiante.categoria else None,
         prefix="CATEGORIA"
     )
-    y -= 12
+    y -= 20
 
     # Texto del contrato
     y = _ensure_space_contrato(c, y, 120)
@@ -832,6 +1060,11 @@ def _draw_box_row(c: canvas.Canvas, y: int, items: list, widths: list, total_wid
 def _draw_checkbox_row(c: canvas.Canvas, y: int, options: list, selected: Optional[str], prefix: Optional[str] = None) -> int:
     x = 50
     h = 18
+    total_width = 520
+    prefix_width = 70 if prefix else 0
+    available = max(0, total_width - prefix_width)
+    count = max(1, len(options))
+    step = min(110, max(70, available / count))
     selected_norm = (str(selected).lower() if selected else "")
     if prefix:
         c.setFont("Helvetica-Bold", 8)
@@ -845,7 +1078,44 @@ def _draw_checkbox_row(c: canvas.Canvas, y: int, options: list, selected: Option
             c.drawString(x + 3, y - 12, "X")
         c.setFont("Helvetica", 8)
         c.drawString(x + 16, y - 12, opt)
-        x += 90
+        x += step
+    return y - h
+
+
+def _draw_boxed_checkbox_row(
+    c: canvas.Canvas,
+    y: int,
+    options: list,
+    selected: Optional[str],
+    prefix: Optional[str] = None
+) -> int:
+    box_h = 22
+    _draw_rect(c, 50, y - box_h, 520, box_h)
+    y = _draw_checkbox_row(c, y, options, selected, prefix=prefix)
+    return y
+
+
+def _draw_certificacion_row(c: canvas.Canvas, y: int, selected: str) -> int:
+    x = 50
+    h = 40
+    _draw_rect(c, x, y - h, 520, h)
+
+    c.setFont("Helvetica-Bold", 7)
+    c.drawString(x + 4, y - 12, "Certificacion de la aptitud en")
+    c.drawString(x + 4, y - 24, "conduccion a solicitar")
+
+    selected_norm = (selected or "").lower()
+    options = ["Obtener por primera vez", "Recategorizar"]
+    option_x = x + 240
+    for index, opt in enumerate(options):
+        box_y = y - 12 - (index * 14)
+        _draw_rect(c, option_x, box_y - 8, 12, 12)
+        if opt.lower() in selected_norm:
+            c.setFont("Helvetica-Bold", 9)
+            c.drawString(option_x + 3, box_y - 7, "X")
+        c.setFont("Helvetica", 8)
+        c.drawString(option_x + 16, box_y - 7, opt)
+
     return y - h
 
 
@@ -1049,6 +1319,7 @@ def _build_estudiante_response(estudiante: Estudiante, db: Session = None) -> Es
         contacto_emergencia_nombre=estudiante.contacto_emergencia_nombre,
         contacto_emergencia_telefono=estudiante.contacto_emergencia_telefono,
         foto_url=estudiante.foto_url,
+        tipo_servicio=estudiante.tipo_servicio,
         categoria=estudiante.categoria,
         origen_cliente=estudiante.origen_cliente,
         referido_por=estudiante.referido_por,

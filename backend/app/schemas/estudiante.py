@@ -31,18 +31,22 @@ class EstudianteCreate(EstudianteBase):
     """Schema para crear un estudiante (solo datos personales)"""
     email: EmailStr
     password: str
-    nombre_completo: str
+    nombre_completo: Optional[str] = None
+    primer_nombre: str
+    segundo_nombre: Optional[str] = None
+    primer_apellido: str
+    segundo_apellido: Optional[str] = None
     cedula: str
     telefono: str
     foto_base64: str  # Foto en base64
     autorizacion_tratamiento: bool
 
-    @field_validator('nombre_completo')
+    @field_validator('primer_nombre', 'primer_apellido')
     @classmethod
-    def validate_nombre(cls, v: str) -> str:
+    def validate_partes_obligatorias(cls, v: str) -> str:
         value = v.strip()
         if not value:
-            raise ValueError('El nombre_completo es obligatorio')
+            raise ValueError('Este campo es obligatorio')
         return value
 
     @field_validator('cedula')
@@ -82,6 +86,10 @@ class EstudianteCreate(EstudianteBase):
 class EstudianteUpdate(BaseModel):
     """Schema para actualizar un estudiante"""
     nombre_completo: Optional[str] = None
+    primer_nombre: Optional[str] = None
+    segundo_nombre: Optional[str] = None
+    primer_apellido: Optional[str] = None
+    segundo_apellido: Optional[str] = None
     email: Optional[EmailStr] = None
     cedula: Optional[str] = None
     telefono: Optional[str] = None
@@ -113,6 +121,16 @@ class EstudianteUpdate(BaseModel):
         value = v.strip()
         if not value:
             raise ValueError('El nombre_completo es obligatorio')
+        return value
+
+    @field_validator('primer_nombre', 'segundo_nombre', 'primer_apellido', 'segundo_apellido')
+    @classmethod
+    def validate_partes_nombre(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        value = v.strip()
+        if not value:
+            return None
         return value
 
     @field_validator('cedula')
@@ -168,6 +186,7 @@ class EstudianteResponse(BaseModel):
     contacto_emergencia_nombre: Optional[str]
     contacto_emergencia_telefono: Optional[str]
     foto_url: Optional[str]
+    tipo_servicio: Optional[TipoServicio]
     categoria: Optional[CategoriaLicencia]  # Opcional hasta definir servicio
     origen_cliente: Optional[OrigenCliente]  # DIRECTO o REFERIDO
     referido_por: Optional[str]  # Nombre de quien refirió
@@ -208,6 +227,7 @@ class EstudianteListItem(BaseModel):
     telefono: str
     foto_url: Optional[str] = None
     matricula_numero: Optional[str] = None
+    tipo_servicio: Optional[TipoServicio] = None
     categoria: Optional[CategoriaLicencia] = None
     estado: EstadoEstudiante
     fecha_inscripcion: datetime
@@ -230,6 +250,9 @@ class EstudiantesListResponse(BaseModel):
 class DefinirServicioRequest(BaseModel):
     """Schema para definir el servicio de un estudiante"""
     tipo_servicio: TipoServicio
+    es_recategorizacion: bool = False
+    categoria_actual: Optional[CategoriaLicencia] = None
+    categoria_nueva: Optional[CategoriaLicencia] = None
     origen_cliente: OrigenCliente
     valor_total_curso: Optional[Decimal] = None  # Solo si es cliente referido
     referido_por: Optional[str] = None  # Nombre de quien refirió (obligatorio si es REFERIDO)
@@ -245,11 +268,20 @@ class DefinirServicioRequest(BaseModel):
         return v
 
 
+class AmpliarServicioRequest(BaseModel):
+    """Schema para ampliar servicio a combo"""
+    tipo_servicio_nuevo: TipoServicio
+    valor_total_curso: Optional[Decimal] = None  # Solo si es cliente referido
+    observaciones: Optional[str] = None
+
+
 class AcreditarHorasRequest(BaseModel):
     """Registrar horas de clase para un estudiante"""
     tipo: str  # TEORICA o PRACTICA
     horas: int
     observaciones: Optional[str] = None
+    instructor_id: Optional[int] = None
+    vehiculo_id: Optional[int] = None
 
     @field_validator('tipo')
     @classmethod

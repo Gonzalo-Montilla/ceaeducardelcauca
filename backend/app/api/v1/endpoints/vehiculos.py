@@ -10,6 +10,8 @@ from app.api.deps import get_admin_or_coordinador
 from app.models.usuario import Usuario
 from app.models.clase import (
     Vehiculo,
+    Instructor,
+    EstadoInstructor,
     MantenimientoVehiculo,
     RepuestoMantenimiento,
     CombustibleVehiculo,
@@ -94,6 +96,15 @@ def crear_vehiculo(
     if existente:
         raise HTTPException(status_code=400, detail="Ya existe un vehículo con esa placa")
 
+    responsable_id = vehiculo_data.responsable_instructor_id
+    if responsable_id:
+        instructor = db.query(Instructor).filter(
+            Instructor.id == responsable_id,
+            Instructor.estado == EstadoInstructor.ACTIVO
+        ).first()
+        if not instructor:
+            raise HTTPException(status_code=400, detail="El instructor responsable no es válido o no está activo")
+
     nuevo = Vehiculo(
         placa=vehiculo_data.placa,
         tipo=vehiculo_data.tipo,
@@ -105,6 +116,7 @@ def crear_vehiculo(
         vin=vehiculo_data.vin,
         foto_url=vehiculo_data.foto_url,
         kilometraje_actual=vehiculo_data.kilometraje_actual,
+        responsable_instructor_id=responsable_id,
         is_active=1
     )
     db.add(nuevo)
@@ -135,6 +147,16 @@ def actualizar_vehiculo(
     update_data = vehiculo_data.model_dump(exclude_unset=True)
     if 'is_active' in update_data:
         update_data['is_active'] = 1 if update_data['is_active'] else 0
+
+    if 'responsable_instructor_id' in update_data:
+        responsable_id = update_data.get('responsable_instructor_id')
+        if responsable_id:
+            instructor = db.query(Instructor).filter(
+                Instructor.id == responsable_id,
+                Instructor.estado == EstadoInstructor.ACTIVO
+            ).first()
+            if not instructor:
+                raise HTTPException(status_code=400, detail="El instructor responsable no es válido o no está activo")
 
     for field, value in update_data.items():
         setattr(vehiculo, field, value)
