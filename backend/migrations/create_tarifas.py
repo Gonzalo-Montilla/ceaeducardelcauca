@@ -28,8 +28,10 @@ def run():
             ('COMBO_A2_B1', 2000000, 0, TRUE),
             ('COMBO_A2_C1', 2200000, 0, TRUE),
             ('CERTIFICADO_MOTO', 480000, 0, TRUE),
-            ('CERTIFICADO_B1', 650000, 100000, TRUE),
-            ('CERTIFICADO_C1', 750000, 100000, TRUE)
+            ('CERTIFICADO_B1', 600000, 100000, TRUE),
+            ('CERTIFICADO_C1', 750000, 100000, TRUE),
+            ('CERTIFICADO_B1_SIN_PRACTICA', 600000, 0, TRUE),
+            ('CERTIFICADO_C1_SIN_PRACTICA', 750000, 0, TRUE)
         ON CONFLICT (tipo_servicio) DO NOTHING;
         """
     ]

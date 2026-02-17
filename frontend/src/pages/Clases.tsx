@@ -8,6 +8,7 @@ interface Estudiante {
   id: number;
   nombre_completo: string;
   cedula: string;
+  tipo_documento?: string;
   telefono: string;
   email: string;
   foto_url?: string;
@@ -45,6 +46,22 @@ export const Clases = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const formatDocumentoBusqueda = (value: string) => {
+    return value.toUpperCase().replace(/[^A-Z0-9\-]/g, '').slice(0, 20);
+  };
+  const getTipoDocumentoLabel = (tipo?: string) => {
+    switch (tipo) {
+      case 'TARJETA_IDENTIDAD':
+        return 'TI';
+      case 'PASAPORTE':
+        return 'PAS';
+      case 'CEDULA_EXTRANJERIA':
+        return 'CE';
+      default:
+        return 'CC';
+    }
+  };
+
   const getErrorMessage = (err: any, fallback: string) => {
     const detail = err?.response?.data?.detail;
     if (Array.isArray(detail)) return fallback;
@@ -52,11 +69,12 @@ export const Clases = () => {
   };
 
   const buscar = async () => {
-    if (!cedula.trim()) return;
+    const documento = formatDocumentoBusqueda(cedula.trim());
+    if (!documento) return;
     try {
       setLoading(true);
       setError('');
-      const data = await estudiantesAPI.getByCedula(cedula.trim());
+      const data = await estudiantesAPI.getByCedula(documento);
       setEstudiante(data as Estudiante);
       await cargarListas();
     } catch (err: any) {
@@ -142,7 +160,7 @@ export const Clases = () => {
     const historial = estudiante.clases_historial || [];
     const rows: (string | number)[][] = [
       ['Estudiante', estudiante.nombre_completo],
-      ['Cédula', estudiante.cedula],
+      ['Documento', estudiante.cedula],
       ['Email', estudiante.email],
       ['Teléfono', estudiante.telefono],
       [],
@@ -181,9 +199,9 @@ export const Clases = () => {
           <Search size={18} className="search-icon" />
           <input
             type="text"
-            placeholder="Buscar por cédula"
+            placeholder="Buscar por documento"
             value={cedula}
-            onChange={(e) => setCedula(e.target.value.replace(/\D/g, ''))}
+            onChange={(e) => setCedula(formatDocumentoBusqueda(e.target.value))}
             className="search-input"
           />
         </div>
@@ -206,7 +224,7 @@ export const Clases = () => {
             </div>
             <div className="clases-info">
               <h3>{estudiante.nombre_completo}</h3>
-              <p>CC: {estudiante.cedula}</p>
+              <p>{getTipoDocumentoLabel(estudiante.tipo_documento)}: {estudiante.cedula}</p>
               <p>{estudiante.email} • {estudiante.telefono}</p>
               <p>Estado: {estudiante.estado}</p>
               {estudiante.categoria && <p>Categoría: {estudiante.categoria}</p>}

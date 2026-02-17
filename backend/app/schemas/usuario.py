@@ -9,6 +9,7 @@ class UsuarioCreate(BaseModel):
     password: str
     nombre_completo: str
     cedula: str
+    tipo_documento: Optional[str] = "CEDULA"
     telefono: Optional[str] = None
     rol: RolUsuario
     is_active: Optional[bool] = True
@@ -19,6 +20,7 @@ class UsuarioUpdate(BaseModel):
     email: Optional[EmailStr] = None
     nombre_completo: Optional[str] = None
     cedula: Optional[str] = None
+    tipo_documento: Optional[str] = None
     telefono: Optional[str] = None
     rol: Optional[RolUsuario] = None
     is_active: Optional[bool] = None
@@ -41,6 +43,7 @@ class UsuarioResponse(BaseModel):
     email: str
     nombre_completo: str
     cedula: str
+    tipo_documento: Optional[str] = None
     telefono: Optional[str]
     rol: RolUsuario
     is_active: bool

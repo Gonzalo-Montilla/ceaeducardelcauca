@@ -24,6 +24,7 @@ class Usuario(Base):
     password_hash = Column(String(255), nullable=False)
     nombre_completo = Column(String(255), nullable=False)
     cedula = Column(String(20), unique=True, index=True, nullable=False)
+    tipo_documento = Column(String(30), default="CEDULA", nullable=False)
     telefono = Column(String(20))
     rol = Column(SQLEnum(RolUsuario), nullable=False)
     permisos_modulos = Column(JSON, default=list)

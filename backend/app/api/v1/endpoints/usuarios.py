@@ -61,6 +61,7 @@ def crear_usuario(
         password_hash=get_password_hash(payload.password),
         nombre_completo=payload.nombre_completo,
         cedula=payload.cedula,
+        tipo_documento=payload.tipo_documento or "CEDULA",
         telefono=payload.telefono,
         rol=payload.rol,
         is_active=payload.is_active if payload.is_active is not None else True,

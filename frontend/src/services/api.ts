@@ -113,6 +113,11 @@ export const estudiantesAPI = {
     return response.data;
   },
 
+  reactivar: async (id: number): Promise<Estudiante> => {
+    const response = await api.put<Estudiante>(`/estudiantes/${id}/reactivar`);
+    return response.data;
+  },
+
   update: async (id: number, data: Partial<Estudiante>): Promise<Estudiante> => {
     const response = await api.put<Estudiante>(`/estudiantes/${id}`, data);
     return response.data;

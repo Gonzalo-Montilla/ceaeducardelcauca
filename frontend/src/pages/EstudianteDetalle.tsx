@@ -42,6 +42,7 @@ interface Estudiante {
   usuario_id: number;
   nombre_completo: string;
   cedula: string;
+  tipo_documento?: string;
   email: string;
   telefono: string;
   fecha_nacimiento: string;
@@ -104,6 +105,7 @@ export const EstudianteDetalle = () => {
     segundo_apellido: '',
     email: '',
     cedula: '',
+    tipo_documento: 'CEDULA',
     telefono: '',
     fecha_nacimiento: '',
     direccion: '',
@@ -215,7 +217,9 @@ export const EstudianteDetalle = () => {
       COMBO_A2_C1: 'Combo A2 + C1',
       CERTIFICADO_MOTO: 'Certificado Moto',
       CERTIFICADO_B1: 'Certificado B1',
-      CERTIFICADO_C1: 'Certificado C1'
+      CERTIFICADO_C1: 'Certificado C1',
+      CERTIFICADO_B1_SIN_PRACTICA: 'Certificado B1 sin práctica',
+      CERTIFICADO_C1_SIN_PRACTICA: 'Certificado C1 sin práctica'
     };
     return map[estudiante?.tipo_servicio || ''] || (estudiante?.tipo_servicio || 'N/A');
   };
@@ -347,6 +351,7 @@ export const EstudianteDetalle = () => {
       segundo_apellido: nombres.segundo_apellido,
       email: estudiante.email || '',
       cedula: estudiante.cedula || '',
+      tipo_documento: estudiante.tipo_documento || 'CEDULA',
       telefono: estudiante.telefono || '',
       fecha_nacimiento: estudiante.fecha_nacimiento || '',
       direccion: estudiante.direccion || '',
@@ -397,6 +402,7 @@ export const EstudianteDetalle = () => {
         segundo_apellido: editForm.segundo_apellido.trim() || null,
         email: editForm.email.trim(),
         cedula: editForm.cedula.trim(),
+        tipo_documento: editForm.tipo_documento,
         telefono: editForm.telefono.trim(),
         foto_base64: editFotoBase64 || undefined,
         fecha_nacimiento: editForm.fecha_nacimiento || null,
@@ -436,6 +442,19 @@ export const EstudianteDetalle = () => {
       'RETIRADO': 'badge-danger'
     };
     return estados[estado] || 'badge-secondary';
+  };
+
+  const getTipoDocumentoLabel = (tipo?: string) => {
+    switch (tipo) {
+      case 'TARJETA_IDENTIDAD':
+        return 'TI';
+      case 'PASAPORTE':
+        return 'PAS';
+      case 'CEDULA_EXTRANJERIA':
+        return 'CE';
+      default:
+        return 'CC';
+    }
   };
 
   if (isLoading) {
@@ -531,7 +550,20 @@ export const EstudianteDetalle = () => {
                 />
               </div>
               <div className="form-group">
-                <label>Cédula</label>
+                <label>Tipo de Documento</label>
+                <select
+                  className="form-input"
+                  value={editForm.tipo_documento}
+                  onChange={(e) => handleEditChange('tipo_documento', e.target.value)}
+                >
+                  <option value="CEDULA">Cédula</option>
+                  <option value="TARJETA_IDENTIDAD">Tarjeta de Identidad</option>
+                  <option value="PASAPORTE">Pasaporte</option>
+                  <option value="CEDULA_EXTRANJERIA">Cédula de Extranjería</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Número de Documento</label>
                 <input
                   className="form-input"
                   value={editForm.cedula}
@@ -813,7 +845,9 @@ export const EstudianteDetalle = () => {
         
         <div className="info-basica">
           <h1>{estudiante.nombre_completo}</h1>
-          <p className="cedula">CC: {estudiante.cedula}</p>
+          <p className="cedula">
+            {getTipoDocumentoLabel(estudiante.tipo_documento)}: {estudiante.cedula}
+          </p>
           {estudiante.matricula_numero && (
             <p className="matricula">Matrícula: {estudiante.matricula_numero}</p>
           )}

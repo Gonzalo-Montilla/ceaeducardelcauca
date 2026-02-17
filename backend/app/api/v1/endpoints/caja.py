@@ -1033,6 +1033,7 @@ def _build_estudiante_financiero(estudiante: Estudiante, db: Session) -> Estudia
         id=estudiante.id,
         nombre_completo=estudiante.usuario.nombre_completo,
         cedula=estudiante.usuario.cedula,
+        tipo_documento=estudiante.usuario.tipo_documento,
         matricula_numero=estudiante.matricula_numero,
         foto_url=estudiante.foto_url,
         tipo_servicio=estudiante.tipo_servicio.value if estudiante.tipo_servicio else None,

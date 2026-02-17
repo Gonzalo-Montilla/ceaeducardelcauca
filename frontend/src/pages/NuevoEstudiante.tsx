@@ -21,6 +21,7 @@ export const NuevoEstudiante = () => {
   const [segundoNombre, setSegundoNombre] = useState('');
   const [primerApellido, setPrimerApellido] = useState('');
   const [segundoApellido, setSegundoApellido] = useState('');
+  const [tipoDocumento, setTipoDocumento] = useState('CEDULA');
   const [cedula, setCedula] = useState('');
   const [fechaNacimiento, setFechaNacimiento] = useState('');
   const [email, setEmail] = useState('');
@@ -143,6 +144,12 @@ export const NuevoEstudiante = () => {
   };
 
   const soloDigitos = (value: string) => value.replace(/\D/g, '');
+  const formatDocumento = (value: string) => {
+    if (tipoDocumento === 'PASAPORTE') {
+      return value.toUpperCase().replace(/[^A-Z0-9\-]/g, '').slice(0, 20);
+    }
+    return soloDigitos(value);
+  };
 
   useEffect(() => {
     return () => {
@@ -160,16 +167,20 @@ export const NuevoEstudiante = () => {
       return;
     }
     
-    const cedulaLimpia = soloDigitos(cedula);
+    const cedulaLimpia = formatDocumento(cedula);
     const telefonoLimpio = soloDigitos(telefono);
     const telefonoEmergenciaLimpio = soloDigitos(contactoEmergenciaTelefono);
 
     if (cedula && cedula !== cedulaLimpia) {
-      setError('La cédula solo debe contener números');
+      setError(tipoDocumento === 'PASAPORTE'
+        ? 'El pasaporte solo debe contener letras, números o guiones'
+        : 'El documento solo debe contener números');
       return;
     }
     if (cedulaLimpia.length < 5 || cedulaLimpia.length > 20) {
-      setError('La cédula debe tener entre 5 y 20 dígitos');
+      setError(tipoDocumento === 'PASAPORTE'
+        ? 'El pasaporte debe tener entre 5 y 20 caracteres'
+        : 'El documento debe tener entre 5 y 20 dígitos');
       return;
     }
     if (telefono && telefono !== telefonoLimpio) {
@@ -200,12 +211,13 @@ export const NuevoEstudiante = () => {
       const estudianteData = {
         // Datos de usuario
         email: email.trim(),
-        password: cedula, // Usar cédula como contraseña inicial
+        password: cedulaLimpia, // Usar documento como contraseña inicial
         primer_nombre: primerNombre.trim(),
         segundo_nombre: segundoNombre.trim() || null,
         primer_apellido: primerApellido.trim(),
         segundo_apellido: segundoApellido.trim() || null,
         cedula: cedulaLimpia,
+        tipo_documento: tipoDocumento,
         telefono: telefonoLimpio,
         
         // Datos personales
@@ -387,15 +399,33 @@ export const NuevoEstudiante = () => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="cedula">Cédula *</label>
+              <label htmlFor="tipoDocumento">Tipo de Documento *</label>
+              <select
+                id="tipoDocumento"
+                value={tipoDocumento}
+                onChange={(e) => {
+                  setTipoDocumento(e.target.value);
+                  setCedula('');
+                }}
+                required
+              >
+                <option value="CEDULA">Cédula</option>
+                <option value="TARJETA_IDENTIDAD">Tarjeta de Identidad</option>
+                <option value="PASAPORTE">Pasaporte</option>
+                <option value="CEDULA_EXTRANJERIA">Cédula de Extranjería</option>
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="cedula">Número de Documento *</label>
               <input
                 id="cedula"
                 type="text"
                 value={cedula}
-                onChange={(e) => setCedula(soloDigitos(e.target.value))}
+                onChange={(e) => setCedula(formatDocumento(e.target.value))}
                 required
-                inputMode="numeric"
-                pattern="[0-9]*"
+                inputMode={tipoDocumento === 'PASAPORTE' ? 'text' : 'numeric'}
+                pattern={tipoDocumento === 'PASAPORTE' ? undefined : '[0-9]*'}
                 maxLength={20}
               />
             </div>

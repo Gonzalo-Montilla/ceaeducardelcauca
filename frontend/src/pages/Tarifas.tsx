@@ -21,7 +21,9 @@ const tiposServicio = [
   { value: 'COMBO_A2_C1', label: 'Combo A2 + C1' },
   { value: 'CERTIFICADO_MOTO', label: 'Certificado Moto' },
   { value: 'CERTIFICADO_B1', label: 'Certificado B1' },
-  { value: 'CERTIFICADO_C1', label: 'Certificado C1' }
+  { value: 'CERTIFICADO_C1', label: 'Certificado C1' },
+  { value: 'CERTIFICADO_B1_SIN_PRACTICA', label: 'Certificado B1 sin práctica' },
+  { value: 'CERTIFICADO_C1_SIN_PRACTICA', label: 'Certificado C1 sin práctica' }
 ];
 
 export const Tarifas = () => {

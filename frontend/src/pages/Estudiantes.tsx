@@ -11,6 +11,7 @@ interface Estudiante {
   usuario_id: number;
   nombre_completo: string;
   cedula: string;
+  tipo_documento?: string;
   email: string;
   telefono: string;
   foto_url?: string;
@@ -90,9 +91,24 @@ export const Estudiantes = () => {
       COMBO_A2_C1: 'Combo A2 + C1',
       CERTIFICADO_MOTO: 'Certificado Moto',
       CERTIFICADO_B1: 'Certificado B1',
-      CERTIFICADO_C1: 'Certificado C1'
+      CERTIFICADO_C1: 'Certificado C1',
+      CERTIFICADO_B1_SIN_PRACTICA: 'Certificado B1 sin práctica',
+      CERTIFICADO_C1_SIN_PRACTICA: 'Certificado C1 sin práctica'
     };
     return map[tipoServicio || ''] || (categoria ? `Licencia ${categoria}` : 'N/A');
+  };
+
+  const getTipoDocumentoLabel = (tipo?: string) => {
+    switch (tipo) {
+      case 'TARJETA_IDENTIDAD':
+        return 'TI';
+      case 'PASAPORTE':
+        return 'PAS';
+      case 'CEDULA_EXTRANJERIA':
+        return 'CE';
+      default:
+        return 'CC';
+    }
   };
 
   const formatearFecha = (fecha: string) => {
@@ -128,6 +144,22 @@ export const Estudiantes = () => {
   const handleDefinirServicio = (estudiante: Estudiante) => {
     setEstudianteSeleccionado(estudiante);
     setMostrarModal(true);
+  };
+
+  const handleReactivar = async (estudiante: Estudiante) => {
+    try {
+      const confirmado = window.confirm('¿Deseas reactivar este estudiante para un nuevo servicio?');
+      if (!confirmado) return;
+      const actualizado = await estudiantesAPI.reactivar(estudiante.id);
+      setEstudiantes((prev) =>
+        prev.map((item) => (item.id === estudiante.id ? actualizado : item))
+      );
+      setEstudianteSeleccionado(actualizado);
+      setMostrarModal(true);
+    } catch (err) {
+      console.error('Error al reactivar estudiante:', err);
+      setError('No se pudo reactivar el estudiante');
+    }
   };
 
   const handleModalClose = () => {
@@ -179,7 +211,7 @@ export const Estudiantes = () => {
           <Search size={20} className="search-icon" />
           <input
             type="text"
-            placeholder="Buscar por cédula, nombre, email o matrícula..."
+            placeholder="Buscar por tipo de documento, email o matrícula..."
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             className="search-input"
@@ -236,7 +268,9 @@ export const Estudiantes = () => {
                   </div>
                   <div className="estudiante-info">
                     <h3>{estudiante.nombre_completo}</h3>
-                    <p className="cedula">CC: {estudiante.cedula}</p>
+                    <p className="cedula">
+                      {getTipoDocumentoLabel(estudiante.tipo_documento)}: {estudiante.cedula}
+                    </p>
                     {estudiante.matricula_numero && (
                       <p className="matricula">Mat: {estudiante.matricula_numero}</p>
                     )}
@@ -288,6 +322,16 @@ export const Estudiantes = () => {
                       >
                         <Settings size={18} />
                         Definir Servicio
+                      </button>
+                    )}
+                    {['LISTO_EXAMEN', 'GRADUADO', 'RETIRADO'].includes(estudiante.estado) && (
+                      <button
+                        className="btn-definir"
+                        onClick={() => handleReactivar(estudiante)}
+                        title="Reactivar para nuevo servicio"
+                      >
+                        <Settings size={18} />
+                        Reactivar
                       </button>
                     )}
                     <button 

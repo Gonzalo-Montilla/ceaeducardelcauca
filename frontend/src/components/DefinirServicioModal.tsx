@@ -8,6 +8,7 @@ interface DefinirServicioModalProps {
     id: number;
     nombre_completo: string;
     cedula: string;
+    tipo_documento?: string;
     matricula_numero?: string;
     foto_url?: string;
   };
@@ -29,6 +30,19 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [tarifas, setTarifas] = useState<any[]>([]);
+
+  const getTipoDocumentoLabel = (tipo?: string) => {
+    switch (tipo) {
+      case 'TARJETA_IDENTIDAD':
+        return 'TI';
+      case 'PASAPORTE':
+        return 'PAS';
+      case 'CEDULA_EXTRANJERIA':
+        return 'CE';
+      default:
+        return 'CC';
+    }
+  };
 
   useEffect(() => {
     const cargarTarifas = async () => {
@@ -75,6 +89,8 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
     { value: 'CERTIFICADO_MOTO', label: 'Certificado Moto', categoria: 'A2' },
     { value: 'CERTIFICADO_B1', label: 'Certificado B1', categoria: 'B1' },
     { value: 'CERTIFICADO_C1', label: 'Certificado C1', categoria: 'C1' },
+    { value: 'CERTIFICADO_B1_SIN_PRACTICA', label: 'Certificado B1 sin práctica', categoria: 'B1' },
+    { value: 'CERTIFICADO_C1_SIN_PRACTICA', label: 'Certificado C1 sin práctica', categoria: 'C1' },
   ];
 
   const categoriaToTipo = (categoriaValue: string) => {
@@ -234,7 +250,7 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
           )}
           <div>
             <h3>{estudiante.nombre_completo}</h3>
-            <p>CC: {estudiante.cedula}</p>
+            <p>{getTipoDocumentoLabel(estudiante.tipo_documento)}: {estudiante.cedula}</p>
             {estudiante.matricula_numero && (
               <p className="matricula-badge">Mat: {estudiante.matricula_numero}</p>
             )}

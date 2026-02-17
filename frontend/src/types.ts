@@ -56,6 +56,7 @@ export interface Usuario {
   email: string;
   nombre_completo: string;
   cedula: string;
+  tipo_documento?: string;
   telefono?: string;
   rol: RolUsuario;
   is_active: boolean;
@@ -102,6 +103,7 @@ export interface RegisterRequest {
   password: string;
   nombre_completo: string;
   cedula: string;
+  tipo_documento?: string;
   telefono?: string;
   rol?: RolUsuario;
 }

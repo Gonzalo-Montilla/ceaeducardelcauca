@@ -37,6 +37,7 @@ class EstudianteCreate(EstudianteBase):
     primer_apellido: str
     segundo_apellido: Optional[str] = None
     cedula: str
+    tipo_documento: str = "CEDULA"
     telefono: str
     foto_base64: str  # Foto en base64
     autorizacion_tratamiento: bool
@@ -51,10 +52,24 @@ class EstudianteCreate(EstudianteBase):
 
     @field_validator('cedula')
     @classmethod
-    def validate_cedula(cls, v: str) -> str:
-        value = v.strip()
-        if not re.fullmatch(r'\d{5,20}', value):
-            raise ValueError('La cédula debe tener entre 5 y 20 dígitos')
+    def validate_cedula(cls, v: str, info) -> str:
+        value = v.strip().upper()
+        tipo = (info.data.get("tipo_documento") or "CEDULA").upper()
+        if tipo == "PASAPORTE":
+            if not re.fullmatch(r'[A-Z0-9\-]{5,20}', value):
+                raise ValueError('El pasaporte debe tener entre 5 y 20 caracteres')
+        else:
+            if not re.fullmatch(r'\d{5,20}', value):
+                raise ValueError('El documento debe tener entre 5 y 20 dígitos')
+        return value
+
+    @field_validator('tipo_documento')
+    @classmethod
+    def validate_tipo_documento(cls, v: str) -> str:
+        value = v.strip().upper()
+        allowed = {"CEDULA", "TARJETA_IDENTIDAD", "PASAPORTE", "CEDULA_EXTRANJERIA"}
+        if value not in allowed:
+            raise ValueError('Tipo de documento inválido')
         return value
 
     @field_validator('telefono')
@@ -92,6 +107,7 @@ class EstudianteUpdate(BaseModel):
     segundo_apellido: Optional[str] = None
     email: Optional[EmailStr] = None
     cedula: Optional[str] = None
+    tipo_documento: Optional[str] = None
     telefono: Optional[str] = None
     foto_base64: Optional[str] = None
     fecha_nacimiento: Optional[date] = None
@@ -135,12 +151,28 @@ class EstudianteUpdate(BaseModel):
 
     @field_validator('cedula')
     @classmethod
-    def validate_cedula_update(cls, v: Optional[str]) -> Optional[str]:
+    def validate_cedula_update(cls, v: Optional[str], info) -> Optional[str]:
         if v is None:
             return v
-        value = v.strip()
-        if not re.fullmatch(r'\d{5,20}', value):
-            raise ValueError('La cédula debe tener entre 5 y 20 dígitos')
+        value = v.strip().upper()
+        tipo = (info.data.get("tipo_documento") or "CEDULA").upper()
+        if tipo == "PASAPORTE":
+            if not re.fullmatch(r'[A-Z0-9\-]{5,20}', value):
+                raise ValueError('El pasaporte debe tener entre 5 y 20 caracteres')
+        else:
+            if not re.fullmatch(r'\d{5,20}', value):
+                raise ValueError('El documento debe tener entre 5 y 20 dígitos')
+        return value
+
+    @field_validator('tipo_documento')
+    @classmethod
+    def validate_tipo_documento_update(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        value = v.strip().upper()
+        allowed = {"CEDULA", "TARJETA_IDENTIDAD", "PASAPORTE", "CEDULA_EXTRANJERIA"}
+        if value not in allowed:
+            raise ValueError('Tipo de documento inválido')
         return value
 
     @field_validator('telefono')
@@ -205,6 +237,7 @@ class EstudianteResponse(BaseModel):
     updated_at: Optional[datetime]
     nombre_completo: str
     cedula: str
+    tipo_documento: Optional[str] = None
     email: str
     telefono: str
     progreso_teorico: float = 0.0
@@ -223,6 +256,7 @@ class EstudianteListItem(BaseModel):
     usuario_id: int
     nombre_completo: str
     cedula: str
+    tipo_documento: Optional[str] = None
     email: str
     telefono: str
     foto_url: Optional[str] = None

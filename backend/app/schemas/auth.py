@@ -16,6 +16,7 @@ class UserRegister(BaseModel):
     password: str
     nombre_completo: str
     cedula: str
+    tipo_documento: Optional[str] = "CEDULA"
     telefono: str
     rol: RolUsuario
 
@@ -38,6 +39,7 @@ class UserResponse(BaseModel):
     email: str
     nombre_completo: str
     cedula: str
+    tipo_documento: Optional[str] = None
     telefono: Optional[str]
     rol: RolUsuario
     is_active: bool

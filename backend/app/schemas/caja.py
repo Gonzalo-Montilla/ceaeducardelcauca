@@ -245,6 +245,7 @@ class EstudianteFinanciero(BaseModel):
     id: int
     nombre_completo: str
     cedula: str
+    tipo_documento: Optional[str] = None
     matricula_numero: str
     foto_url: Optional[str]
     

@@ -79,6 +79,7 @@ def create_estudiante(
             password_hash=get_password_hash(estudiante_data.password),
             nombre_completo=nombre_completo,
             cedula=estudiante_data.cedula,
+            tipo_documento=estudiante_data.tipo_documento,
             telefono=estudiante_data.telefono,
             rol=RolUsuario.ESTUDIANTE,
             is_active=True,
@@ -201,6 +202,7 @@ def list_estudiantes(
             usuario_id=est.usuario_id,
             nombre_completo=est.usuario.nombre_completo,
             cedula=est.usuario.cedula,
+            tipo_documento=est.usuario.tipo_documento,
             email=est.usuario.email,
             telefono=est.usuario.telefono,
             foto_url=est.foto_url,
@@ -284,7 +286,7 @@ def update_estudiante(
         if field in update_data:
             nombre_parts[field] = update_data.pop(field)
 
-    for field in ["nombre_completo", "email", "telefono", "cedula"]:
+    for field in ["nombre_completo", "email", "telefono", "cedula", "tipo_documento"]:
         if field in update_data:
             user_fields[field] = update_data.pop(field)
 
@@ -508,6 +510,71 @@ def definir_servicio(
             detail=f"Error al definir servicio: {str(e)}"
         )
 
+
+@router.put("/{estudiante_id}/reactivar", response_model=EstudianteResponse)
+def reactivar_estudiante(
+    estudiante_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
+):
+    """
+    Reactivar estudiante para iniciar un nuevo servicio.
+    - Guarda un snapshot del servicio anterior en datos_adicionales
+    - Reinicia estados/horas/saldos
+    """
+    estudiante = db.query(Estudiante).filter(Estudiante.id == estudiante_id).first()
+    
+    if not estudiante:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Estudiante no encontrado"
+        )
+    
+    try:
+        datos = dict(estudiante.datos_adicionales or {})
+        historial = list(datos.get("historial_servicios", []))
+        historial.append({
+            "fecha": datetime.utcnow().isoformat(),
+            "tipo_servicio": str(estudiante.tipo_servicio) if estudiante.tipo_servicio else None,
+            "categoria": str(estudiante.categoria) if estudiante.categoria else None,
+            "origen_cliente": str(estudiante.origen_cliente) if estudiante.origen_cliente else None,
+            "valor_total_curso": str(estudiante.valor_total_curso) if estudiante.valor_total_curso else None,
+            "saldo_pendiente": str(estudiante.saldo_pendiente) if estudiante.saldo_pendiente else None,
+            "horas_teoricas_completadas": estudiante.horas_teoricas_completadas,
+            "horas_practicas_completadas": estudiante.horas_practicas_completadas,
+            "estado": str(estudiante.estado)
+        })
+        datos["historial_servicios"] = historial
+        estudiante.datos_adicionales = datos
+        
+        # Reactivar y resetear datos clave para nuevo servicio
+        estudiante.usuario.is_active = True
+        estudiante.estado = EstadoEstudiante.PROSPECTO
+        estudiante.tipo_servicio = None
+        estudiante.categoria = None
+        estudiante.origen_cliente = None
+        estudiante.referido_por = None
+        estudiante.telefono_referidor = None
+        estudiante.valor_total_curso = None
+        estudiante.saldo_pendiente = None
+        estudiante.horas_teoricas_completadas = 0
+        estudiante.horas_practicas_completadas = 0
+        estudiante.horas_teoricas_requeridas = 0
+        estudiante.horas_practicas_requeridas = 0
+        estudiante.fecha_inscripcion = datetime.utcnow()
+        estudiante.contrato_pdf_url = None
+        
+        db.commit()
+        db.refresh(estudiante)
+        
+        return _build_estudiante_response(estudiante)
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error al reactivar estudiante")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al reactivar estudiante"
+        )
 
 @router.get("/{estudiante_id}/contrato-pdf")
 def contrato_estudiante_pdf(
@@ -757,7 +824,7 @@ def _build_contrato_pdf_bytes(estudiante: Estudiante) -> bytes:
         y,
         [
             ("Nombre del Alumno", estudiante.usuario.nombre_completo if estudiante.usuario else ""),
-            ("Tipo de Documento", "CC"),
+            ("Tipo de Documento", _tipo_documento_label(estudiante.usuario.tipo_documento if estudiante.usuario else None)),
             ("Numero", estudiante.usuario.cedula if estudiante.usuario else "")
         ],
         [250, 120, 150]
@@ -843,7 +910,7 @@ def _build_contrato_pdf_bytes(estudiante: Estudiante) -> bytes:
         c,
         y,
         ["A2", "B1", "C1"],
-        estudiante.categoria.value if estudiante.categoria else None,
+        _categorias_contrato(estudiante),
         prefix="CATEGORIA"
     )
     y -= 20
@@ -1039,6 +1106,29 @@ def _draw_section_bar(c: canvas.Canvas, title: str, y: int) -> int:
     return y - 22
 
 
+def _tipo_documento_label(tipo: Optional[str]) -> str:
+    if not tipo:
+        return "CC"
+    value = tipo.upper()
+    if value == "TARJETA_IDENTIDAD":
+        return "TI"
+    if value == "PASAPORTE":
+        return "PAS"
+    if value == "CEDULA_EXTRANJERIA":
+        return "CE"
+    return "CC"
+
+
+def _categorias_contrato(estudiante: Estudiante) -> list[str]:
+    if estudiante.tipo_servicio == TipoServicio.COMBO_A2_B1:
+        return ["A2", "B1"]
+    if estudiante.tipo_servicio == TipoServicio.COMBO_A2_C1:
+        return ["A2", "C1"]
+    if estudiante.categoria:
+        return [estudiante.categoria.value]
+    return []
+
+
 def _draw_box_row(c: canvas.Canvas, y: int, items: list, widths: list, total_width: int = 520) -> int:
     x = 50
     h = 22
@@ -1057,7 +1147,7 @@ def _draw_box_row(c: canvas.Canvas, y: int, items: list, widths: list, total_wid
     return y - h
 
 
-def _draw_checkbox_row(c: canvas.Canvas, y: int, options: list, selected: Optional[str], prefix: Optional[str] = None) -> int:
+def _draw_checkbox_row(c: canvas.Canvas, y: int, options: list, selected, prefix: Optional[str] = None) -> int:
     x = 50
     h = 18
     total_width = 520
@@ -1065,7 +1155,10 @@ def _draw_checkbox_row(c: canvas.Canvas, y: int, options: list, selected: Option
     available = max(0, total_width - prefix_width)
     count = max(1, len(options))
     step = min(110, max(70, available / count))
-    selected_norm = (str(selected).lower() if selected else "")
+    if isinstance(selected, (list, tuple, set)):
+        selected_norms = {str(item).lower() for item in selected}
+    else:
+        selected_norms = {str(selected).lower()} if selected else set()
     if prefix:
         c.setFont("Helvetica-Bold", 8)
         c.drawString(x, y - 12, prefix)
@@ -1073,7 +1166,7 @@ def _draw_checkbox_row(c: canvas.Canvas, y: int, options: list, selected: Option
     for opt in options:
         opt_norm = opt.lower().replace(" ", "_")
         _draw_rect(c, x, y - h, 12, 12)
-        if selected_norm and (opt_norm in selected_norm or opt.lower() in selected_norm):
+        if selected_norms and (opt_norm in selected_norms or opt.lower() in selected_norms):
             c.setFont("Helvetica-Bold", 9)
             c.drawString(x + 3, y - 12, "X")
         c.setFont("Helvetica", 8)
@@ -1338,6 +1431,7 @@ def _build_estudiante_response(estudiante: Estudiante, db: Session = None) -> Es
         updated_at=estudiante.updated_at,
         nombre_completo=estudiante.usuario.nombre_completo,
         cedula=estudiante.usuario.cedula,
+        tipo_documento=estudiante.usuario.tipo_documento,
         email=estudiante.usuario.email,
         telefono=estudiante.usuario.telefono,
         progreso_teorico=estudiante.progreso_teorico,

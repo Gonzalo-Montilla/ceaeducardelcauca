@@ -37,6 +37,7 @@ interface EstudianteFinanciero {
   id: number;
   nombre_completo: string;
   cedula: string;
+  tipo_documento?: string;
   matricula_numero: string;
   foto_url?: string;
   tipo_servicio?: string;
@@ -94,6 +95,21 @@ export const Caja = () => {
   const [cerrandoCaja, setCerrandoCaja] = useState(false);
 
   const soloDigitos = (value: string) => value.replace(/\D/g, '');
+  const formatDocumentoBusqueda = (value: string) => {
+    return value.toUpperCase().replace(/[^A-Z0-9\-]/g, '').slice(0, 20);
+  };
+  const getTipoDocumentoLabel = (tipo?: string) => {
+    switch (tipo) {
+      case 'TARJETA_IDENTIDAD':
+        return 'TI';
+      case 'PASAPORTE':
+        return 'PAS';
+      case 'CEDULA_EXTRANJERIA':
+        return 'CE';
+      default:
+        return 'CC';
+    }
+  };
 
   const downloadCSV = (filename: string, rows: (string | number)[][]) => {
     const escape = (value: string | number) => {
@@ -188,9 +204,9 @@ export const Caja = () => {
   };
   
   const handleBuscarEstudiante = async () => {
-    const cedulaLimpia = soloDigitos(cedula);
+    const cedulaLimpia = formatDocumentoBusqueda(cedula);
     if (!cedulaLimpia) {
-      alert('Ingrese la cédula del estudiante');
+      alert('Ingrese el documento del estudiante');
       return;
     }
     
@@ -723,13 +739,11 @@ export const Caja = () => {
           <div className="search-bar">
             <input
               type="text"
-              placeholder="Buscar por cédula..."
+              placeholder="Buscar por documento..."
               value={cedula}
-              onChange={(e) => setCedula(soloDigitos(e.target.value))}
+              onChange={(e) => setCedula(formatDocumentoBusqueda(e.target.value))}
               onKeyDown={(e) => e.key === 'Enter' && handleBuscarEstudiante()}
               className="search-input"
-              inputMode="numeric"
-              pattern="[0-9]*"
             />
             <button onClick={handleBuscarEstudiante} disabled={buscando} className="btn-search">
               <Search size={20} />
@@ -745,7 +759,7 @@ export const Caja = () => {
                 )}
                 <div className="estudiante-datos">
                   <h3>{estudiante.nombre_completo}</h3>
-                  <p>CC: {estudiante.cedula}</p>
+                  <p>{getTipoDocumentoLabel(estudiante.tipo_documento)}: {estudiante.cedula}</p>
                   <p>Matrícula: {estudiante.matricula_numero}</p>
                   <span className={`badge badge-${getEstadoFinancieroColor(estudiante.estado_financiero)}`}>
                     {estudiante.estado_financiero.replace('_', ' ')}
