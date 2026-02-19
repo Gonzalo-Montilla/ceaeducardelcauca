@@ -58,8 +58,13 @@ def calcular_precio(
             precio_base = Decimal(str(tarifa.precio_base))
             costo_practica = Decimal(str(tarifa.costo_practica or 0))
     
-    # Para certificados B1 y C1, agregar costo de práctica si aplica
-    if tipo_servicio in [TipoServicio.CERTIFICADO_B1, TipoServicio.CERTIFICADO_C1]:
+    # Para certificados, agregar costo de práctica si aplica
+    if tipo_servicio in [
+        TipoServicio.CERTIFICADO_B1,
+        TipoServicio.CERTIFICADO_C1,
+        TipoServicio.CERTIFICADO_A2_B1_CON_PRACTICA,
+        TipoServicio.CERTIFICADO_A2_C1_CON_PRACTICA,
+    ]:
         if incluye_practica:
             precio_base += costo_practica
 
