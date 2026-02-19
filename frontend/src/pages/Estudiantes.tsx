@@ -93,7 +93,11 @@ export const Estudiantes = () => {
       CERTIFICADO_B1: 'Certificado B1',
       CERTIFICADO_C1: 'Certificado C1',
       CERTIFICADO_B1_SIN_PRACTICA: 'Certificado B1 sin práctica',
-      CERTIFICADO_C1_SIN_PRACTICA: 'Certificado C1 sin práctica'
+      CERTIFICADO_C1_SIN_PRACTICA: 'Certificado C1 sin práctica',
+      CERTIFICADO_A2_B1_SIN_PRACTICA: 'Certificado A2 + B1 sin práctica',
+      CERTIFICADO_A2_C1_SIN_PRACTICA: 'Certificado A2 + C1 sin práctica',
+      CERTIFICADO_A2_B1_CON_PRACTICA: 'Certificado A2 + B1 con práctica',
+      CERTIFICADO_A2_C1_CON_PRACTICA: 'Certificado A2 + C1 con práctica'
     };
     return map[tipoServicio || ''] || (categoria ? `Licencia ${categoria}` : 'N/A');
   };

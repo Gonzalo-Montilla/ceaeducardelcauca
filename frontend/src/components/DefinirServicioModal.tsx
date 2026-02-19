@@ -91,6 +91,10 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
     { value: 'CERTIFICADO_C1', label: 'Certificado C1', categoria: 'C1' },
     { value: 'CERTIFICADO_B1_SIN_PRACTICA', label: 'Certificado B1 sin práctica', categoria: 'B1' },
     { value: 'CERTIFICADO_C1_SIN_PRACTICA', label: 'Certificado C1 sin práctica', categoria: 'C1' },
+    { value: 'CERTIFICADO_A2_B1_SIN_PRACTICA', label: 'Certificado A2 + B1 sin práctica', categoria: 'A2,B1' },
+    { value: 'CERTIFICADO_A2_C1_SIN_PRACTICA', label: 'Certificado A2 + C1 sin práctica', categoria: 'A2,C1' },
+    { value: 'CERTIFICADO_A2_B1_CON_PRACTICA', label: 'Certificado A2 + B1 con práctica', categoria: 'A2,B1' },
+    { value: 'CERTIFICADO_A2_C1_CON_PRACTICA', label: 'Certificado A2 + C1 con práctica', categoria: 'A2,C1' },
   ];
 
   const categoriaToTipo = (categoriaValue: string) => {

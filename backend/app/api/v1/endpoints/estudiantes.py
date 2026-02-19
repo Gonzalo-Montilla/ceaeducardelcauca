@@ -1124,6 +1124,16 @@ def _categorias_contrato(estudiante: Estudiante) -> list[str]:
         return ["A2", "B1"]
     if estudiante.tipo_servicio == TipoServicio.COMBO_A2_C1:
         return ["A2", "C1"]
+    if estudiante.tipo_servicio in [
+        TipoServicio.CERTIFICADO_A2_B1_SIN_PRACTICA,
+        TipoServicio.CERTIFICADO_A2_B1_CON_PRACTICA
+    ]:
+        return ["A2", "B1"]
+    if estudiante.tipo_servicio in [
+        TipoServicio.CERTIFICADO_A2_C1_SIN_PRACTICA,
+        TipoServicio.CERTIFICADO_A2_C1_CON_PRACTICA
+    ]:
+        return ["A2", "C1"]
     if estudiante.categoria:
         return [estudiante.categoria.value]
     return []

@@ -20,6 +20,10 @@ PRECIOS_BASE = {
     TipoServicio.CERTIFICADO_C1: Decimal("750000"),  # Sin práctica
     TipoServicio.CERTIFICADO_B1_SIN_PRACTICA: Decimal("600000"),
     TipoServicio.CERTIFICADO_C1_SIN_PRACTICA: Decimal("750000"),
+    TipoServicio.CERTIFICADO_A2_B1_SIN_PRACTICA: Decimal("1080000"),
+    TipoServicio.CERTIFICADO_A2_C1_SIN_PRACTICA: Decimal("1230000"),
+    TipoServicio.CERTIFICADO_A2_B1_CON_PRACTICA: Decimal("1180000"),
+    TipoServicio.CERTIFICADO_A2_C1_CON_PRACTICA: Decimal("1330000"),
 }
 
 # Costo adicional por práctica en certificados
@@ -78,5 +82,9 @@ def obtener_categoria_licencia(tipo_servicio: TipoServicio) -> str:
         TipoServicio.CERTIFICADO_C1: "C1",
         TipoServicio.CERTIFICADO_B1_SIN_PRACTICA: "B1",
         TipoServicio.CERTIFICADO_C1_SIN_PRACTICA: "C1",
+        TipoServicio.CERTIFICADO_A2_B1_SIN_PRACTICA: "B1",
+        TipoServicio.CERTIFICADO_A2_C1_SIN_PRACTICA: "C1",
+        TipoServicio.CERTIFICADO_A2_B1_CON_PRACTICA: "B1",
+        TipoServicio.CERTIFICADO_A2_C1_CON_PRACTICA: "C1",
     }
     return mapeo.get(tipo_servicio, "B1")
