@@ -13,6 +13,7 @@ import { FiltrosPeriodo } from '../components/reportes/FiltrosPeriodo';
 import { RankingReferidos } from '../components/reportes/RankingReferidos';
 import { TablaEstudiantesRegistrados } from '../components/reportes/TablaEstudiantesRegistrados';
 import { TablaEstudiantesPagos } from '../components/reportes/TablaEstudiantesPagos';
+import { TablaConceptosPagos } from '../components/reportes/TablaConceptosPagos';
 import '../styles/Reportes.css';
 
 interface DashboardData {
@@ -397,6 +398,7 @@ export const Reportes = () => {
       <div className="tablas-estudiantes-grid">
         <TablaEstudiantesRegistrados estudiantes={lista_estudiantes_registrados || []} />
         <TablaEstudiantesPagos pagos={lista_estudiantes_pagos || []} />
+        <TablaConceptosPagos pagos={lista_estudiantes_pagos || []} />
       </div>
     </div>
   );

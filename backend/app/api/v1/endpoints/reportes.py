@@ -856,6 +856,7 @@ def _lista_estudiantes_pagos(db: Session, fecha_inicio: date, fecha_fin: date) -
             continue
             
         lista.append(EstudiantePago(
+            pago_id=pago.id,
             estudiante_id=est.id,
             nombre_completo=est.usuario.nombre_completo,
             documento=est.usuario.cedula,

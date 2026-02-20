@@ -97,6 +97,7 @@ class EstudianteRegistrado(BaseModel):
 
 class EstudiantePago(BaseModel):
     """Estudiante que realizó un pago en el período"""
+    pago_id: int
     estudiante_id: int
     nombre_completo: str
     documento: str
