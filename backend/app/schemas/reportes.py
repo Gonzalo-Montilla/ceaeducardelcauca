@@ -113,6 +113,22 @@ class EstudiantePago(BaseModel):
         from_attributes = True
 
 
+class EgresoCajaItem(BaseModel):
+    """Egreso registrado en el período"""
+    egreso_id: int
+    fecha: datetime
+    concepto: str
+    categoria: Optional[str] = None
+    metodo_pago: str
+    monto: Decimal
+    usuario: Optional[str] = None
+    numero_factura: Optional[str] = None
+    observaciones: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 class ReferidoRanking(BaseModel):
     """Ranking de referidos que más estudiantes envían"""
     referido_nombre: str
@@ -177,6 +193,7 @@ class DashboardEjecutivo(BaseModel):
     ranking_referidos: List[ReferidoRanking]
     lista_estudiantes_registrados: List[EstudianteRegistrado]
     lista_estudiantes_pagos: List[EstudiantePago]
+    lista_egresos_caja: List[EgresoCajaItem]
     fecha_generacion: datetime
     periodo_inicio: datetime
     periodo_fin: datetime

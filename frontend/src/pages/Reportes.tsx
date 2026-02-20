@@ -14,6 +14,7 @@ import { RankingReferidos } from '../components/reportes/RankingReferidos';
 import { TablaEstudiantesRegistrados } from '../components/reportes/TablaEstudiantesRegistrados';
 import { TablaEstudiantesPagos } from '../components/reportes/TablaEstudiantesPagos';
 import { TablaConceptosPagos } from '../components/reportes/TablaConceptosPagos';
+import { TablaEgresosCaja } from '../components/reportes/TablaEgresosCaja';
 import '../styles/Reportes.css';
 
 interface DashboardData {
@@ -120,7 +121,8 @@ export const Reportes = () => {
     grafico_egresos,
     ranking_referidos,
     lista_estudiantes_registrados,
-    lista_estudiantes_pagos
+  lista_estudiantes_pagos,
+  lista_egresos_caja
   } = dashboard!;
 
   // Preparar datos para gráfico de línea (ingresos)
@@ -398,6 +400,7 @@ export const Reportes = () => {
       <div className="tablas-estudiantes-grid">
         <TablaEstudiantesRegistrados estudiantes={lista_estudiantes_registrados || []} />
         <TablaEstudiantesPagos pagos={lista_estudiantes_pagos || []} />
+        <TablaEgresosCaja egresos={lista_egresos_caja || []} />
         <TablaConceptosPagos pagos={lista_estudiantes_pagos || []} />
       </div>
     </div>

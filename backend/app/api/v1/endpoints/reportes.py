@@ -18,7 +18,7 @@ from app.schemas.reportes import (
     GraficoEvolucionIngresos, GraficoMetodosPago,
     GraficoEstudiantesCategorias, GraficoEgresos,
     DatoPunto, DatoCategoria,
-    EstudianteRegistrado, EstudiantePago, ReferidoRanking,
+    EstudianteRegistrado, EstudiantePago, EgresoCajaItem, ReferidoRanking,
     AlertasOperativas, AlertasVencimientosResponse,
     AlertaDocumentoVehiculo, AlertaDocumentoInstructor, AlertaPin, AlertaPagoVencido, AlertaCompromiso,
     CierreFinancieroResponse, CierreCajaItem
@@ -73,6 +73,7 @@ def get_dashboard_ejecutivo(
     # Listas de estudiantes
     lista_registrados = _lista_estudiantes_registrados(db, fecha_inicio_date, fecha_fin_date)
     lista_pagos = _lista_estudiantes_pagos(db, fecha_inicio_date, fecha_fin_date)
+    lista_egresos = _lista_egresos_caja(db, fecha_inicio_date, fecha_fin_date)
     
     return DashboardEjecutivo(
         kpis=kpis,
@@ -83,6 +84,7 @@ def get_dashboard_ejecutivo(
         ranking_referidos=ranking_referidos,
         lista_estudiantes_registrados=lista_registrados,
         lista_estudiantes_pagos=lista_pagos,
+        lista_egresos_caja=lista_egresos,
         fecha_generacion=datetime.utcnow(),
         periodo_inicio=fecha_inicio,
         periodo_fin=fecha_fin
@@ -869,6 +871,31 @@ def _lista_estudiantes_pagos(db: Session, fecha_inicio: date, fecha_fin: date) -
             saldo_pendiente=est.saldo_pendiente
         ))
     
+    return lista
+
+
+def _lista_egresos_caja(db: Session, fecha_inicio: date, fecha_fin: date) -> list:
+    egresos = db.query(MovimientoCaja).filter(
+        and_(
+            MovimientoCaja.tipo == "EGRESO",
+            cast(MovimientoCaja.fecha, Date) >= fecha_inicio,
+            cast(MovimientoCaja.fecha, Date) <= fecha_fin
+        )
+    ).order_by(MovimientoCaja.fecha.desc()).all()
+
+    lista = []
+    for eg in egresos:
+        lista.append(EgresoCajaItem(
+            egreso_id=eg.id,
+            fecha=eg.fecha,
+            concepto=eg.concepto,
+            categoria=eg.categoria.value if eg.categoria else None,
+            metodo_pago=eg.metodo_pago.value if eg.metodo_pago else "N/A",
+            monto=eg.monto,
+            usuario=eg.usuario.nombre_completo if eg.usuario else None,
+            numero_factura=eg.numero_factura,
+            observaciones=eg.observaciones
+        ))
     return lista
 
 
