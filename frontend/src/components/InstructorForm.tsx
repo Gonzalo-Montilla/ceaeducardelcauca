@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, User, Camera, RotateCcw, Check, Upload, FileText, AlertCircle, Award, Calendar, ArrowRight, ArrowLeft } from 'lucide-react';
-import { instructoresAPI, authAPI } from '../services/api';
+import { instructoresAPI, authAPI, usuariosAPI } from '../services/api';
 import '../styles/InstructorForm.css';
 import '../styles/InstructorFormExtras.css';
 
@@ -14,6 +14,10 @@ export const InstructorForm = ({ instructor, onClose, onSuccess }: InstructorFor
   const [step, setStep] = useState(1); // 1 = Usuario, 2 = Foto, 3 = Datos Instructor, 4 = Documentos
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [usarUsuarioExistente, setUsarUsuarioExistente] = useState(false);
+  const [busquedaUsuario, setBusquedaUsuario] = useState('');
+  const [usuariosEncontrados, setUsuariosEncontrados] = useState<any[]>([]);
+  const [buscandoUsuarios, setBuscandoUsuarios] = useState(false);
 
   // PASO 1: Datos del usuario
   const [nombreCompleto, setNombreCompleto] = useState('');
@@ -22,6 +26,7 @@ export const InstructorForm = ({ instructor, onClose, onSuccess }: InstructorFor
   const [telefono, setTelefono] = useState('');
   const [password, setPassword] = useState('');
   const [usuarioId, setUsuarioId] = useState<number | null>(null);
+  const [usuarioSeleccionado, setUsuarioSeleccionado] = useState<any | null>(null);
 
   // PASO 2: Captura de foto
   const [fotoCapturada, setFotoCapturada] = useState<string | null>(null);
@@ -82,6 +87,15 @@ export const InstructorForm = ({ instructor, onClose, onSuccess }: InstructorFor
       setCertificadoPdf(instructor.certificado_pdf_url);
     }
   }, [instructor]);
+
+  useEffect(() => {
+    if (usuarioSeleccionado) {
+      setNombreCompleto(usuarioSeleccionado.nombre_completo || '');
+      setCedula(usuarioSeleccionado.cedula || '');
+      setEmail(usuarioSeleccionado.email || '');
+      setTelefono(usuarioSeleccionado.telefono || '');
+    }
+  }, [usuarioSeleccionado]);
 
   useEffect(() => {
     return () => {
@@ -194,7 +208,16 @@ export const InstructorForm = ({ instructor, onClose, onSuccess }: InstructorFor
 
   const handleCrearUsuario = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    if (usarUsuarioExistente) {
+      if (!usuarioSeleccionado) {
+        setError('Selecciona un usuario existente');
+        return;
+      }
+      setUsuarioId(usuarioSeleccionado.id);
+      setStep(2);
+      return;
+    }
+
     if (!nombreCompleto || !cedula || !email || !password) {
       setError('Todos los campos son obligatorios');
       return;
@@ -222,6 +245,23 @@ export const InstructorForm = ({ instructor, onClose, onSuccess }: InstructorFor
     }
   };
 
+  const buscarUsuarios = async () => {
+    if (!busquedaUsuario.trim()) {
+      setUsuariosEncontrados([]);
+      return;
+    }
+    try {
+      setBuscandoUsuarios(true);
+      const data = await usuariosAPI.getAll({ search: busquedaUsuario.trim() });
+      setUsuariosEncontrados(data || []);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Error al buscar usuarios');
+      setUsuariosEncontrados([]);
+    } finally {
+      setBuscandoUsuarios(false);
+    }
+  };
+
   const handleContinuarConFoto = () => {
     if (!fotoCapturada) {
       setError('Debe capturar la fotografía del instructor');
@@ -246,6 +286,10 @@ export const InstructorForm = ({ instructor, onClose, onSuccess }: InstructorFor
     try {
       setLoading(true);
       setError('');
+      if (!usuarioId) {
+        setError('Debe seleccionar o crear un usuario para el instructor');
+        return;
+      }
       
       const instructorData = {
         usuario_id: usuarioId,
@@ -307,6 +351,86 @@ export const InstructorForm = ({ instructor, onClose, onSuccess }: InstructorFor
             <h3 className="step-title">
               <User size={20} /> Paso 1: Datos del Usuario
             </h3>
+
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+              <button
+                type="button"
+                className={usarUsuarioExistente ? 'btn-cancel' : 'btn-primary'}
+                onClick={() => {
+                  setUsarUsuarioExistente(false);
+                  setUsuarioSeleccionado(null);
+                  setUsuariosEncontrados([]);
+                  setBusquedaUsuario('');
+                }}
+              >
+                Crear nuevo
+              </button>
+              <button
+                type="button"
+                className={usarUsuarioExistente ? 'btn-primary' : 'btn-cancel'}
+                onClick={() => {
+                  setUsarUsuarioExistente(true);
+                  setError('');
+                  setPassword('');
+                }}
+              >
+                Usar existente
+              </button>
+            </div>
+
+            {usarUsuarioExistente && (
+              <div className="form-group">
+                <label>Buscar usuario (nombre, cédula o email)</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    value={busquedaUsuario}
+                    onChange={(e) => setBusquedaUsuario(e.target.value)}
+                    placeholder="Ej: 123456 o correo@..."
+                  />
+                  <button type="button" className="btn-primary" onClick={buscarUsuarios} disabled={buscandoUsuarios}>
+                    {buscandoUsuarios ? 'Buscando...' : 'Buscar'}
+                  </button>
+                </div>
+                {usuariosEncontrados.length > 0 && (
+                  <div style={{ marginTop: '8px', display: 'grid', gap: '6px' }}>
+                    {usuariosEncontrados.map((u) => (
+                      <div
+                        key={u.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '8px',
+                          padding: '8px',
+                          border: '1px solid var(--border)',
+                          borderRadius: '8px'
+                        }}
+                      >
+                        <div>
+                          <strong>{u.nombre_completo}</strong>
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                            {u.cedula} · {u.email}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          onClick={() => setUsuarioSeleccionado(u)}
+                        >
+                          Usar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {usuarioSeleccionado && (
+                  <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    Usuario seleccionado: <strong>{usuarioSeleccionado.nombre_completo}</strong>
+                  </div>
+                )}
+              </div>
+            )}
             
             <div className="form-row">
               <div className="form-group">
@@ -315,7 +439,8 @@ export const InstructorForm = ({ instructor, onClose, onSuccess }: InstructorFor
                   type="text"
                   value={nombreCompleto}
                   onChange={(e) => setNombreCompleto(e.target.value)}
-                  required
+                  required={!usarUsuarioExistente}
+                  disabled={usarUsuarioExistente}
                   placeholder="Ej: Juan Pérez García"
                 />
               </div>
@@ -326,7 +451,8 @@ export const InstructorForm = ({ instructor, onClose, onSuccess }: InstructorFor
                   type="text"
                   value={cedula}
                   onChange={(e) => setCedula(e.target.value)}
-                  required
+                  required={!usarUsuarioExistente}
+                  disabled={usarUsuarioExistente}
                   placeholder="Sin puntos ni comas"
                 />
               </div>
@@ -339,7 +465,8 @@ export const InstructorForm = ({ instructor, onClose, onSuccess }: InstructorFor
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  required
+                  required={!usarUsuarioExistente}
+                  disabled={usarUsuarioExistente}
                   placeholder="instructor@ejemplo.com"
                 />
               </div>
@@ -350,22 +477,25 @@ export const InstructorForm = ({ instructor, onClose, onSuccess }: InstructorFor
                   type="tel"
                   value={telefono}
                   onChange={(e) => setTelefono(e.target.value)}
+                  disabled={usarUsuarioExistente}
                   placeholder="3001234567"
                 />
               </div>
             </div>
 
-            <div className="form-group">
-              <label>Contraseña *</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                placeholder="Mínimo 6 caracteres"
-              />
-            </div>
+            {!usarUsuarioExistente && (
+              <div className="form-group">
+                <label>Contraseña *</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  placeholder="Mínimo 6 caracteres"
+                />
+              </div>
+            )}
 
             <div className="form-actions">
               <button type="button" onClick={onClose} className="btn-cancel">
