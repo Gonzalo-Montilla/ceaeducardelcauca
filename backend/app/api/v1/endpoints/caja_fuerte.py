@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
-from datetime import datetime
+from datetime import datetime, date, time
 from decimal import Decimal
 from typing import List, Optional
 from io import BytesIO
@@ -222,8 +222,8 @@ def list_movimientos(
     limit: int = Query(50, ge=1, le=200),
     tipo: Optional[TipoMovimiento] = None,
     metodo_pago: Optional[MetodoPago] = None,
-    fecha_inicio: Optional[datetime] = None,
-    fecha_fin: Optional[datetime] = None,
+    fecha_inicio: Optional[date] = None,
+    fecha_fin: Optional[date] = None,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_admin_or_gerente)
 ):
@@ -237,9 +237,11 @@ def list_movimientos(
     if metodo_pago:
         query = query.filter(MovimientoCajaFuerte.metodo_pago == metodo_pago)
     if fecha_inicio:
-        query = query.filter(MovimientoCajaFuerte.fecha >= fecha_inicio)
+        inicio_dt = datetime.combine(fecha_inicio, time.min)
+        query = query.filter(MovimientoCajaFuerte.fecha >= inicio_dt)
     if fecha_fin:
-        query = query.filter(MovimientoCajaFuerte.fecha <= fecha_fin)
+        fin_dt = datetime.combine(fecha_fin, time.max)
+        query = query.filter(MovimientoCajaFuerte.fecha <= fin_dt)
 
     movimientos = query.order_by(MovimientoCajaFuerte.fecha.desc()).offset(skip).limit(limit).all()
     return [_build_movimiento_response(m) for m in movimientos]
