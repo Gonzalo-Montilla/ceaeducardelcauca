@@ -885,12 +885,14 @@ def _lista_egresos_caja(db: Session, fecha_inicio: date, fecha_fin: date) -> lis
 
     lista = []
     for eg in egresos:
+        metodo = eg.metodo_pago
+        metodo_label = metodo.value if hasattr(metodo, "value") else (metodo or "N/A")
         lista.append(EgresoCajaItem(
             egreso_id=eg.id,
             fecha=eg.fecha,
             concepto=eg.concepto,
             categoria=eg.categoria.value if eg.categoria else None,
-            metodo_pago=eg.metodo_pago.value if eg.metodo_pago else "N/A",
+            metodo_pago=metodo_label,
             monto=eg.monto,
             usuario=eg.usuario.nombre_completo if eg.usuario else None,
             numero_factura=eg.numero_factura,
