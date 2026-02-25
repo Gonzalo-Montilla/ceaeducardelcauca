@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, extract, cast, Date, or_
+from sqlalchemy import func, and_, extract, cast, Date, or_, String
 from typing import Optional
 from datetime import datetime, timedelta, date
 from decimal import Decimal
@@ -715,7 +715,7 @@ def _grafico_estudiantes_categorias(db: Session) -> GraficoEstudiantesCategorias
     """Gráfico de estudiantes por categoría de licencia (solo activos)"""
     certificados_count = db.query(func.count(Estudiante.id)).filter(
         Estudiante.estado.in_([EstadoEstudiante.INSCRITO, EstadoEstudiante.EN_FORMACION, EstadoEstudiante.LISTO_EXAMEN]),
-        Estudiante.tipo_servicio.like("CERTIFICADO%")
+        cast(Estudiante.tipo_servicio, String).like("CERTIFICADO%")
     ).scalar() or 0
 
     resultado = db.query(
@@ -723,7 +723,10 @@ def _grafico_estudiantes_categorias(db: Session) -> GraficoEstudiantesCategorias
         func.count(Estudiante.id).label('total')
     ).filter(
         Estudiante.estado.in_([EstadoEstudiante.INSCRITO, EstadoEstudiante.EN_FORMACION, EstadoEstudiante.LISTO_EXAMEN]),
-        or_(Estudiante.tipo_servicio.is_(None), ~Estudiante.tipo_servicio.like("CERTIFICADO%"))
+        or_(
+            Estudiante.tipo_servicio.is_(None),
+            ~cast(Estudiante.tipo_servicio, String).like("CERTIFICADO%")
+        )
     ).group_by(Estudiante.categoria).all()
     
     total = sum(r.total for r in resultado) + certificados_count
