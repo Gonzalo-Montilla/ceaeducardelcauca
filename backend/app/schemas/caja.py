@@ -2,7 +2,7 @@ from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional
 from datetime import datetime
 from decimal import Decimal
-from app.models.caja import EstadoCaja, TipoMovimiento, ConceptoEgreso
+from app.models.caja import EstadoCaja, TipoMovimiento, ConceptoMovimientoCaja
 from app.models.pago import MetodoPago
 
 
@@ -99,52 +99,6 @@ class CajaDetalle(CajaResumen):
 
 # ==================== MOVIMIENTO CAJA SCHEMAS ====================
 
-class MovimientoCajaCreate(BaseModel):
-    """Schema para crear un movimiento (egreso)"""
-    concepto: str
-    categoria: Optional[ConceptoEgreso] = ConceptoEgreso.OTROS
-    monto: Decimal
-    metodo_pago: MetodoPago
-    numero_factura: Optional[str] = None
-    observaciones: Optional[str] = None
-    
-    @field_validator('monto')
-    @classmethod
-    def validate_monto(cls, v):
-        if v <= 0:
-            raise ValueError('El monto debe ser mayor a cero')
-        return v
-    
-    @field_validator('concepto')
-    @classmethod
-    def validate_concepto(cls, v):
-        if not v or len(v.strip()) < 3:
-            raise ValueError('El concepto debe tener al menos 3 caracteres')
-        return v.strip().upper()
-
-
-class MovimientoCajaResponse(BaseModel):
-    """Schema para respuesta de movimiento"""
-    id: int
-    caja_id: int
-    tipo: TipoMovimiento
-    concepto: str
-    categoria: Optional[ConceptoEgreso]
-    monto: Decimal
-    metodo_pago: MetodoPago
-    numero_factura: Optional[str]
-    comprobante_url: Optional[str]
-    fecha: datetime
-    observaciones: Optional[str]
-    usuario_nombre: str  # Nombre del usuario que registró
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-
-# ==================== PAGO SCHEMAS (actualizados) ====================
-
 class DetallePagoCreate(BaseModel):
     """Schema para un detalle de pago mixto"""
     metodo_pago: MetodoPago
@@ -169,7 +123,79 @@ class DetallePagoResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class MovimientoCajaCreate(BaseModel):
+    """Schema para crear un movimiento (egreso)"""
+    concepto: str
+    categoria: Optional[ConceptoMovimientoCaja] = ConceptoMovimientoCaja.OTROS
+    monto: Decimal
+    metodo_pago: Optional[MetodoPago] = None
+    tercero_nombre: Optional[str] = None
+    tercero_documento: Optional[str] = None
+    numero_factura: Optional[str] = None
+    observaciones: Optional[str] = None
+    es_pago_mixto: bool = False
+    detalles_pago: Optional[list[DetallePagoCreate]] = None
+    
+    @field_validator('monto')
+    @classmethod
+    def validate_monto(cls, v):
+        if v <= 0:
+            raise ValueError('El monto debe ser mayor a cero')
+        return v
+    
+    @field_validator('concepto')
+    @classmethod
+    def validate_concepto(cls, v):
+        if not v or len(v.strip()) < 3:
+            raise ValueError('El concepto debe tener al menos 3 caracteres')
+        return v.strip().upper()
 
+    @model_validator(mode='after')
+    def validate_movimiento(self):
+        if self.es_pago_mixto:
+            if not self.detalles_pago or len(self.detalles_pago) < 2:
+                raise ValueError('Pago mixto debe tener al menos 2 métodos de pago')
+            suma_detalles = sum(d.monto for d in self.detalles_pago)
+            if suma_detalles != self.monto:
+                raise ValueError(f'La suma de detalles ({suma_detalles}) no coincide con el monto total ({self.monto})')
+            if self.metodo_pago is not None:
+                raise ValueError('No debe enviar metodo_pago cuando es pago mixto')
+        else:
+            if not self.metodo_pago:
+                raise ValueError('Debe especificar metodo_pago para pagos simples')
+        return self
+
+
+class MovimientoCajaGeneralCreate(MovimientoCajaCreate):
+    """Schema para crear un movimiento general (ingreso/egreso)"""
+    tipo: TipoMovimiento
+
+
+class MovimientoCajaResponse(BaseModel):
+    """Schema para respuesta de movimiento"""
+    id: int
+    caja_id: int
+    tipo: TipoMovimiento
+    concepto: str
+    categoria: Optional[ConceptoMovimientoCaja]
+    monto: Decimal
+    metodo_pago: Optional[MetodoPago]
+    numero_factura: Optional[str]
+    comprobante_url: Optional[str]
+    fecha: datetime
+    observaciones: Optional[str]
+    tercero_nombre: Optional[str]
+    tercero_documento: Optional[str]
+    es_pago_mixto: bool = False
+    detalles_pago: Optional[list[DetallePagoResponse]] = None
+    usuario_nombre: str  # Nombre del usuario que registró
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+# ==================== PAGO SCHEMAS (actualizados) ====================
 class PagoCreate(BaseModel):
     """Schema para registrar un pago de estudiante"""
     estudiante_id: int

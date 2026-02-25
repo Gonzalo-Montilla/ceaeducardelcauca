@@ -13,8 +13,8 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 from reportlab.lib import colors
 from app.core.database import get_db
-from app.core.security import get_password_hash
-from app.core.precios import calcular_precio, obtener_categoria_licencia
+from app.core.security import get_password_hash, verify_password
+from app.core.precios import calcular_precio, obtener_categoria_licencia, es_certificado_sin_practica
 from app.core.config import settings
 from app.core.email import send_email
 from app.models.usuario import Usuario, RolUsuario
@@ -30,7 +30,8 @@ from app.schemas.estudiante import (
     EstudiantesListResponse,
     DefinirServicioRequest,
     AmpliarServicioRequest,
-    AcreditarHorasRequest
+    AcreditarHorasRequest,
+    CorregirServicioRequest
 )
 from app.api.deps import get_current_active_user, get_admin_or_coordinador_or_cajero, require_role
 
@@ -435,8 +436,45 @@ def definir_servicio(
         # 4. Calcular o asignar valor total
         precio_minimo = calcular_precio(servicio_data.tipo_servicio, db=db)
         if servicio_data.origen_cliente == OrigenCliente.DIRECTO:
-            # Cliente directo: usar precio fijo del sistema
-            estudiante.valor_total_curso = precio_minimo
+            # Cliente directo: precio fijo, con descuento opcional (solo Admin/Gerente)
+            valor_solicitado = servicio_data.valor_total_curso
+            valor_final = precio_minimo
+
+            if valor_solicitado is None:
+                if estudiante.datos_adicionales and "descuento_directo" in estudiante.datos_adicionales:
+                    datos = dict(estudiante.datos_adicionales)
+                    datos.pop("descuento_directo", None)
+                    estudiante.datos_adicionales = datos
+            else:
+                if valor_solicitado > precio_minimo:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"El valor total no puede ser mayor a {precio_minimo}"
+                    )
+                if valor_solicitado < precio_minimo:
+                    if current_user.rol not in [RolUsuario.ADMIN, RolUsuario.GERENTE]:
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="No tiene permisos para aplicar descuento"
+                        )
+                    valor_final = valor_solicitado
+
+                    datos = estudiante.datos_adicionales or {}
+                    datos["descuento_directo"] = {
+                        "valor_base": float(precio_minimo),
+                        "valor_final": float(valor_final),
+                        "aplicado_por_id": current_user.id,
+                        "aplicado_por": current_user.nombre_completo,
+                        "fecha": datetime.utcnow().isoformat()
+                    }
+                    estudiante.datos_adicionales = datos
+                else:
+                    if estudiante.datos_adicionales and "descuento_directo" in estudiante.datos_adicionales:
+                        datos = dict(estudiante.datos_adicionales)
+                        datos.pop("descuento_directo", None)
+                        estudiante.datos_adicionales = datos
+
+            estudiante.valor_total_curso = valor_final
         else:
             # Cliente referido: valor manual, pero no menor al mínimo
             if servicio_data.valor_total_curso is None:
@@ -457,10 +495,16 @@ def definir_servicio(
             CategoriaLicencia.B1: {"teoricas": 30, "practicas": 20},
             CategoriaLicencia.C1: {"teoricas": 36, "practicas": 30},
         }
-        
-        if estudiante.categoria in horas_map:
+
+        if es_certificado_sin_practica(servicio_data.tipo_servicio):
+            estudiante.horas_teoricas_requeridas = 0
+            estudiante.horas_practicas_requeridas = 0
+        elif estudiante.categoria in horas_map:
             estudiante.horas_teoricas_requeridas = horas_map[estudiante.categoria]["teoricas"]
             estudiante.horas_practicas_requeridas = horas_map[estudiante.categoria]["practicas"]
+        else:
+            estudiante.horas_teoricas_requeridas = 0
+            estudiante.horas_practicas_requeridas = 0
 
         if servicio_data.es_recategorizacion:
             datos = dict(estudiante.datos_adicionales or {})
@@ -478,13 +522,48 @@ def definir_servicio(
                 "categoria_nueva": str(servicio_data.categoria_nueva)
             }
             estudiante.datos_adicionales = datos
-        else:
-            # Para certificados y combos, usar valores por defecto
-            estudiante.horas_teoricas_requeridas = 0
-            estudiante.horas_practicas_requeridas = 0
         
         # 6. Inicializar saldo pendiente (igual al valor total)
         estudiante.saldo_pendiente = estudiante.valor_total_curso
+
+        # 6.1 Registrar/actualizar servicio activo para historial por ciclos
+        datos = dict(estudiante.datos_adicionales or {})
+        servicios = list(datos.get("servicios", []))
+        servicio_activo_id = datos.get("servicio_activo_id")
+
+        servicio_entry = None
+        if servicio_activo_id is not None:
+            for s in servicios:
+                if s.get("id") == servicio_activo_id:
+                    servicio_entry = s
+                    break
+
+        if servicio_entry is None:
+            next_id = max([s.get("id", 0) for s in servicios] or [0]) + 1
+            servicio_activo_id = next_id
+            servicio_entry = {"id": servicio_activo_id}
+            servicios.append(servicio_entry)
+
+        servicio_entry.update({
+            "fecha_inicio": servicio_entry.get("fecha_inicio") or (
+                estudiante.fecha_inscripcion.isoformat() if estudiante.fecha_inscripcion else datetime.utcnow().isoformat()
+            ),
+            "fecha_fin": None,
+            "tipo_servicio": str(estudiante.tipo_servicio) if estudiante.tipo_servicio else None,
+            "categoria": str(estudiante.categoria) if estudiante.categoria else None,
+            "origen_cliente": str(estudiante.origen_cliente) if estudiante.origen_cliente else None,
+            "valor_total_curso": float(estudiante.valor_total_curso) if estudiante.valor_total_curso else None,
+            "saldo_pendiente": float(estudiante.saldo_pendiente) if estudiante.saldo_pendiente else None,
+            "horas_teoricas_completadas": estudiante.horas_teoricas_completadas,
+            "horas_practicas_completadas": estudiante.horas_practicas_completadas,
+            "horas_teoricas_requeridas": estudiante.horas_teoricas_requeridas,
+            "horas_practicas_requeridas": estudiante.horas_practicas_requeridas,
+            "estado": "ACTIVO"
+        })
+
+        datos["servicios"] = servicios
+        datos["servicio_activo_id"] = servicio_activo_id
+        estudiante.datos_adicionales = datos
         
         # 7. Guardar observaciones si las hay
         if servicio_data.observaciones:
@@ -531,20 +610,59 @@ def reactivar_estudiante(
         )
     
     try:
+        now_iso = datetime.utcnow().isoformat()
         datos = dict(estudiante.datos_adicionales or {})
         historial = list(datos.get("historial_servicios", []))
-        historial.append({
-            "fecha": datetime.utcnow().isoformat(),
+        servicios = list(datos.get("servicios", []))
+        servicio_activo_id = datos.get("servicio_activo_id")
+
+        snapshot = {
+            "fecha": now_iso,
+            "fecha_inicio": estudiante.fecha_inscripcion.isoformat() if estudiante.fecha_inscripcion else None,
+            "fecha_fin": now_iso,
             "tipo_servicio": str(estudiante.tipo_servicio) if estudiante.tipo_servicio else None,
             "categoria": str(estudiante.categoria) if estudiante.categoria else None,
             "origen_cliente": str(estudiante.origen_cliente) if estudiante.origen_cliente else None,
-            "valor_total_curso": str(estudiante.valor_total_curso) if estudiante.valor_total_curso else None,
-            "saldo_pendiente": str(estudiante.saldo_pendiente) if estudiante.saldo_pendiente else None,
+            "valor_total_curso": float(estudiante.valor_total_curso) if estudiante.valor_total_curso else None,
+            "saldo_pendiente": float(estudiante.saldo_pendiente) if estudiante.saldo_pendiente else None,
             "horas_teoricas_completadas": estudiante.horas_teoricas_completadas,
             "horas_practicas_completadas": estudiante.horas_practicas_completadas,
+            "horas_teoricas_requeridas": estudiante.horas_teoricas_requeridas,
+            "horas_practicas_requeridas": estudiante.horas_practicas_requeridas,
             "estado": str(estudiante.estado)
-        })
+        }
+        historial.append(snapshot)
         datos["historial_servicios"] = historial
+
+        servicio_entry = None
+        if servicio_activo_id is not None:
+            for s in servicios:
+                if s.get("id") == servicio_activo_id:
+                    servicio_entry = s
+                    break
+        if servicio_entry is None and estudiante.tipo_servicio:
+            next_id = max([s.get("id", 0) for s in servicios] or [0]) + 1
+            servicio_entry = {"id": servicio_activo_id or next_id}
+            servicios.append(servicio_entry)
+
+        if servicio_entry is not None:
+            servicio_entry.update({
+                "fecha_inicio": servicio_entry.get("fecha_inicio") or snapshot["fecha_inicio"],
+                "fecha_fin": now_iso,
+                "tipo_servicio": snapshot["tipo_servicio"],
+                "categoria": snapshot["categoria"],
+                "origen_cliente": snapshot["origen_cliente"],
+                "valor_total_curso": snapshot["valor_total_curso"],
+                "saldo_pendiente": snapshot["saldo_pendiente"],
+                "horas_teoricas_completadas": snapshot["horas_teoricas_completadas"],
+                "horas_practicas_completadas": snapshot["horas_practicas_completadas"],
+                "horas_teoricas_requeridas": snapshot["horas_teoricas_requeridas"],
+                "horas_practicas_requeridas": snapshot["horas_practicas_requeridas"],
+                "estado": "FINALIZADO"
+            })
+
+        datos["servicios"] = servicios
+        datos["servicio_activo_id"] = None
         estudiante.datos_adicionales = datos
         
         # Reactivar y resetear datos clave para nuevo servicio
@@ -608,6 +726,12 @@ def acreditar_horas(
             detail="No se pueden acreditar horas a estudiantes inactivos"
         )
 
+    if estudiante.tipo_servicio and es_certificado_sin_practica(estudiante.tipo_servicio):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este servicio no requiere horas de clase"
+        )
+
     if payload.tipo == "TEORICA":
         nuevo = estudiante.horas_teoricas_completadas + payload.horas
         if estudiante.horas_teoricas_requeridas:
@@ -621,6 +745,7 @@ def acreditar_horas(
 
     datos = dict(estudiante.datos_adicionales or {})
     historial = list(datos.get("clases_historial", []))
+    servicio_activo_id = datos.get("servicio_activo_id")
     fecha_iso = datetime.utcnow().isoformat()
     instructor_nombre = None
     vehiculo_label = None
@@ -644,12 +769,29 @@ def acreditar_horas(
         "horas": payload.horas,
         "observaciones": payload.observaciones,
         "usuario_id": current_user.id,
+        "servicio_id": servicio_activo_id,
         "instructor_id": payload.instructor_id,
         "instructor_nombre": instructor_nombre,
         "vehiculo_id": payload.vehiculo_id,
         "vehiculo_label": vehiculo_label
     })
     datos["clases_historial"] = historial
+
+    # Actualizar resumen del servicio activo para progreso por ciclo
+    if servicio_activo_id is not None:
+        servicios = list(datos.get("servicios", []))
+        for s in servicios:
+            if s.get("id") == servicio_activo_id:
+                s["horas_teoricas_completadas"] = estudiante.horas_teoricas_completadas
+                s["horas_practicas_completadas"] = estudiante.horas_practicas_completadas
+                s["horas_teoricas_requeridas"] = estudiante.horas_teoricas_requeridas
+                s["horas_practicas_requeridas"] = estudiante.horas_practicas_requeridas
+                s["saldo_pendiente"] = float(estudiante.saldo_pendiente) if estudiante.saldo_pendiente is not None else None
+                s["valor_total_curso"] = float(estudiante.valor_total_curso) if estudiante.valor_total_curso is not None else None
+                s["estado"] = "ACTIVO"
+                break
+        datos["servicios"] = servicios
+
     estudiante.datos_adicionales = datos
 
     if estudiante.esta_listo_para_examen:
@@ -744,9 +886,15 @@ def ampliar_servicio(
         CategoriaLicencia.B1: {"teoricas": 30, "practicas": 20},
         CategoriaLicencia.C1: {"teoricas": 36, "practicas": 30},
     }
-    if estudiante.categoria in horas_map:
+    if es_certificado_sin_practica(servicio_data.tipo_servicio_nuevo):
+        estudiante.horas_teoricas_requeridas = 0
+        estudiante.horas_practicas_requeridas = 0
+    elif estudiante.categoria in horas_map:
         estudiante.horas_teoricas_requeridas = horas_map[estudiante.categoria]["teoricas"]
         estudiante.horas_practicas_requeridas = horas_map[estudiante.categoria]["practicas"]
+    else:
+        estudiante.horas_teoricas_requeridas = 0
+        estudiante.horas_practicas_requeridas = 0
 
     datos = dict(estudiante.datos_adicionales or {})
     ampliaciones = list(datos.get("ampliaciones_servicio", []))
@@ -762,11 +910,166 @@ def ampliar_servicio(
         "observaciones": servicio_data.observaciones
     })
     datos["ampliaciones_servicio"] = ampliaciones
+    servicios = list(datos.get("servicios", []))
+    servicio_activo_id = datos.get("servicio_activo_id")
+    servicio_entry = None
+    if servicio_activo_id is not None:
+        for s in servicios:
+            if s.get("id") == servicio_activo_id:
+                servicio_entry = s
+                break
+    if servicio_entry is None and estudiante.tipo_servicio:
+        next_id = max([s.get("id", 0) for s in servicios] or [0]) + 1
+        servicio_entry = {"id": servicio_activo_id or next_id}
+        servicio_activo_id = servicio_entry["id"]
+        servicios.append(servicio_entry)
+    if servicio_entry is not None:
+        servicio_entry.update({
+            "tipo_servicio": str(estudiante.tipo_servicio) if estudiante.tipo_servicio else None,
+            "categoria": str(estudiante.categoria) if estudiante.categoria else None,
+            "valor_total_curso": float(estudiante.valor_total_curso) if estudiante.valor_total_curso else None,
+            "saldo_pendiente": float(estudiante.saldo_pendiente) if estudiante.saldo_pendiente else None,
+            "horas_teoricas_requeridas": estudiante.horas_teoricas_requeridas,
+            "horas_practicas_requeridas": estudiante.horas_practicas_requeridas,
+            "estado": "ACTIVO"
+        })
+    datos["servicios"] = servicios
+    datos["servicio_activo_id"] = servicio_activo_id
     estudiante.datos_adicionales = datos
 
     db.commit()
     db.refresh(estudiante)
 
+    return _build_estudiante_response(estudiante, db)
+
+
+@router.put("/{estudiante_id}/corregir-servicio", response_model=EstudianteResponse)
+def corregir_servicio(
+    estudiante_id: int,
+    payload: CorregirServicioRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_role([RolUsuario.ADMIN, RolUsuario.GERENTE]))
+):
+    """
+    Corregir servicio mal definido:
+    - Solo permitido si no hay pagos ni horas acreditadas
+    - Requiere contraseña del admin/gerente
+    - Registra historial de correcciones en datos_adicionales
+    """
+    estudiante = db.query(Estudiante).filter(Estudiante.id == estudiante_id).first()
+    if not estudiante:
+        raise HTTPException(status_code=404, detail="Estudiante no encontrado")
+
+    if not verify_password(payload.password, current_user.password_hash):
+        raise HTTPException(status_code=403, detail="Contraseña incorrecta")
+
+    if estudiante.tipo_servicio == payload.tipo_servicio_nuevo:
+        raise HTTPException(status_code=400, detail="El servicio nuevo debe ser diferente al actual")
+
+    if estudiante.horas_teoricas_completadas > 0 or estudiante.horas_practicas_completadas > 0:
+        raise HTTPException(
+            status_code=400,
+            detail="No se puede corregir el servicio con horas acreditadas"
+        )
+
+    pago_existente = db.query(Pago).filter(
+        Pago.estudiante_id == estudiante.id,
+        Pago.estado == EstadoPago.COMPLETADO
+    ).first()
+    if pago_existente:
+        raise HTTPException(
+            status_code=400,
+            detail="No se puede corregir el servicio con pagos registrados"
+        )
+
+    total_pagado = Decimal("0")
+    if estudiante.valor_total_curso is not None and estudiante.saldo_pendiente is not None:
+        total_pagado = Decimal(str(estudiante.valor_total_curso)) - Decimal(str(estudiante.saldo_pendiente))
+    if total_pagado > 0:
+        raise HTTPException(
+            status_code=400,
+            detail="No se puede corregir el servicio con pagos registrados"
+        )
+
+    precio_minimo = calcular_precio(payload.tipo_servicio_nuevo, db=db)
+    if estudiante.origen_cliente == OrigenCliente.DIRECTO:
+        nuevo_valor_total = precio_minimo
+    else:
+        if payload.valor_total_curso is None:
+            raise HTTPException(status_code=400, detail="El valor total es obligatorio para clientes referidos")
+        if payload.valor_total_curso < precio_minimo:
+            raise HTTPException(status_code=400, detail=f"El valor total no puede ser menor a {precio_minimo}")
+        nuevo_valor_total = payload.valor_total_curso
+
+    tipo_anterior = estudiante.tipo_servicio
+    categoria_anterior = estudiante.categoria
+    valor_anterior = Decimal(str(estudiante.valor_total_curso or 0))
+
+    estudiante.tipo_servicio = payload.tipo_servicio_nuevo
+    estudiante.categoria = obtener_categoria_licencia(payload.tipo_servicio_nuevo)
+    estudiante.valor_total_curso = nuevo_valor_total
+    estudiante.saldo_pendiente = nuevo_valor_total
+
+    horas_map = {
+        CategoriaLicencia.A2: {"teoricas": 28, "practicas": 15},
+        CategoriaLicencia.B1: {"teoricas": 30, "practicas": 20},
+        CategoriaLicencia.C1: {"teoricas": 36, "practicas": 30},
+    }
+    if es_certificado_sin_practica(payload.tipo_servicio_nuevo):
+        estudiante.horas_teoricas_requeridas = 0
+        estudiante.horas_practicas_requeridas = 0
+    elif estudiante.categoria in horas_map:
+        estudiante.horas_teoricas_requeridas = horas_map[estudiante.categoria]["teoricas"]
+        estudiante.horas_practicas_requeridas = horas_map[estudiante.categoria]["practicas"]
+    else:
+        estudiante.horas_teoricas_requeridas = 0
+        estudiante.horas_practicas_requeridas = 0
+
+    datos = dict(estudiante.datos_adicionales or {})
+    correcciones = list(datos.get("correcciones_servicio", []))
+    correcciones.append({
+        "fecha": datetime.utcnow().isoformat(),
+        "usuario_id": current_user.id,
+        "usuario_nombre": current_user.nombre_completo,
+        "motivo": payload.motivo,
+        "tipo_anterior": str(tipo_anterior) if tipo_anterior else None,
+        "tipo_nuevo": str(payload.tipo_servicio_nuevo),
+        "categoria_anterior": str(categoria_anterior) if categoria_anterior else None,
+        "categoria_nueva": str(estudiante.categoria) if estudiante.categoria else None,
+        "valor_anterior": str(valor_anterior),
+        "valor_nuevo": str(nuevo_valor_total)
+    })
+    datos["correcciones_servicio"] = correcciones
+    datos.pop("descuento_directo", None)
+
+    servicios = list(datos.get("servicios", []))
+    servicio_activo_id = datos.get("servicio_activo_id")
+    servicio_entry = None
+    if servicio_activo_id is not None:
+        for s in servicios:
+            if s.get("id") == servicio_activo_id:
+                servicio_entry = s
+                break
+    if servicio_entry is None and estudiante.tipo_servicio:
+        next_id = max([s.get("id", 0) for s in servicios] or [0]) + 1
+        servicio_entry = {"id": servicio_activo_id or next_id}
+        servicios.append(servicio_entry)
+    if servicio_entry is not None:
+        servicio_entry.update({
+            "tipo_servicio": str(estudiante.tipo_servicio) if estudiante.tipo_servicio else None,
+            "categoria": str(estudiante.categoria) if estudiante.categoria else None,
+            "valor_total_curso": float(estudiante.valor_total_curso) if estudiante.valor_total_curso else None,
+            "saldo_pendiente": float(estudiante.saldo_pendiente) if estudiante.saldo_pendiente else None,
+            "horas_teoricas_requeridas": estudiante.horas_teoricas_requeridas,
+            "horas_practicas_requeridas": estudiante.horas_practicas_requeridas,
+            "estado": "ACTIVO"
+        })
+    datos["servicios"] = servicios
+    datos["servicio_activo_id"] = servicio_activo_id
+    estudiante.datos_adicionales = datos
+
+    db.commit()
+    db.refresh(estudiante)
     return _build_estudiante_response(estudiante, db)
 
 
@@ -1400,8 +1703,12 @@ def _build_estudiante_response(estudiante: Estudiante, db: Session = None) -> Es
         historial_pagos = [_build_pago_response(p) for p in pagos]
     
     clases_historial = []
+    servicios = []
+    servicio_activo_id = None
     if estudiante.datos_adicionales:
         clases_historial = estudiante.datos_adicionales.get("clases_historial", [])
+        servicios = estudiante.datos_adicionales.get("servicios", [])
+        servicio_activo_id = estudiante.datos_adicionales.get("servicio_activo_id")
 
     return EstudianteResponse(
         id=estudiante.id,
@@ -1448,5 +1755,7 @@ def _build_estudiante_response(estudiante: Estudiante, db: Session = None) -> Es
         progreso_practico=estudiante.progreso_practico,
         esta_listo_para_examen=estudiante.esta_listo_para_examen,
         historial_pagos=historial_pagos,
-        clases_historial=clases_historial
+        clases_historial=clases_historial,
+        servicios=servicios,
+        servicio_activo_id=servicio_activo_id
     )

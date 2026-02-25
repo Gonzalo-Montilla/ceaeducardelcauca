@@ -380,6 +380,12 @@
   justify-content: flex-end;
 }
 
+.acciones-academicas-row {
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
 .btn-ampliar {
   display: inline-flex;
   align-items: center;
@@ -393,12 +399,31 @@
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
+  min-width: 210px;
+  justify-content: center;
 }
 
 .btn-ampliar:hover {
   background: var(--surface-2);
   border-color: var(--border);
   transform: translateY(-1px);
+}
+
+.btn-ampliar-primary {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.btn-ampliar-primary:hover {
+  background: var(--primary-600);
+  border-color: var(--primary-600);
+}
+
+.btn-ampliar-secondary {
+  background: #fff;
+  color: var(--text-secondary);
+  border-color: var(--border);
 }
 
 .btn-pago {
@@ -513,6 +538,69 @@
   font-weight: 700;
   color: #1e293b;
   margin-bottom: 16px;
+}
+
+/* Historial de servicios */
+.servicios-historial {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 2px solid #e2e8f0;
+}
+
+.servicios-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.servicio-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  transition: all 0.2s;
+}
+
+.servicio-item:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.servicio-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.servicio-titulo {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.servicio-estado {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  background: #e2e8f0;
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+
+.servicio-estado.activo {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.servicio-detalles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: #475569;
 }
 
 .historial-lista {

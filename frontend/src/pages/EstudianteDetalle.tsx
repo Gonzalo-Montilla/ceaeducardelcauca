@@ -37,6 +37,22 @@ interface PagoHistorial {
   detalles_pago: DetallePagoItem[];
 }
 
+interface ServicioHistorialItem {
+  id: number;
+  tipo_servicio?: string;
+  categoria?: string;
+  origen_cliente?: string;
+  valor_total_curso?: number;
+  saldo_pendiente?: number;
+  horas_teoricas_completadas?: number;
+  horas_practicas_completadas?: number;
+  horas_teoricas_requeridas?: number;
+  horas_practicas_requeridas?: number;
+  fecha_inicio?: string;
+  fecha_fin?: string | null;
+  estado?: string;
+}
+
 interface Estudiante {
   id: number;
   usuario_id: number;
@@ -77,6 +93,8 @@ interface Estudiante {
   horas_practicas_completadas: number;
   horas_practicas_requeridas: number;
   historial_pagos?: PagoHistorial[];
+  servicios?: ServicioHistorialItem[];
+  servicio_activo_id?: number | null;
 }
 
 export const EstudianteDetalle = () => {
@@ -98,6 +116,14 @@ export const EstudianteDetalle = () => {
   const [comboTipo, setComboTipo] = useState('');
   const [valorCombo, setValorCombo] = useState('');
   const [observacionesCombo, setObservacionesCombo] = useState('');
+  const [servicioVistaId, setServicioVistaId] = useState<number | null>(null);
+  const [showCorregirModal, setShowCorregirModal] = useState(false);
+  const [corregirTipoServicio, setCorregirTipoServicio] = useState('');
+  const [corregirValor, setCorregirValor] = useState('');
+  const [corregirMotivo, setCorregirMotivo] = useState('');
+  const [corregirPassword, setCorregirPassword] = useState('');
+  const [corregirError, setCorregirError] = useState('');
+  const [corregirLoading, setCorregirLoading] = useState(false);
   const [editForm, setEditForm] = useState({
     primer_nombre: '',
     segundo_nombre: '',
@@ -136,6 +162,12 @@ export const EstudianteDetalle = () => {
       }
     }
   }, [showAmpliarModal, comboTipo, tarifas, estudiante?.origen_cliente, valorCombo]);
+
+  useEffect(() => {
+    if (!estudiante?.servicios || estudiante.servicios.length === 0) return;
+    const activo = estudiante.servicio_activo_id ?? estudiante.servicios[0].id;
+    setServicioVistaId(activo);
+  }, [estudiante]);
 
   const cargarEstudiante = async () => {
     try {
@@ -190,6 +222,30 @@ export const EstudianteDetalle = () => {
     });
   };
 
+  const formatearFechaCorta = (fecha?: string | null) => {
+    if (!fecha) return 'N/A';
+    return formatearFecha(fecha);
+  };
+
+  const getServicioVista = () => {
+    if (!estudiante?.servicios || estudiante.servicios.length === 0) return null;
+    const id = servicioVistaId ?? estudiante.servicio_activo_id ?? estudiante.servicios[0].id;
+    return estudiante.servicios.find((s) => s.id === id) || null;
+  };
+
+  const resolverValor = (valorServicio?: number, fallback?: number) => {
+    if (valorServicio === undefined || valorServicio === null) return fallback || 0;
+    if (valorServicio === 0 && (fallback || 0) > 0) return fallback || 0;
+    return valorServicio;
+  };
+
+  const getProgreso = (completadas?: number, requeridas?: number) => {
+    if (!requeridas) return 0;
+    return Math.min(100, (Number(completadas || 0) / Number(requeridas)) * 100);
+  };
+
+  const servicioVista = getServicioVista();
+
   const formatearMoneda = (valor?: number) => {
     if (!valor) return '$0';
     return new Intl.NumberFormat('es-CO', {
@@ -208,7 +264,7 @@ export const EstudianteDetalle = () => {
     return esCertificado ? base + practica : base;
   };
 
-  const getServicioActualLabel = () => {
+  const getServicioLabel = (tipo?: string) => {
     const map: Record<string, string> = {
       LICENCIA_A2: 'Licencia A2 (Moto)',
       LICENCIA_B1: 'Licencia B1 (Automóvil)',
@@ -225,7 +281,79 @@ export const EstudianteDetalle = () => {
       CERTIFICADO_A2_B1_CON_PRACTICA: 'Certificado A2 + B1 con práctica',
       CERTIFICADO_A2_C1_CON_PRACTICA: 'Certificado A2 + C1 con práctica'
     };
-    return map[estudiante?.tipo_servicio || ''] || (estudiante?.tipo_servicio || 'N/A');
+    return map[tipo || ''] || (tipo || 'N/A');
+  };
+
+  const tiposServicio = [
+    { value: 'LICENCIA_A2', label: 'Licencia A2 (Moto)' },
+    { value: 'LICENCIA_B1', label: 'Licencia B1 (Automóvil)' },
+    { value: 'LICENCIA_C1', label: 'Licencia C1 (Camioneta)' },
+    { value: 'COMBO_A2_B1', label: 'Combo A2 + B1' },
+    { value: 'COMBO_A2_C1', label: 'Combo A2 + C1' },
+    { value: 'CERTIFICADO_MOTO', label: 'Certificado Moto' },
+    { value: 'CERTIFICADO_B1', label: 'Certificado B1' },
+    { value: 'CERTIFICADO_C1', label: 'Certificado C1' },
+    { value: 'CERTIFICADO_B1_SIN_PRACTICA', label: 'Certificado B1 sin práctica' },
+    { value: 'CERTIFICADO_C1_SIN_PRACTICA', label: 'Certificado C1 sin práctica' },
+    { value: 'CERTIFICADO_A2_B1_SIN_PRACTICA', label: 'Certificado A2 + B1 sin práctica' },
+    { value: 'CERTIFICADO_A2_C1_SIN_PRACTICA', label: 'Certificado A2 + C1 sin práctica' },
+    { value: 'CERTIFICADO_A2_B1_CON_PRACTICA', label: 'Certificado A2 + B1 con práctica' },
+    { value: 'CERTIFICADO_A2_C1_CON_PRACTICA', label: 'Certificado A2 + C1 con práctica' },
+  ];
+
+  const getServicioActualLabel = () => getServicioLabel(estudiante?.tipo_servicio);
+
+  const abrirCorregirServicio = () => {
+    if (!estudiante?.tipo_servicio) return;
+    setCorregirTipoServicio(estudiante.tipo_servicio);
+    if (estudiante.origen_cliente === 'DIRECTO') {
+      const minimo = calcularPrecioMinimo(estudiante.tipo_servicio);
+      setCorregirValor(minimo ? minimo.toString() : '');
+    } else {
+      setCorregirValor(estudiante.valor_total_curso ? String(estudiante.valor_total_curso) : '');
+    }
+    setCorregirMotivo('');
+    setCorregirPassword('');
+    setCorregirError('');
+    setShowCorregirModal(true);
+  };
+
+  const cerrarCorregirServicio = () => {
+    setShowCorregirModal(false);
+  };
+
+  const guardarCorreccionServicio = async () => {
+    if (!estudiante) return;
+    if (!corregirTipoServicio || !corregirMotivo.trim() || !corregirPassword.trim()) {
+      setCorregirError('Complete el servicio, motivo y contraseña');
+      return;
+    }
+    setCorregirLoading(true);
+    setCorregirError('');
+    try {
+      const payload: any = {
+        tipo_servicio_nuevo: corregirTipoServicio,
+        motivo: corregirMotivo.trim(),
+        password: corregirPassword
+      };
+      if (estudiante.origen_cliente === 'REFERIDO') {
+        const valorNum = parseInt(corregirValor || '0', 10);
+        if (!valorNum || valorNum <= 0) {
+          setCorregirError('El valor debe ser mayor a 0');
+          setCorregirLoading(false);
+          return;
+        }
+        payload.valor_total_curso = valorNum;
+      }
+      await estudiantesAPI.corregirServicio(estudiante.id, payload);
+      const actualizado = await estudiantesAPI.getById(estudiante.id);
+      setEstudiante(actualizado);
+      setShowCorregirModal(false);
+    } catch (err: any) {
+      setCorregirError(err.response?.data?.detail || 'Error al corregir el servicio');
+    } finally {
+      setCorregirLoading(false);
+    }
   };
 
   const getOpcionesAdicional = () => {
@@ -399,15 +527,12 @@ export const EstudianteDetalle = () => {
     setIsSaving(true);
     setEditError('');
     try {
+      const addIfNotEmpty = (value: string) => {
+        const trimmed = value.trim();
+        return trimmed ? trimmed : undefined;
+      };
       const payload: any = {
-        primer_nombre: editForm.primer_nombre.trim(),
-        segundo_nombre: editForm.segundo_nombre.trim() || null,
-        primer_apellido: editForm.primer_apellido.trim(),
-        segundo_apellido: editForm.segundo_apellido.trim() || null,
-        email: editForm.email.trim(),
-        cedula: editForm.cedula.trim(),
         tipo_documento: editForm.tipo_documento,
-        telefono: editForm.telefono.trim(),
         foto_base64: editFotoBase64 || undefined,
         fecha_nacimiento: editForm.fecha_nacimiento || null,
         direccion: editForm.direccion || null,
@@ -424,6 +549,21 @@ export const EstudianteDetalle = () => {
         contacto_emergencia_nombre: editForm.contacto_emergencia_nombre || null,
         contacto_emergencia_telefono: editForm.contacto_emergencia_telefono || null
       };
+      const primerNombre = addIfNotEmpty(editForm.primer_nombre);
+      const segundoNombre = addIfNotEmpty(editForm.segundo_nombre);
+      const primerApellido = addIfNotEmpty(editForm.primer_apellido);
+      const segundoApellido = addIfNotEmpty(editForm.segundo_apellido);
+      const email = addIfNotEmpty(editForm.email);
+      const cedula = addIfNotEmpty(editForm.cedula);
+      const telefono = addIfNotEmpty(editForm.telefono);
+
+      if (primerNombre !== undefined) payload.primer_nombre = primerNombre;
+      if (segundoNombre !== undefined) payload.segundo_nombre = segundoNombre;
+      if (primerApellido !== undefined) payload.primer_apellido = primerApellido;
+      if (segundoApellido !== undefined) payload.segundo_apellido = segundoApellido;
+      if (email !== undefined) payload.email = email;
+      if (cedula !== undefined) payload.cedula = cedula;
+      if (telefono !== undefined) payload.telefono = telefono;
       const data = await estudiantesAPI.update(Number(id), payload);
       setEstudiante(data);
       setShowEditModal(false);
@@ -800,6 +940,83 @@ export const EstudianteDetalle = () => {
           </div>
         </div>
       )}
+      {showCorregirModal && (
+        <div className="modal-overlay">
+          <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Corregir servicio</h2>
+              <button className="btn-close" onClick={cerrarCorregirServicio}>
+                ✕
+              </button>
+            </div>
+            <form className="modal-form" onSubmit={(e) => e.preventDefault()}>
+              {corregirError && <div className="error-message">{corregirError}</div>}
+              <div className="form-group">
+                <label>Servicio actual</label>
+                <input className="form-input readonly" readOnly value={getServicioActualLabel()} />
+              </div>
+              <div className="form-group">
+                <label>Nuevo servicio *</label>
+                <select
+                  className="form-select"
+                  value={corregirTipoServicio}
+                  onChange={(e) => setCorregirTipoServicio(e.target.value)}
+                  required
+                >
+                  <option value="">Seleccione</option>
+                  {tiposServicio.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              {estudiante.origen_cliente === 'REFERIDO' && (
+                <div className="form-group">
+                  <label>Valor total del curso *</label>
+                  <small className="help-text">
+                    Mínimo permitido: {formatearMoneda(calcularPrecioMinimo(corregirTipoServicio))}
+                  </small>
+                  <input
+                    className="form-input"
+                    value={corregirValor}
+                    onChange={(e) => setCorregirValor(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Ingrese el valor"
+                  />
+                </div>
+              )}
+              <div className="form-group">
+                <label>Motivo de corrección *</label>
+                <textarea
+                  className="form-textarea"
+                  rows={3}
+                  value={corregirMotivo}
+                  onChange={(e) => setCorregirMotivo(e.target.value.toUpperCase())}
+                  placeholder="DETALLE DEL ERROR Y CORRECCIÓN"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Contraseña Admin/Gerente *</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  value={corregirPassword}
+                  onChange={(e) => setCorregirPassword(e.target.value)}
+                  placeholder="********"
+                  required
+                />
+              </div>
+              <div className="modal-footer" style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn-outline" onClick={cerrarCorregirServicio}>
+                  Cancelar
+                </button>
+                <button type="button" className="btn" onClick={guardarCorreccionServicio} disabled={corregirLoading}>
+                  {corregirLoading ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {contratoPreviewUrl && (
         <div className="pdf-preview-modal">
           <div className="pdf-preview-content" onClick={(e) => e.stopPropagation()}>
@@ -934,37 +1151,117 @@ export const EstudianteDetalle = () => {
         {estudiante.categoria && (
           <div className="detalle-card">
             <h2><FileText size={20} /> Información Académica</h2>
+            {estudiante.servicios && estudiante.servicios.length > 0 && (
+              <div className="form-group">
+                <label>Ver servicio</label>
+                <select
+                  value={servicioVistaId ?? ''}
+                  onChange={(e) => setServicioVistaId(Number(e.target.value))}
+                >
+                  {estudiante.servicios.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      Servicio {s.id} {s.estado ? `(${s.estado})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="info-rows">
               <div className="info-row">
-                <span className="label">Servicio actual:</span>
-                <span className="value badge-categoria">{getServicioActualLabel()}</span>
+                <span className="label">Servicio:</span>
+                <span className="value badge-categoria">
+                  {servicioVista ? getServicioLabel(servicioVista.tipo_servicio) : getServicioActualLabel()}
+                </span>
               </div>
               <div className="info-row">
                 <span className="label">Fecha de Inscripción:</span>
-                <span className="value">{formatearFecha(estudiante.fecha_inscripcion)}</span>
+                <span className="value">
+                  {formatearFechaCorta(servicioVista?.fecha_inicio || estudiante.fecha_inscripcion)}
+                </span>
               </div>
               <div className="info-row">
                 <span className="label">Horas Teóricas:</span>
-                <span className="value">{estudiante.horas_teoricas_completadas} / {estudiante.horas_teoricas_requeridas}</span>
+                <span className="value">
+                  {resolverValor(servicioVista?.horas_teoricas_completadas, estudiante.horas_teoricas_completadas)} / {resolverValor(servicioVista?.horas_teoricas_requeridas, estudiante.horas_teoricas_requeridas)}
+                </span>
               </div>
               <div className="progreso-bar">
-                <div className="progreso-fill" style={{ width: `${estudiante.progreso_teorico}%` }}></div>
-                <span className="progreso-text">{estudiante.progreso_teorico.toFixed(0)}%</span>
+                {(() => {
+                  const teoricasCompletadas = resolverValor(servicioVista?.horas_teoricas_completadas, estudiante.horas_teoricas_completadas);
+                  const teoricasRequeridas = resolverValor(servicioVista?.horas_teoricas_requeridas, estudiante.horas_teoricas_requeridas);
+                  const progreso = getProgreso(teoricasCompletadas, teoricasRequeridas);
+                  return (
+                    <>
+                      <div className="progreso-fill" style={{ width: `${progreso}%` }}></div>
+                      <span className="progreso-text">{progreso.toFixed(0)}%</span>
+                    </>
+                  );
+                })()}
               </div>
               <div className="info-row">
                 <span className="label">Horas Prácticas:</span>
-                <span className="value">{estudiante.horas_practicas_completadas} / {estudiante.horas_practicas_requeridas}</span>
+                <span className="value">
+                  {resolverValor(servicioVista?.horas_practicas_completadas, estudiante.horas_practicas_completadas)} / {resolverValor(servicioVista?.horas_practicas_requeridas, estudiante.horas_practicas_requeridas)}
+                </span>
               </div>
               <div className="progreso-bar">
-                <div className="progreso-fill progreso-practica" style={{ width: `${estudiante.progreso_practico}%` }}></div>
-                <span className="progreso-text">{estudiante.progreso_practico.toFixed(0)}%</span>
+                {(() => {
+                  const practicasCompletadas = resolverValor(servicioVista?.horas_practicas_completadas, estudiante.horas_practicas_completadas);
+                  const practicasRequeridas = resolverValor(servicioVista?.horas_practicas_requeridas, estudiante.horas_practicas_requeridas);
+                  const progreso = getProgreso(practicasCompletadas, practicasRequeridas);
+                  return (
+                    <>
+                      <div className="progreso-fill progreso-practica" style={{ width: `${progreso}%` }}></div>
+                      <span className="progreso-text">{progreso.toFixed(0)}%</span>
+                    </>
+                  );
+                })()}
               </div>
             </div>
-            {['LICENCIA_A2', 'LICENCIA_B1', 'LICENCIA_C1'].includes(estudiante.tipo_servicio || '') && (
-              <div className="acciones-academicas">
-                <button className="btn-ampliar" onClick={abrirAmpliarServicio}>
+            <div className="acciones-academicas acciones-academicas-row">
+              {['LICENCIA_A2', 'LICENCIA_B1', 'LICENCIA_C1'].includes(estudiante.tipo_servicio || '') && (
+                <button className="btn-ampliar btn-ampliar-primary" onClick={abrirAmpliarServicio}>
                   <PlusCircle size={18} /> Ampliar servicio a combo
                 </button>
+              )}
+              <button className="btn-ampliar btn-ampliar-secondary" onClick={abrirCorregirServicio}>
+                <AlertCircle size={18} /> Corregir servicio
+              </button>
+            </div>
+
+            {estudiante.servicios && estudiante.servicios.length > 0 && (
+              <div className="servicios-historial">
+                <h3 className="historial-title">Historial de servicios</h3>
+                <div className="servicios-lista">
+                  {estudiante.servicios.map((serv) => (
+                    <div key={serv.id} className="servicio-item">
+                      <div className="servicio-header">
+                        <span className="servicio-titulo">
+                          Servicio {serv.id} • {getServicioLabel(serv.tipo_servicio)}
+                        </span>
+                        <span className={`servicio-estado ${serv.estado === 'ACTIVO' ? 'activo' : ''}`}>
+                          {serv.estado || 'FINALIZADO'}
+                        </span>
+                      </div>
+                      <div className="servicio-detalles">
+                        <span>Inicio: {formatearFechaCorta(serv.fecha_inicio)}</span>
+                        <span>Fin: {formatearFechaCorta(serv.fecha_fin)}</span>
+                      </div>
+                      <div className="servicio-detalles">
+                        <span>
+                          Teóricas: {serv.horas_teoricas_completadas ?? 0}/{serv.horas_teoricas_requeridas ?? 0}
+                        </span>
+                        <span>
+                          Prácticas: {serv.horas_practicas_completadas ?? 0}/{serv.horas_practicas_requeridas ?? 0}
+                        </span>
+                      </div>
+                      <div className="servicio-detalles">
+                        <span>Valor: {formatearMoneda(serv.valor_total_curso || 0)}</span>
+                        <span>Saldo: {formatearMoneda(serv.saldo_pendiente || 0)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

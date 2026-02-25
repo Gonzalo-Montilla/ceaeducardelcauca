@@ -15,7 +15,7 @@ from app.models.clase import (
     VehiculoConsumoUmbral
 )
 from app.models.tarifa import Tarifa
-from app.models.caja import Caja, MovimientoCaja, EstadoCaja, TipoMovimiento, ConceptoEgreso
+from app.models.caja import Caja, MovimientoCaja, EstadoCaja, TipoMovimiento, ConceptoMovimientoCaja
 
 __all__ = [
     "Usuario", "RolUsuario",
@@ -25,5 +25,5 @@ __all__ = [
     "Clase", "Instructor", "Vehiculo", "Evaluacion", "MantenimientoVehiculo", "RepuestoMantenimiento", "CombustibleVehiculo",
     "AdjuntoMantenimientoVehiculo", "AdjuntoCombustibleVehiculo", "VehiculoConsumoUmbral",
     "Tarifa",
-    "Caja", "MovimientoCaja", "EstadoCaja", "TipoMovimiento", "ConceptoEgreso"
+    "Caja", "MovimientoCaja", "EstadoCaja", "TipoMovimiento", "ConceptoMovimientoCaja"
 ]

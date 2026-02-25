@@ -87,6 +87,20 @@ export const Caja = () => {
   const [categoriaEgreso, setCategoriaEgreso] = useState('OTROS');
   const [montoEgreso, setMontoEgreso] = useState('');
   const [metodoEgreso, setMetodoEgreso] = useState('EFECTIVO');
+
+  // Estados para movimientos generales (ingreso/egreso)
+  const [showMovimientoGeneral, setShowMovimientoGeneral] = useState(false);
+  const [tipoMovimientoGeneral] = useState<'INGRESO'>('INGRESO');
+  const [conceptoMovimiento, setConceptoMovimiento] = useState('');
+  const [categoriaMovimiento, setCategoriaMovimiento] = useState('OTROS');
+  const [terceroNombre, setTerceroNombre] = useState('');
+  const [terceroDocumento, setTerceroDocumento] = useState('');
+  const [esPagoMixtoMovimiento, setEsPagoMixtoMovimiento] = useState(false);
+  const [metodoMovimiento, setMetodoMovimiento] = useState('EFECTIVO');
+  const [montoMovimiento, setMontoMovimiento] = useState('');
+  const [detallesMovimiento, setDetallesMovimiento] = useState<Array<{metodo: string, monto: string}>>([
+    {metodo: 'EFECTIVO', monto: ''}
+  ]);
   
   // Estados para cierre de caja
   const [showCerrarCaja, setShowCerrarCaja] = useState(false);
@@ -94,9 +108,28 @@ export const Caja = () => {
   const [observacionesCierre, setObservacionesCierre] = useState('');
   const [cerrandoCaja, setCerrandoCaja] = useState(false);
 
+  // Confirmación previa de registro
+  const [showConfirmacion, setShowConfirmacion] = useState(false);
+  const [confirmacionItems, setConfirmacionItems] = useState<Array<{ label: string; valor: number }>>([]);
+  const [confirmacionAction, setConfirmacionAction] = useState<null | (() => Promise<void>)>(null);
+  const [confirmando, setConfirmando] = useState(false);
+
   const soloDigitos = (value: string) => value.replace(/\D/g, '');
   const formatDocumentoBusqueda = (value: string) => {
     return value.toUpperCase().replace(/[^A-Z0-9\-]/g, '').slice(0, 20);
+  };
+  const getMetodoResumenLabel = (metodo: string) => {
+    const labels: Record<string, string> = {
+      EFECTIVO: 'EFECTIVO',
+      NEQUI: 'NEQUI',
+      DAVIPLATA: 'DAVIPLATA',
+      TRANSFERENCIA_BANCARIA: 'TRANSFERENCIA',
+      TARJETA_DEBITO: 'TARJETA DÉBITO',
+      TARJETA_CREDITO: 'TARJETA CRÉDITO',
+      CREDISMART: 'CREDISMART',
+      SISTECREDITO: 'SISTECREDITO'
+    };
+    return labels[metodo] || metodo;
   };
   const getTipoDocumentoLabel = (tipo?: string) => {
     switch (tipo) {
@@ -256,56 +289,65 @@ export const Caja = () => {
       return;
     }
     
-    try {
-      setRegistrandoPago(true);
-      
-      let pagoResponse: any = null;
-      if (esPagoMixto) {
-        // Pago mixto
-        pagoResponse = await cajaAPI.registrarPago({
-          estudiante_id: estudiante.id,
-          monto: montoTotal,
-          concepto: 'Abono al curso',
-          es_pago_mixto: true,
-          detalles_pago: detallesPago
-            .filter(d => parseFloat(d.monto) > 0)
-            .map(d => ({
-              metodo_pago: d.metodo,
-              monto: parseFloat(d.monto)
-            }))
-        });
-      } else {
-        // Pago simple
-        pagoResponse = await cajaAPI.registrarPago({
-          estudiante_id: estudiante.id,
-          monto: montoTotal,
-          metodo_pago: detallesPago[0].metodo,
-          concepto: 'Abono al curso',
-          es_pago_mixto: false
-        });
-      }
-      
-      alert('Pago registrado exitosamente');
-      if (pagoResponse?.id) {
-        const abrir = window.confirm('¿Desea abrir el recibo PDF del pago?');
-        if (abrir) {
-          const blob = await cajaAPI.getPagoReciboPdf(pagoResponse.id);
-          const url = URL.createObjectURL(blob);
-          window.open(url, '_blank');
-          setTimeout(() => URL.revokeObjectURL(url), 10000);
+    const resumenItems = esPagoMixto
+      ? detallesPago
+          .filter(d => parseFloat(d.monto) > 0)
+          .map(d => ({ label: getMetodoResumenLabel(d.metodo), valor: parseFloat(d.monto) }))
+      : [{ label: getMetodoResumenLabel(detallesPago[0].metodo), valor: montoTotal }];
+
+    setConfirmacionItems(resumenItems);
+    setConfirmacionAction(() => async () => {
+      try {
+        setRegistrandoPago(true);
+        
+        let pagoResponse: any = null;
+        if (esPagoMixto) {
+          pagoResponse = await cajaAPI.registrarPago({
+            estudiante_id: estudiante.id,
+            monto: montoTotal,
+            concepto: 'Abono al curso',
+            es_pago_mixto: true,
+            detalles_pago: detallesPago
+              .filter(d => parseFloat(d.monto) > 0)
+              .map(d => ({
+                metodo_pago: d.metodo,
+                monto: parseFloat(d.monto)
+              }))
+          });
+        } else {
+          pagoResponse = await cajaAPI.registrarPago({
+            estudiante_id: estudiante.id,
+            monto: montoTotal,
+            metodo_pago: detallesPago[0].metodo,
+            concepto: 'Abono al curso',
+            es_pago_mixto: false
+          });
         }
+        
+        alert('Pago registrado exitosamente');
+        if (pagoResponse?.id) {
+          const abrir = window.confirm('¿Desea abrir el recibo PDF del pago?');
+          if (abrir) {
+            const blob = await cajaAPI.getPagoReciboPdf(pagoResponse.id);
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
+          }
+        }
+        setMontoPago('');
+        setEsPagoMixto(false);
+        setDetallesPago([{metodo: 'EFECTIVO', monto: ''}]);
+        setCedula('');
+        setEstudiante(null);
+        await cargarCajaActual();
+      } catch (error: any) {
+        alert(error.response?.data?.detail || 'Error al registrar pago');
+      } finally {
+        setRegistrandoPago(false);
       }
-      setMontoPago('');
-      setEsPagoMixto(false);
-      setDetallesPago([{metodo: 'EFECTIVO', monto: ''}]);
-      setCedula('');
-      setEstudiante(null);
-      await cargarCajaActual();
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Error al registrar pago');
-    } finally {
-      setRegistrandoPago(false);
-    }
+    });
+    setConfirmando(false);
+    setShowConfirmacion(true);
   };
   
   const handleRegistrarEgreso = async () => {
@@ -318,33 +360,113 @@ export const Caja = () => {
       return;
     }
     
-    try {
-      const egresoResponse = await cajaAPI.registrarEgreso({
-        concepto: conceptoEgreso,
-        categoria: categoriaEgreso,
-        monto: parseFloat(montoEgreso),
-        metodo_pago: metodoEgreso,
-        numero_factura: null,
-        observaciones: null
-      });
-      
-      alert('Egreso registrado exitosamente');
-      if (egresoResponse?.id) {
-        const abrir = window.confirm('¿Desea abrir el recibo PDF del egreso?');
-        if (abrir) {
-          const blob = await cajaAPI.getEgresoReciboPdf(egresoResponse.id);
-          const url = URL.createObjectURL(blob);
-          window.open(url, '_blank');
-          setTimeout(() => URL.revokeObjectURL(url), 10000);
+    const resumenItems = [{ label: getMetodoResumenLabel(metodoEgreso), valor: parseFloat(montoEgreso) }];
+    setConfirmacionItems(resumenItems);
+    setConfirmacionAction(() => async () => {
+      try {
+        const egresoResponse = await cajaAPI.registrarEgreso({
+          concepto: conceptoEgreso,
+          categoria: categoriaEgreso,
+          monto: parseFloat(montoEgreso),
+          metodo_pago: metodoEgreso,
+          numero_factura: null,
+          observaciones: null
+        });
+        
+        alert('Egreso registrado exitosamente');
+        if (egresoResponse?.id) {
+          const abrir = window.confirm('¿Desea abrir el recibo PDF del egreso?');
+          if (abrir) {
+            const blob = await cajaAPI.getEgresoReciboPdf(egresoResponse.id);
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
+          }
         }
+        setShowEgreso(false);
+        setConceptoEgreso('');
+        setMontoEgreso('');
+        await cargarCajaActual();
+      } catch (error: any) {
+        alert(error.response?.data?.detail || 'Error al registrar egreso');
       }
-      setShowEgreso(false);
-      setConceptoEgreso('');
-      setMontoEgreso('');
-      await cargarCajaActual();
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Error al registrar egreso');
+    });
+    setConfirmando(false);
+    setShowConfirmacion(true);
+  };
+
+  const handleRegistrarMovimientoGeneral = async () => {
+    if (!conceptoMovimiento.trim() || (!esPagoMixtoMovimiento && !montoMovimiento)) {
+      alert('Complete todos los campos');
+      return;
     }
+    const montoTotal = esPagoMixtoMovimiento
+      ? detallesMovimiento.reduce((sum, d) => sum + (parseFloat(d.monto) || 0), 0)
+      : parseFloat(montoMovimiento);
+    if (montoTotal <= 0) {
+      alert('El monto debe ser mayor a cero');
+      return;
+    }
+    if (esPagoMixtoMovimiento) {
+      const detallesConMonto = detallesMovimiento.filter(d => parseFloat(d.monto) > 0);
+      if (detallesConMonto.length < 2) {
+        alert('Pago mixto debe tener al menos 2 métodos con monto');
+        return;
+      }
+    }
+    const resumenItems = esPagoMixtoMovimiento
+      ? detallesMovimiento
+          .filter(d => parseFloat(d.monto) > 0)
+          .map(d => ({ label: getMetodoResumenLabel(d.metodo), valor: parseFloat(d.monto) }))
+      : [{ label: getMetodoResumenLabel(metodoMovimiento), valor: montoTotal }];
+
+    setConfirmacionItems(resumenItems);
+    setConfirmacionAction(() => async () => {
+      try {
+        const payload: any = {
+          tipo: tipoMovimientoGeneral,
+          concepto: conceptoMovimiento,
+          categoria: categoriaMovimiento,
+          monto: montoTotal,
+          observaciones: null,
+          tercero_nombre: terceroNombre.trim() || null,
+          tercero_documento: terceroDocumento.trim() || null,
+          es_pago_mixto: esPagoMixtoMovimiento
+        };
+        if (esPagoMixtoMovimiento) {
+          payload.detalles_pago = detallesMovimiento
+            .filter(d => parseFloat(d.monto) > 0)
+            .map(d => ({ metodo_pago: d.metodo, monto: parseFloat(d.monto) }));
+        } else {
+          payload.metodo_pago = metodoMovimiento;
+        }
+        const movimientoResponse = await cajaAPI.registrarMovimientoGeneral(payload);
+        alert('Movimiento registrado exitosamente');
+        if (movimientoResponse?.id) {
+          const abrir = window.confirm('¿Desea abrir el recibo PDF del ingreso?');
+          if (abrir) {
+            const blob = await cajaAPI.getMovimientoReciboPdf(movimientoResponse.id);
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
+          }
+        }
+        setShowMovimientoGeneral(false);
+        setConceptoMovimiento('');
+        setCategoriaMovimiento('OTROS');
+        setTerceroNombre('');
+        setTerceroDocumento('');
+        setEsPagoMixtoMovimiento(false);
+        setMetodoMovimiento('EFECTIVO');
+        setMontoMovimiento('');
+        setDetallesMovimiento([{metodo: 'EFECTIVO', monto: ''}]);
+        await cargarCajaActual();
+      } catch (error: any) {
+        alert(error.response?.data?.detail || 'Error al registrar movimiento');
+      }
+    });
+    setConfirmando(false);
+    setShowConfirmacion(true);
   };
   
   const handleCerrarCaja = async () => {
@@ -718,12 +840,70 @@ export const Caja = () => {
         </div>
         )}
       </div>
-      
+
+      {showConfirmacion && (
+        <div className="modal-overlay confirmacion-overlay">
+          <div className="modal-box confirmacion-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="confirmacion-header">
+                <span className="confirmacion-icon">
+                  <AlertCircle size={20} />
+                </span>
+                <div>
+                  <h3>ADVERTENCIA</h3>
+                  <p className="confirmacion-subtitulo">Verifica el resumen antes de continuar</p>
+                </div>
+              </div>
+              <button onClick={() => setShowConfirmacion(false)} className="btn-icon">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="confirmacion-texto">¿Estás seguro de registrar el movimiento?</p>
+              <div className="confirmacion-resumen">
+                <h4>RESUMEN</h4>
+                <div className="confirmacion-lista">
+                  {confirmacionItems.map((item, index) => (
+                    <div key={`${item.label}-${index}`} className="confirmacion-item">
+                      <span className="confirmacion-label">{item.label}</span>
+                      <span className="confirmacion-valor">{formatCurrency(item.valor)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button onClick={() => setShowConfirmacion(false)} className="btn-secondary">
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  if (!confirmacionAction || confirmando) return;
+                  setConfirmando(true);
+                  setShowConfirmacion(false);
+                  await confirmacionAction();
+                  setConfirmacionAction(null);
+                  setConfirmando(false);
+                }}
+                className="btn-primary"
+                disabled={!confirmacionAction || confirmando}
+              >
+                {confirmando ? 'Procesando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Acciones rápidas */}
       <div className="actions-bar">
         <button onClick={() => setShowEgreso(true)} className="btn-action">
           <Plus size={20} />
           Registrar Egreso
+        </button>
+        <button onClick={() => setShowMovimientoGeneral(true)} className="btn-action">
+          <Plus size={20} />
+          Registrar Otro Concepto
         </button>
         <button onClick={() => setShowCerrarCaja(true)} className="btn-action btn-danger">
           <X size={20} />
@@ -922,7 +1102,7 @@ export const Caja = () => {
                   </div>
                 )}
                 
-                <button onClick={handleRegistrarPago} disabled={registrandoPago} className="btn-primary-full">
+              <button type="button" onClick={handleRegistrarPago} disabled={registrandoPago} className="btn-primary-full">
                   {registrandoPago ? 'Registrando...' : 'Registrar Pago'}
                 </button>
               </div>
@@ -986,6 +1166,8 @@ export const Caja = () => {
                   <option value="TRANSFERENCIA_BANCARIA">Transferencia Bancaria</option>
                   <option value="TARJETA_DEBITO">Tarjeta Débito</option>
                   <option value="TARJETA_CREDITO">Tarjeta Crédito</option>
+                  <option value="CREDISMART">CrediSmart</option>
+                  <option value="SISTECREDITO">Sistecredito</option>
                 </select>
               </div>
             </div>
@@ -993,8 +1175,198 @@ export const Caja = () => {
               <button onClick={() => setShowEgreso(false)} className="btn-secondary">
                 Cancelar
               </button>
-              <button onClick={handleRegistrarEgreso} className="btn-primary">
+              <button type="button" onClick={handleRegistrarEgreso} className="btn-primary">
                 Registrar Egreso
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Movimiento General */}
+      {showMovimientoGeneral && (
+        <div className="modal-overlay">
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Registrar Otro Concepto</h3>
+              <button onClick={() => setShowMovimientoGeneral(false)} className="btn-icon">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Tipo</label>
+                <input className="form-input readonly" readOnly value="Ingreso" />
+              </div>
+              <div className="form-group">
+                <label>Categoría *</label>
+                <select
+                  value={categoriaMovimiento}
+                  onChange={(e) => setCategoriaMovimiento(e.target.value)}
+                  className="form-select"
+                >
+                  <option value="ESTUDIANTE_NO_REGISTRADO">Estudiante no registrado</option>
+                  <option value="PAGO_PRESTAMO_EMPLEADO">Pago préstamo empleado</option>
+                  <option value="VENTA_MATERIAL">Venta material / trámites</option>
+                  <option value="INGRESO_ADMINISTRATIVO">Ingreso administrativo</option>
+                  <option value="OTROS">Otros</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Concepto *</label>
+                <input
+                  type="text"
+                  value={conceptoMovimiento}
+                  onChange={(e) => setConceptoMovimiento(e.target.value.toUpperCase())}
+                  placeholder="Descripción del movimiento"
+                  className="form-input"
+                />
+              </div>
+              <div className="form-group">
+                <label>Pagó / Tercero</label>
+                <input
+                  type="text"
+                  value={terceroNombre}
+                  onChange={(e) => setTerceroNombre(e.target.value.toUpperCase())}
+                  placeholder="Nombre de quien paga"
+                  className="form-input"
+                />
+              </div>
+              <div className="form-group">
+                <label>Documento (opcional)</label>
+                <input
+                  type="text"
+                  value={terceroDocumento}
+                  onChange={(e) => setTerceroDocumento(e.target.value.toUpperCase())}
+                  placeholder="Documento"
+                  className="form-input"
+                />
+              </div>
+              <div className="form-group">
+                <label className="checkbox-label pago-mixto-label">
+                  <input
+                    type="checkbox"
+                    checked={esPagoMixtoMovimiento}
+                    onChange={(e) => {
+                      setEsPagoMixtoMovimiento(e.target.checked);
+                      if (e.target.checked) {
+                        setDetallesMovimiento([{metodo: 'EFECTIVO', monto: ''}, {metodo: 'NEQUI', monto: ''}]);
+                      } else {
+                        setDetallesMovimiento([{metodo: 'EFECTIVO', monto: montoMovimiento}]);
+                      }
+                    }}
+                  />
+                  <span className="checkbox-custom" aria-hidden="true"></span>
+                  <span className="checkbox-text">Pago Mixto (varios métodos)</span>
+                </label>
+              </div>
+              {!esPagoMixtoMovimiento ? (
+                <>
+                  <div className="form-group">
+                    <label>Monto *</label>
+                    <input
+                      type="number"
+                      value={montoMovimiento}
+                      onChange={(e) => setMontoMovimiento(e.target.value)}
+                      placeholder="0"
+                      className="form-input"
+                      min="0"
+                      step="100"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Método de Pago</label>
+                    <select
+                      value={metodoMovimiento}
+                      onChange={(e) => setMetodoMovimiento(e.target.value)}
+                      className="form-select"
+                    >
+                      <option value="EFECTIVO">Efectivo</option>
+                      <option value="NEQUI">Nequi</option>
+                      <option value="DAVIPLATA">Daviplata</option>
+                      <option value="TRANSFERENCIA_BANCARIA">Transferencia Bancaria</option>
+                      <option value="TARJETA_DEBITO">Tarjeta Débito</option>
+                      <option value="TARJETA_CREDITO">Tarjeta Crédito</option>
+                      <option value="CREDISMART">CrediSmart</option>
+                      <option value="SISTECREDITO">Sistecredito</option>
+                    </select>
+                  </div>
+                </>
+              ) : (
+                <div className="pago-mixto-container">
+                  {detallesMovimiento.map((detalle, index) => (
+                    <div key={index} className="detalle-pago-row">
+                      <div className="form-group" style={{flex: 1}}>
+                        <label>Método {index + 1}</label>
+                        <select
+                          value={detalle.metodo}
+                          onChange={(e) => {
+                            const newDetalles = [...detallesMovimiento];
+                            newDetalles[index].metodo = e.target.value;
+                            setDetallesMovimiento(newDetalles);
+                          }}
+                          className="form-select"
+                        >
+                          <option value="EFECTIVO">Efectivo</option>
+                          <option value="NEQUI">Nequi</option>
+                          <option value="DAVIPLATA">Daviplata</option>
+                          <option value="TRANSFERENCIA_BANCARIA">Transferencia</option>
+                          <option value="TARJETA_DEBITO">T. Débito</option>
+                          <option value="TARJETA_CREDITO">T. Crédito</option>
+                          <option value="CREDISMART">CrediSmart</option>
+                          <option value="SISTECREDITO">Sistecredito</option>
+                        </select>
+                      </div>
+                      <div className="form-group" style={{flex: 1}}>
+                        <label>Monto</label>
+                        <input
+                          type="number"
+                          value={detalle.monto}
+                          onChange={(e) => {
+                            const newDetalles = [...detallesMovimiento];
+                            newDetalles[index].monto = e.target.value;
+                            setDetallesMovimiento(newDetalles);
+                          }}
+                          placeholder="0"
+                          className="form-input"
+                          min="0"
+                          step="100"
+                        />
+                      </div>
+                      {detallesMovimiento.length > 1 && (
+                        <button
+                          onClick={() => {
+                            setDetallesMovimiento(detallesMovimiento.filter((_, i) => i !== index));
+                          }}
+                          className="btn-icon-danger"
+                          style={{marginTop: '24px'}}
+                        >
+                          <X size={20} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => {
+                      setDetallesMovimiento([...detallesMovimiento, {metodo: 'EFECTIVO', monto: ''}]);
+                    }}
+                    className="btn-secondary-small"
+                  >
+                    <Plus size={16} />
+                    Agregar Método
+                  </button>
+                  <div className="total-mixto">
+                    <strong>Total: {formatCurrency(detallesMovimiento.reduce((sum, d) => sum + (parseFloat(d.monto) || 0), 0))}</strong>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button onClick={() => setShowMovimientoGeneral(false)} className="btn-secondary">
+                Cancelar
+              </button>
+              <button type="button" onClick={handleRegistrarMovimientoGeneral} className="btn-primary">
+                Guardar
               </button>
             </div>
           </div>

@@ -13,6 +13,7 @@ interface Estudiante {
   email: string;
   foto_url?: string;
   categoria?: string;
+  tipo_servicio?: string;
   estado: string;
   horas_teoricas_completadas: number;
   horas_teoricas_requeridas: number;
@@ -26,11 +27,22 @@ interface Estudiante {
     horas: number;
     observaciones?: string;
     usuario_id?: number;
-      instructor_id?: number;
-      instructor_nombre?: string;
-      vehiculo_id?: number;
-      vehiculo_label?: string;
+    servicio_id?: number | null;
+    instructor_id?: number;
+    instructor_nombre?: string;
+    vehiculo_id?: number;
+    vehiculo_label?: string;
   }[];
+  servicios?: {
+    id: number;
+    tipo_servicio?: string;
+    estado?: string;
+    horas_teoricas_completadas?: number;
+    horas_practicas_completadas?: number;
+    horas_teoricas_requeridas?: number;
+    horas_practicas_requeridas?: number;
+  }[];
+  servicio_activo_id?: number | null;
 }
 
 export const Clases = () => {
@@ -45,6 +57,43 @@ export const Clases = () => {
   const [vehiculos, setVehiculos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [servicioSeleccionado, setServicioSeleccionado] = useState<number | 'TODOS'>('TODOS');
+
+  const sinPractica = new Set([
+    'CERTIFICADO_MOTO',
+    'CERTIFICADO_B1',
+    'CERTIFICADO_C1',
+    'CERTIFICADO_B1_SIN_PRACTICA',
+    'CERTIFICADO_C1_SIN_PRACTICA',
+    'CERTIFICADO_A2_B1_SIN_PRACTICA',
+    'CERTIFICADO_A2_C1_SIN_PRACTICA'
+  ]);
+
+  const getServicioSeleccionado = () => {
+    if (!estudiante) return null;
+    const servicios = estudiante.servicios || [];
+    const id = servicioSeleccionado === 'TODOS'
+      ? estudiante.servicio_activo_id
+      : servicioSeleccionado;
+    if (!id) return null;
+    return servicios.find((s) => s.id === id) || null;
+  };
+
+  const getTipoServicioSeleccionado = () => {
+    const servicio = getServicioSeleccionado();
+    return servicio?.tipo_servicio || estudiante?.tipo_servicio || null;
+  };
+
+  const resolverValor = (valorServicio?: number, fallback?: number) => {
+    if (valorServicio === undefined || valorServicio === null) return fallback || 0;
+    if (valorServicio === 0 && (fallback || 0) > 0) return fallback || 0;
+    return valorServicio;
+  };
+
+  const getProgreso = (completadas?: number, requeridas?: number) => {
+    if (!requeridas) return 0;
+    return Math.min(100, (Number(completadas || 0) / Number(requeridas)) * 100);
+  };
 
   const formatDocumentoBusqueda = (value: string) => {
     return value.toUpperCase().replace(/[^A-Z0-9\-]/g, '').slice(0, 20);
@@ -76,6 +125,7 @@ export const Clases = () => {
       setError('');
       const data = await estudiantesAPI.getByCedula(documento);
       setEstudiante(data as Estudiante);
+      setServicioSeleccionado((data as Estudiante).servicio_activo_id ?? 'TODOS');
       await cargarListas();
     } catch (err: any) {
       setError(getErrorMessage(err, 'No se encontró el estudiante'));
@@ -100,6 +150,11 @@ export const Clases = () => {
 
   const acreditar = async () => {
     if (!estudiante) return;
+    const tipoServicio = getTipoServicioSeleccionado();
+    if (tipoServicio && sinPractica.has(tipoServicio)) {
+      setError('Este servicio no requiere horas de clase');
+      return;
+    }
     if (!horas || parseInt(horas) <= 0) {
       setError('Las horas deben ser mayores a 0');
       return;
@@ -124,6 +179,7 @@ export const Clases = () => {
       });
       const actualizado = await estudiantesAPI.getByCedula(estudiante.cedula);
       setEstudiante(actualizado as Estudiante);
+      setServicioSeleccionado((actualizado as Estudiante).servicio_activo_id ?? 'TODOS');
       setObservaciones('');
       setHoras('1');
       setInstructorId('');
@@ -158,15 +214,19 @@ export const Clases = () => {
   const exportClasesCSV = () => {
     if (!estudiante) return;
     const historial = estudiante.clases_historial || [];
+    const filtrado = servicioSeleccionado === 'TODOS'
+      ? historial
+      : historial.filter((h) => h.servicio_id === servicioSeleccionado);
     const rows: (string | number)[][] = [
       ['Estudiante', estudiante.nombre_completo],
       ['Documento', estudiante.cedula],
       ['Email', estudiante.email],
       ['Teléfono', estudiante.telefono],
+      ['Servicio', servicioSeleccionado === 'TODOS' ? 'TODOS' : `Servicio ${servicioSeleccionado}`],
       [],
       ['Fecha', 'Tipo', 'Horas', 'Observaciones']
     ];
-    historial.forEach((h) => {
+    filtrado.forEach((h) => {
       rows.push([
         new Date(h.fecha).toLocaleString('es-CO'),
         h.tipo,
@@ -232,20 +292,66 @@ export const Clases = () => {
           </div>
 
           <div className="clases-progreso">
-            <div>
-              <strong>Teóricas:</strong> {estudiante.horas_teoricas_completadas}/{estudiante.horas_teoricas_requeridas}
-              <div className="progreso-bar">
-                <div className="progreso-fill" style={{ width: `${estudiante.progreso_teorico}%` }}></div>
-                <span className="progreso-text">{estudiante.progreso_teorico.toFixed(0)}%</span>
-              </div>
-            </div>
-            <div>
-              <strong>Prácticas:</strong> {estudiante.horas_practicas_completadas}/{estudiante.horas_practicas_requeridas}
-              <div className="progreso-bar">
-                <div className="progreso-fill progreso-practica" style={{ width: `${estudiante.progreso_practico}%` }}></div>
-                <span className="progreso-text">{estudiante.progreso_practico.toFixed(0)}%</span>
-              </div>
-            </div>
+            {(() => {
+              const servicio = getServicioSeleccionado();
+              const teoricasCompletadas = resolverValor(
+                servicio?.horas_teoricas_completadas,
+                estudiante.horas_teoricas_completadas
+              );
+              const teoricasRequeridas = resolverValor(
+                servicio?.horas_teoricas_requeridas,
+                estudiante.horas_teoricas_requeridas
+              );
+              const practicasCompletadas = resolverValor(
+                servicio?.horas_practicas_completadas,
+                estudiante.horas_practicas_completadas
+              );
+              const practicasRequeridas = resolverValor(
+                servicio?.horas_practicas_requeridas,
+                estudiante.horas_practicas_requeridas
+              );
+              const progresoTeorico = getProgreso(teoricasCompletadas, teoricasRequeridas);
+              const progresoPractico = getProgreso(practicasCompletadas, practicasRequeridas);
+              return (
+                <>
+                  <div>
+                    <strong>Teóricas:</strong> {teoricasCompletadas}/{teoricasRequeridas}
+                    <div className="progreso-bar">
+                      <div className="progreso-fill" style={{ width: `${progresoTeorico}%` }}></div>
+                      <span className="progreso-text">{progresoTeorico.toFixed(0)}%</span>
+                    </div>
+                  </div>
+                  <div>
+                    <strong>Prácticas:</strong> {practicasCompletadas}/{practicasRequeridas}
+                    <div className="progreso-bar">
+                      <div className="progreso-fill progreso-practica" style={{ width: `${progresoPractico}%` }}></div>
+                      <span className="progreso-text">{progresoPractico.toFixed(0)}%</span>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+
+          <div className="form-group">
+            <label>Servicio</label>
+            <select
+              value={servicioSeleccionado}
+              onChange={(e) => {
+                const value = e.target.value;
+                setServicioSeleccionado(value === 'TODOS' ? 'TODOS' : Number(value));
+              }}
+            >
+              <option value="TODOS">Todos los servicios</option>
+              {estudiante.servicios && estudiante.servicios.length > 0 && estudiante.servicios.map((s) => (
+                <option key={s.id} value={s.id}>
+                  Servicio {s.id} {s.estado ? `(${s.estado})` : ''}
+                </option>
+              ))}
+              {(!estudiante.servicios || estudiante.servicios.length === 0) && estudiante.servicio_activo_id && (
+                <option value={estudiante.servicio_activo_id}>Servicio {estudiante.servicio_activo_id}</option>
+              )}
+            </select>
           </div>
 
           <div className="clases-form">
@@ -304,7 +410,9 @@ export const Clases = () => {
             <h4>Historial de clases acreditadas</h4>
             {estudiante.clases_historial && estudiante.clases_historial.length > 0 ? (
               <div className="historial-list">
-                {estudiante.clases_historial
+                {(servicioSeleccionado === 'TODOS'
+                  ? estudiante.clases_historial
+                  : estudiante.clases_historial.filter((h) => h.servicio_id === servicioSeleccionado))
                   .slice()
                   .reverse()
                   .map((h, idx) => (

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, extract, cast, Date
+from sqlalchemy import func, and_, extract, cast, Date, or_
 from typing import Optional
 from datetime import datetime, timedelta, date
 from decimal import Decimal
@@ -8,7 +8,7 @@ from decimal import Decimal
 from app.core.database import get_db
 from app.api.deps import get_current_active_user
 from app.models.usuario import Usuario
-from app.models.caja import Caja, MovimientoCaja, EstadoCaja, ConceptoEgreso
+from app.models.caja import Caja, MovimientoCaja, EstadoCaja, ConceptoMovimientoCaja, TipoMovimiento
 from app.models.pago import Pago, DetallePago, MetodoPago, EstadoPago
 from app.models.compromiso_pago import CuotaPago, EstadoCuota
 from app.models.estudiante import Estudiante, EstadoEstudiante
@@ -18,7 +18,7 @@ from app.schemas.reportes import (
     GraficoEvolucionIngresos, GraficoMetodosPago,
     GraficoEstudiantesCategorias, GraficoEgresos,
     DatoPunto, DatoCategoria,
-    EstudianteRegistrado, EstudiantePago, EgresoCajaItem, ReferidoRanking,
+    EstudianteRegistrado, EstudiantePago, EgresoCajaItem, MovimientoCajaItem, ReferidoRanking,
     AlertasOperativas, AlertasVencimientosResponse,
     AlertaDocumentoVehiculo, AlertaDocumentoInstructor, AlertaPin, AlertaPagoVencido, AlertaCompromiso,
     CierreFinancieroResponse, CierreCajaItem
@@ -74,6 +74,7 @@ def get_dashboard_ejecutivo(
     lista_registrados = _lista_estudiantes_registrados(db, fecha_inicio_date, fecha_fin_date)
     lista_pagos = _lista_estudiantes_pagos(db, fecha_inicio_date, fecha_fin_date)
     lista_egresos = _lista_egresos_caja(db, fecha_inicio_date, fecha_fin_date)
+    lista_otros = _lista_otros_movimientos(db, fecha_inicio_date, fecha_fin_date)
     
     return DashboardEjecutivo(
         kpis=kpis,
@@ -85,6 +86,7 @@ def get_dashboard_ejecutivo(
         lista_estudiantes_registrados=lista_registrados,
         lista_estudiantes_pagos=lista_pagos,
         lista_egresos_caja=lista_egresos,
+        lista_otros_movimientos=lista_otros,
         fecha_generacion=datetime.utcnow(),
         periodo_inicio=fecha_inicio,
         periodo_fin=fecha_fin
@@ -135,9 +137,7 @@ def get_alertas_operativas(
     ).count()
 
     estudiantes_listos_examen_cantidad = db.query(Estudiante).filter(
-        Estudiante.horas_teoricas_completadas >= Estudiante.horas_teoricas_requeridas,
-        Estudiante.horas_practicas_completadas >= Estudiante.horas_practicas_requeridas,
-        ~Estudiante.estado.in_([EstadoEstudiante.GRADUADO, EstadoEstudiante.DESERTOR, EstadoEstudiante.RETIRADO])
+        Estudiante.estado == EstadoEstudiante.LISTO_EXAMEN
     ).count()
 
     return AlertasOperativas(
@@ -391,13 +391,14 @@ def _calcular_kpis(
     ).all()
     
     print(f"💼 Cajas encontradas en el período: {len(cajas_periodo)}")
-    ingresos_actual = Decimal('0')
+    ingresos_cajas_periodo = Decimal('0')
     for caja in cajas_periodo:
         total_caja = _ingresos_caja(caja)
-        ingresos_actual += total_caja
+        ingresos_cajas_periodo += total_caja
         print(f"  - Caja ID {caja.id} ({caja.fecha_apertura.date()}): Total=${total_caja}")
-    
-    print(f"💵 Total ingresos del período: ${ingresos_actual}")
+
+    ingresos_actual = _sumar_ingresos_periodo(db, fecha_inicio, fecha_fin)
+    print(f"💵 Total ingresos del período (por movimientos): ${ingresos_actual}")
     
     ingresos_anterior = None
     cambio_ingresos = None
@@ -410,28 +411,22 @@ def _calcular_kpis(
                 cast(Caja.fecha_apertura, Date) < fecha_fin_anterior
             )
         ).all()
-        
-        ingresos_anterior = Decimal('0')
-        for caja in cajas_anterior:
-            ingresos_anterior += _ingresos_caja(caja)
+
+        ingresos_anterior = _sumar_ingresos_periodo(db, fecha_inicio_anterior, fecha_fin_anterior)
         
         if ingresos_anterior > 0:
             cambio_ingresos = float(((ingresos_actual - ingresos_anterior) / ingresos_anterior) * 100)
             tendencia_ingresos = "up" if cambio_ingresos > 0 else "down" if cambio_ingresos < 0 else "neutral"
     
     # EGRESOS TOTALES (de cajas por fecha de apertura)
-    egresos_actual = Decimal('0')
-    for caja in cajas_periodo:
-        egresos_actual += _egresos_caja(caja)
+    egresos_actual = _sumar_egresos_periodo(db, fecha_inicio, fecha_fin)
     
     egresos_anterior = None
     cambio_egresos = None
     tendencia_egresos = "neutral"
     
     if comparar:
-        egresos_anterior = Decimal('0')
-        for caja in cajas_anterior:
-            egresos_anterior += _egresos_caja(caja)
+        egresos_anterior = _sumar_egresos_periodo(db, fecha_inicio_anterior, fecha_fin_anterior)
         
         if egresos_anterior > 0:
             cambio_egresos = float(((egresos_actual - egresos_anterior) / egresos_anterior) * 100)
@@ -444,7 +439,7 @@ def _calcular_kpis(
 
     ingreso_neto = ingresos_actual - egresos_actual
     ingresos_promedio_por_caja = (
-        ingresos_actual / len(cajas_periodo)
+        ingresos_cajas_periodo / len(cajas_periodo)
         if len(cajas_periodo) > 0
         else Decimal('0')
     )
@@ -495,11 +490,6 @@ def _calcular_kpis(
     if total_estudiantes > 0:
         tasa_desercion = (inactivos_periodo / total_estudiantes) * 100
     
-    # TICKET PROMEDIO
-    ticket_promedio = Decimal('0')
-    if activos_periodo > 0:
-        ticket_promedio = ingresos_actual / activos_periodo
-    
     # DÍAS PROMEDIO DE PAGO (simplificado - calcular de pagos)
     pagos_periodo = db.query(Pago).filter(
         and_(
@@ -526,6 +516,12 @@ def _calcular_kpis(
     dias_promedio_pago = 0.0
     if count_pagos > 0:
         dias_promedio_pago = total_dias / count_pagos
+
+    # TICKET PROMEDIO (por pago completado en el período)
+    ticket_promedio = Decimal('0')
+    if count_pagos > 0:
+        total_pagado_periodo = sum((p.monto or Decimal('0')) for p in pagos_periodo)
+        ticket_promedio = total_pagado_periodo / count_pagos
     
     # TASA DE COBRANZA
     total_valor_cursos = db.query(func.sum(Estudiante.valor_total_curso)).filter(
@@ -610,29 +606,32 @@ def _grafico_evolucion_ingresos(db: Session, fecha_inicio: date, fecha_fin: date
         formato_agrupacion = 'YYYY-MM'
         label_agrupacion = 'mes'
     
-    # Agrupar ingresos desde tabla Caja por fecha de apertura (usando CAST a DATE)
-    resultado = db.query(
-        func.to_char(Caja.fecha_apertura, formato_agrupacion).label(label_agrupacion),
-        func.sum(
-            func.coalesce(Caja.total_ingresos_efectivo, 0) +
-            func.coalesce(Caja.total_nequi, 0) +
-            func.coalesce(Caja.total_daviplata, 0) +
-            func.coalesce(Caja.total_transferencia_bancaria, 0) +
-            func.coalesce(Caja.total_tarjeta_debito, 0) +
-            func.coalesce(Caja.total_tarjeta_credito, 0) +
-            func.coalesce(Caja.total_credismart, 0) +
-            func.coalesce(Caja.total_sistecredito, 0)
-        ).label('total')
-    ).filter(
+    pagos = db.query(Pago).filter(
         and_(
-            cast(Caja.fecha_apertura, Date) >= fecha_inicio,
-            cast(Caja.fecha_apertura, Date) <= fecha_fin
+            Pago.estado == EstadoPago.COMPLETADO,
+            cast(Pago.fecha_pago, Date) >= fecha_inicio,
+            cast(Pago.fecha_pago, Date) <= fecha_fin
         )
-    ).group_by(label_agrupacion).order_by(label_agrupacion).all()
-    
+    ).all()
+    movimientos = db.query(MovimientoCaja).filter(
+        and_(
+            MovimientoCaja.tipo == TipoMovimiento.INGRESO,
+            cast(MovimientoCaja.fecha, Date) >= fecha_inicio,
+            cast(MovimientoCaja.fecha, Date) <= fecha_fin
+        )
+    ).all()
+
+    buckets = {}
+    for pago in pagos:
+        key = _bucket_key(pago.fecha_pago, label_agrupacion)
+        buckets[key] = buckets.get(key, Decimal('0')) + (pago.monto or Decimal('0'))
+    for mov in movimientos:
+        key = _bucket_key(mov.fecha, label_agrupacion)
+        buckets[key] = buckets.get(key, Decimal('0')) + (mov.monto or Decimal('0'))
+
     datos = [
-        DatoPunto(fecha=getattr(r, label_agrupacion), valor=r.total or Decimal('0'))
-        for r in resultado
+        DatoPunto(fecha=key, valor=buckets[key])
+        for key in _ordenar_buckets(list(buckets.keys()), label_agrupacion)
     ]
     
     total_periodo = sum(d.valor for d in datos)
@@ -688,35 +687,7 @@ def _parse_fecha(value) -> Optional[datetime]:
 
 def _grafico_metodos_pago(db: Session, fecha_inicio: date, fecha_fin: date) -> GraficoMetodosPago:
     """Gráfico de ingresos por método de pago (desde Cajas)"""
-    cajas = db.query(Caja).filter(
-        and_(
-            cast(Caja.fecha_apertura, Date) >= fecha_inicio,
-            cast(Caja.fecha_apertura, Date) <= fecha_fin
-        )
-    ).all()
-    
-    # Sumar todos los métodos
-    totales = {
-        'Efectivo': Decimal('0'),
-        'Nequi': Decimal('0'),
-        'Daviplata': Decimal('0'),
-        'Transferencia Bancaria': Decimal('0'),
-        'Tarjeta Débito': Decimal('0'),
-        'Tarjeta Crédito': Decimal('0'),
-        'CrediSmart': Decimal('0'),
-        'Sistecredito': Decimal('0')
-    }
-    
-    for caja in cajas:
-        totales['Efectivo'] += caja.total_ingresos_efectivo or Decimal('0')
-        totales['Nequi'] += caja.total_nequi or Decimal('0')
-        totales['Daviplata'] += caja.total_daviplata or Decimal('0')
-        totales['Transferencia Bancaria'] += caja.total_transferencia_bancaria or Decimal('0')
-        totales['Tarjeta Débito'] += caja.total_tarjeta_debito or Decimal('0')
-        totales['Tarjeta Crédito'] += caja.total_tarjeta_credito or Decimal('0')
-        totales['CrediSmart'] += caja.total_credismart or Decimal('0')
-        totales['Sistecredito'] += caja.total_sistecredito or Decimal('0')
-    
+    totales = _sumar_ingresos_por_metodo_periodo(db, fecha_inicio, fecha_fin)
     total_general = sum(totales.values())
     
     datos = [
@@ -742,14 +713,20 @@ def _grafico_metodos_pago(db: Session, fecha_inicio: date, fecha_fin: date) -> G
 
 def _grafico_estudiantes_categorias(db: Session) -> GraficoEstudiantesCategorias:
     """Gráfico de estudiantes por categoría de licencia (solo activos)"""
+    certificados_count = db.query(func.count(Estudiante.id)).filter(
+        Estudiante.estado.in_([EstadoEstudiante.INSCRITO, EstadoEstudiante.EN_FORMACION, EstadoEstudiante.LISTO_EXAMEN]),
+        Estudiante.tipo_servicio.like("CERTIFICADO%")
+    ).scalar() or 0
+
     resultado = db.query(
         Estudiante.categoria,
         func.count(Estudiante.id).label('total')
     ).filter(
-        Estudiante.estado.in_([EstadoEstudiante.INSCRITO, EstadoEstudiante.EN_FORMACION, EstadoEstudiante.LISTO_EXAMEN])
+        Estudiante.estado.in_([EstadoEstudiante.INSCRITO, EstadoEstudiante.EN_FORMACION, EstadoEstudiante.LISTO_EXAMEN]),
+        or_(Estudiante.tipo_servicio.is_(None), ~Estudiante.tipo_servicio.like("CERTIFICADO%"))
     ).group_by(Estudiante.categoria).all()
     
-    total = sum(r.total for r in resultado)
+    total = sum(r.total for r in resultado) + certificados_count
     
     colores = {
         'A1': '#ef4444',  # rojo
@@ -760,6 +737,7 @@ def _grafico_estudiantes_categorias(db: Session) -> GraficoEstudiantesCategorias
         'C1': '#10b981',  # verde
         'C2': '#34d399',  # verde claro
         'C3': '#6ee7b7',  # verde muy claro
+        'CERTIFICADOS': '#6366f1'
     }
     
     datos = [
@@ -771,11 +749,139 @@ def _grafico_estudiantes_categorias(db: Session) -> GraficoEstudiantesCategorias
         )
         for r in resultado
     ]
+
+    if certificados_count > 0:
+        datos.append(DatoCategoria(
+            nombre="Certificados",
+            valor=Decimal(str(certificados_count)),
+            porcentaje=float((certificados_count / total) * 100) if total > 0 else 0.0,
+            color=colores.get('CERTIFICADOS', '#6b7280')
+        ))
     
     return GraficoEstudiantesCategorias(
         datos=datos,
         total=total
     )
+
+
+def _sumar_ingresos_periodo(db: Session, fecha_inicio: date, fecha_fin: date) -> Decimal:
+    pagos = db.query(Pago).filter(
+        and_(
+            Pago.estado == EstadoPago.COMPLETADO,
+            cast(Pago.fecha_pago, Date) >= fecha_inicio,
+            cast(Pago.fecha_pago, Date) <= fecha_fin
+        )
+    ).all()
+    movimientos = db.query(MovimientoCaja).filter(
+        and_(
+            MovimientoCaja.tipo == TipoMovimiento.INGRESO,
+            cast(MovimientoCaja.fecha, Date) >= fecha_inicio,
+            cast(MovimientoCaja.fecha, Date) <= fecha_fin
+        )
+    ).all()
+    total_pagos = sum((p.monto or Decimal('0')) for p in pagos)
+    total_movs = sum((m.monto or Decimal('0')) for m in movimientos)
+    return total_pagos + total_movs
+
+
+def _sumar_egresos_periodo(db: Session, fecha_inicio: date, fecha_fin: date) -> Decimal:
+    egresos = db.query(MovimientoCaja).filter(
+        and_(
+            MovimientoCaja.tipo == TipoMovimiento.EGRESO,
+            cast(MovimientoCaja.fecha, Date) >= fecha_inicio,
+            cast(MovimientoCaja.fecha, Date) <= fecha_fin
+        )
+    ).all()
+    return sum((e.monto or Decimal('0')) for e in egresos)
+
+
+def _sumar_ingresos_por_metodo_periodo(db: Session, fecha_inicio: date, fecha_fin: date) -> dict:
+    totales = {
+        'Efectivo': Decimal('0'),
+        'Nequi': Decimal('0'),
+        'Daviplata': Decimal('0'),
+        'Transferencia Bancaria': Decimal('0'),
+        'Tarjeta Débito': Decimal('0'),
+        'Tarjeta Crédito': Decimal('0'),
+        'CrediSmart': Decimal('0'),
+        'Sistecredito': Decimal('0')
+    }
+
+    pagos = db.query(Pago).filter(
+        and_(
+            Pago.estado == EstadoPago.COMPLETADO,
+            cast(Pago.fecha_pago, Date) >= fecha_inicio,
+            cast(Pago.fecha_pago, Date) <= fecha_fin
+        )
+    ).all()
+    movimientos = db.query(MovimientoCaja).filter(
+        and_(
+            MovimientoCaja.tipo == TipoMovimiento.INGRESO,
+            cast(MovimientoCaja.fecha, Date) >= fecha_inicio,
+            cast(MovimientoCaja.fecha, Date) <= fecha_fin
+        )
+    ).all()
+
+    def acumular_metodo(metodo, monto: Decimal):
+        key = _map_metodo_label(metodo)
+        if not key:
+            return
+        totales[key] += monto
+
+    for pago in pagos:
+        if pago.es_pago_mixto:
+            for d in pago.detalles_pago:
+                acumular_metodo(d.metodo_pago, d.monto)
+        else:
+            acumular_metodo(pago.metodo_pago, pago.monto)
+
+    for mov in movimientos:
+        if mov.es_pago_mixto:
+            for d in mov.detalles_pago:
+                acumular_metodo(d.metodo_pago, d.monto)
+        else:
+            acumular_metodo(mov.metodo_pago, mov.monto)
+
+    return totales
+
+
+def _map_metodo_label(metodo) -> Optional[str]:
+    if not metodo:
+        return None
+    if hasattr(metodo, "value"):
+        metodo_val = metodo.value
+    else:
+        metodo_val = str(metodo)
+    etiquetas = {
+        MetodoPago.EFECTIVO.value: 'Efectivo',
+        MetodoPago.NEQUI.value: 'Nequi',
+        MetodoPago.DAVIPLATA.value: 'Daviplata',
+        MetodoPago.TRANSFERENCIA_BANCARIA.value: 'Transferencia Bancaria',
+        MetodoPago.TARJETA_DEBITO.value: 'Tarjeta Débito',
+        MetodoPago.TARJETA_CREDITO.value: 'Tarjeta Crédito',
+        MetodoPago.CREDISMART.value: 'CrediSmart',
+        MetodoPago.SISTECREDITO.value: 'Sistecredito'
+    }
+    return etiquetas.get(metodo_val)
+
+
+def _bucket_key(fecha: datetime, label_agrupacion: str) -> str:
+    if label_agrupacion == 'hora':
+        return fecha.strftime('%H:00')
+    if label_agrupacion == 'dia':
+        return fecha.strftime('%Y-%m-%d')
+    if label_agrupacion == 'semana':
+        year, week, _ = fecha.isocalendar()
+        return f"{year}-{week:02d}"
+    return fecha.strftime('%Y-%m')
+
+
+def _ordenar_buckets(keys: list, label_agrupacion: str) -> list:
+    if label_agrupacion == 'hora':
+        return sorted(keys, key=lambda k: int(k.split(':')[0]))
+    if label_agrupacion == 'semana':
+        return sorted(keys, key=lambda k: (int(k.split('-')[0]), int(k.split('-')[1])))
+    return sorted(keys)
 
 
 def _grafico_egresos_categoria(db: Session, fecha_inicio: date, fecha_fin: date) -> GraficoEgresos:
@@ -785,12 +891,13 @@ def _grafico_egresos_categoria(db: Session, fecha_inicio: date, fecha_fin: date)
         func.sum(MovimientoCaja.monto).label('total')
     ).filter(
         and_(
+            MovimientoCaja.tipo == TipoMovimiento.EGRESO,
             cast(MovimientoCaja.fecha, Date) >= fecha_inicio,
             cast(MovimientoCaja.fecha, Date) <= fecha_fin
         )
     ).group_by(MovimientoCaja.categoria).all()
     
-    total = sum(r.total for r in resultado if r.total)
+    total = sum((r.total or Decimal('0')) for r in resultado)
     
     datos = [
         DatoCategoria(
@@ -877,7 +984,7 @@ def _lista_estudiantes_pagos(db: Session, fecha_inicio: date, fecha_fin: date) -
 def _lista_egresos_caja(db: Session, fecha_inicio: date, fecha_fin: date) -> list:
     egresos = db.query(MovimientoCaja).filter(
         and_(
-            MovimientoCaja.tipo == "EGRESO",
+            MovimientoCaja.tipo == TipoMovimiento.EGRESO,
             cast(MovimientoCaja.fecha, Date) >= fecha_inicio,
             cast(MovimientoCaja.fecha, Date) <= fecha_fin
         )
@@ -885,8 +992,11 @@ def _lista_egresos_caja(db: Session, fecha_inicio: date, fecha_fin: date) -> lis
 
     lista = []
     for eg in egresos:
-        metodo = eg.metodo_pago
-        metodo_label = metodo.value if hasattr(metodo, "value") else (metodo or "N/A")
+        if eg.es_pago_mixto:
+            metodo_label = "MIXTO"
+        else:
+            metodo = eg.metodo_pago
+            metodo_label = metodo.value if hasattr(metodo, "value") else (metodo or "N/A")
         lista.append(EgresoCajaItem(
             egreso_id=eg.id,
             fecha=eg.fecha,
@@ -897,6 +1007,42 @@ def _lista_egresos_caja(db: Session, fecha_inicio: date, fecha_fin: date) -> lis
             usuario=eg.usuario.nombre_completo if eg.usuario else None,
             numero_factura=eg.numero_factura,
             observaciones=eg.observaciones
+        ))
+    return lista
+
+
+def _lista_otros_movimientos(db: Session, fecha_inicio: date, fecha_fin: date) -> list:
+    categorias = [
+        ConceptoMovimientoCaja.ESTUDIANTE_NO_REGISTRADO,
+        ConceptoMovimientoCaja.PAGO_PRESTAMO_EMPLEADO,
+        ConceptoMovimientoCaja.VENTA_MATERIAL,
+        ConceptoMovimientoCaja.INGRESO_ADMINISTRATIVO,
+        ConceptoMovimientoCaja.OTROS,
+    ]
+    movimientos = db.query(MovimientoCaja).filter(
+        and_(
+            MovimientoCaja.tipo == TipoMovimiento.INGRESO,
+            MovimientoCaja.categoria.in_(categorias),
+            cast(MovimientoCaja.fecha, Date) >= fecha_inicio,
+            cast(MovimientoCaja.fecha, Date) <= fecha_fin
+        )
+    ).order_by(MovimientoCaja.fecha.desc()).all()
+
+    lista = []
+    for mov in movimientos:
+        metodo = mov.metodo_pago
+        metodo_label = metodo.value if hasattr(metodo, "value") else (metodo or "N/A")
+        lista.append(MovimientoCajaItem(
+            movimiento_id=mov.id,
+            tipo=mov.tipo.value if hasattr(mov.tipo, "value") else str(mov.tipo),
+            fecha=mov.fecha,
+            concepto=mov.concepto,
+            categoria=mov.categoria.value if mov.categoria else None,
+            metodo_pago=metodo_label,
+            monto=mov.monto,
+            tercero_nombre=mov.tercero_nombre,
+            tercero_documento=mov.tercero_documento,
+            usuario=mov.usuario.nombre_completo if mov.usuario else None
         ))
     return lista
 

@@ -140,6 +140,14 @@ export const estudiantesAPI = {
     return response.data;
   },
 
+  corregirServicio: async (
+    id: number,
+    data: { tipo_servicio_nuevo: string; valor_total_curso?: number | null; motivo: string; password: string }
+  ): Promise<Estudiante> => {
+    const response = await api.put<Estudiante>(`/estudiantes/${id}/corregir-servicio`, data);
+    return response.data;
+  },
+
   acreditarHoras: async (
     id: number,
     data: { tipo: string; horas: number; observaciones?: string | null; instructor_id?: number | null; vehiculo_id?: number | null }
@@ -204,6 +212,27 @@ export const cajaAPI = {
     observaciones?: string | null;
   }): Promise<any> => {
     const response = await api.post('/caja/egresos', data);
+    return response.data;
+  },
+
+  registrarMovimientoGeneral: async (data: {
+    tipo: string;
+    concepto: string;
+    categoria: string;
+    monto: number;
+    metodo_pago?: string | null;
+    tercero_nombre?: string | null;
+    tercero_documento?: string | null;
+    es_pago_mixto?: boolean;
+    detalles_pago?: { metodo_pago: string; monto: number }[];
+    observaciones?: string | null;
+  }): Promise<any> => {
+    const response = await api.post('/caja/movimientos', data);
+    return response.data;
+  },
+
+  getMovimientoReciboPdf: async (movimientoId: number): Promise<Blob> => {
+    const response = await api.get(`/caja/movimientos/${movimientoId}/recibo-pdf`, { responseType: 'blob' });
     return response.data;
   },
 

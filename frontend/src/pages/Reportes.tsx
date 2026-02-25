@@ -15,6 +15,7 @@ import { TablaEstudiantesRegistrados } from '../components/reportes/TablaEstudia
 import { TablaEstudiantesPagos } from '../components/reportes/TablaEstudiantesPagos';
 import { TablaConceptosPagos } from '../components/reportes/TablaConceptosPagos';
 import { TablaEgresosCaja } from '../components/reportes/TablaEgresosCaja';
+import { TablaOtrosIngresos } from '../components/reportes/TablaOtrosIngresos';
 import '../styles/Reportes.css';
 
 interface DashboardData {
@@ -26,6 +27,7 @@ interface DashboardData {
   ranking_referidos: any[];
   lista_estudiantes_registrados: any[];
   lista_estudiantes_pagos: any[];
+  lista_otros_movimientos: any[];
 }
 
 export const Reportes = () => {
@@ -122,6 +124,7 @@ export const Reportes = () => {
     ranking_referidos,
     lista_estudiantes_registrados,
   lista_estudiantes_pagos,
+  lista_otros_movimientos,
   lista_egresos_caja
   } = dashboard!;
 
@@ -142,6 +145,7 @@ export const Reportes = () => {
   const datosEstudiantes = (grafico_estudiantes?.datos || []).map((d: any) => ({
     nombre: d.nombre,
     valor: parseFloat(d.valor),
+    porcentaje: d.porcentaje,
     color: d.color
   }));
 
@@ -355,7 +359,7 @@ export const Reportes = () => {
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ nombre, porcentaje }) => `${nombre}: ${porcentaje ? porcentaje.toFixed(1) : '0.0'}%`}
+                label={({ nombre, porcentaje }) => `${nombre}: ${typeof porcentaje === 'number' ? porcentaje.toFixed(1) : '0.0'}%`}
                 outerRadius={100}
                 fill="#8884d8"
                 dataKey="valor"
@@ -401,6 +405,7 @@ export const Reportes = () => {
         <TablaEstudiantesRegistrados estudiantes={lista_estudiantes_registrados || []} />
         <TablaEstudiantesPagos pagos={lista_estudiantes_pagos || []} />
         <TablaEgresosCaja egresos={lista_egresos_caja || []} />
+        <TablaOtrosIngresos ingresos={lista_otros_movimientos || []} />
         <TablaConceptosPagos pagos={lista_estudiantes_pagos || []} />
       </div>
     </div>

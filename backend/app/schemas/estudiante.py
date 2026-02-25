@@ -245,6 +245,8 @@ class EstudianteResponse(BaseModel):
     esta_listo_para_examen: bool = False
     historial_pagos: List = []  # List[PagoResponse] causaría circular import, se popula manualmente
     clases_historial: List = []
+    servicios: List = []
+    servicio_activo_id: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -288,7 +290,7 @@ class DefinirServicioRequest(BaseModel):
     categoria_actual: Optional[CategoriaLicencia] = None
     categoria_nueva: Optional[CategoriaLicencia] = None
     origen_cliente: OrigenCliente
-    valor_total_curso: Optional[Decimal] = None  # Solo si es cliente referido
+    valor_total_curso: Optional[Decimal] = None  # Referidos o descuento en DIRECTO (Admin/Gerente)
     referido_por: Optional[str] = None  # Nombre de quien refirió (obligatorio si es REFERIDO)
     telefono_referidor: Optional[str] = None  # Teléfono del referidor
     observaciones: Optional[str] = None
@@ -296,6 +298,8 @@ class DefinirServicioRequest(BaseModel):
     @field_validator('valor_total_curso')
     @classmethod
     def validate_valor(cls, v, info):
+        if v is not None and v <= 0:
+            raise ValueError('El valor_total_curso debe ser mayor a 0')
         # Si es cliente referido, el valor es obligatorio
         if info.data.get('origen_cliente') == OrigenCliente.REFERIDO and v is None:
             raise ValueError('El valor_total_curso es obligatorio para clientes referidos')
@@ -307,6 +311,21 @@ class AmpliarServicioRequest(BaseModel):
     tipo_servicio_nuevo: TipoServicio
     valor_total_curso: Optional[Decimal] = None  # Solo si es cliente referido
     observaciones: Optional[str] = None
+
+
+class CorregirServicioRequest(BaseModel):
+    """Schema para corregir servicio mal definido"""
+    tipo_servicio_nuevo: TipoServicio
+    valor_total_curso: Optional[Decimal] = None
+    motivo: str
+    password: str
+
+    @field_validator('valor_total_curso')
+    @classmethod
+    def validate_valor(cls, v, info):
+        if v is not None and v <= 0:
+            raise ValueError('El valor_total_curso debe ser mayor a 0')
+        return v
 
 
 class AcreditarHorasRequest(BaseModel):

@@ -17,13 +17,13 @@ from app.core.config import settings
 from app.core.email import send_email
 from app.api.deps import get_current_active_user, get_admin_or_coordinador_or_cajero
 from app.models.usuario import Usuario
-from app.models.caja import Caja, MovimientoCaja, EstadoCaja, TipoMovimiento
+from app.models.caja import Caja, MovimientoCaja, EstadoCaja, TipoMovimiento, ConceptoMovimientoCaja, DetallePagoMovimientoCaja
 from app.models.caja_fuerte import CajaFuerte, MovimientoCajaFuerte
 from app.models.pago import Pago, DetallePago, MetodoPago, EstadoPago
 from app.models.estudiante import Estudiante
 from app.schemas.caja import (
     CajaApertura, CajaCierre, CajaResumen, CajaDetalle,
-    MovimientoCajaCreate, MovimientoCajaResponse,
+    MovimientoCajaCreate, MovimientoCajaGeneralCreate, MovimientoCajaResponse, DetallePagoResponse,
     PagoCreate, PagoResponse,
     EstudianteFinanciero, DashboardCaja
 )
@@ -368,6 +368,59 @@ def get_recibo_egreso_pdf(
     return _pdf_response(buffer, f"recibo_egreso_{egreso.id}.pdf")
 
 
+@router.get("/movimientos/{movimiento_id}/recibo-pdf")
+def get_recibo_movimiento_pdf(
+    movimiento_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_active_user)
+):
+    movimiento = db.query(MovimientoCaja).filter(
+        MovimientoCaja.id == movimiento_id
+    ).first()
+    if not movimiento:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Movimiento no encontrado")
+
+    db.refresh(movimiento, ['detalles_pago', 'usuario'])
+
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    titulo = "Recibo de ingreso" if movimiento.tipo == TipoMovimiento.INGRESO else "Recibo de egreso"
+    _pdf_header(c, titulo)
+    y = 580
+    c.setLineWidth(0.5)
+    c.line(80, y, 532, y)
+    y -= 20
+
+    y = _pdf_section(c, "Datos del movimiento", y)
+    y = _pdf_kv(c, "ID", movimiento.id, y)
+    y = _pdf_kv(c, "Fecha", movimiento.fecha.strftime("%Y-%m-%d %H:%M"), y)
+    y = _pdf_kv(c, "Concepto", movimiento.concepto, y)
+    y = _pdf_kv(c, "Categoria", movimiento.categoria.value if movimiento.categoria else "OTROS", y)
+    if movimiento.tercero_nombre:
+        y = _pdf_kv(c, "Pagado por", movimiento.tercero_nombre, y)
+    if movimiento.tercero_documento:
+        y = _pdf_kv(c, "Documento", movimiento.tercero_documento, y)
+
+    y -= 6
+    y = _pdf_section(c, "Monto", y)
+    y = _pdf_kv(c, "Total", _fmt_money(movimiento.monto), y)
+
+    y -= 6
+    y = _pdf_section(c, "Metodo de pago", y)
+    if movimiento.es_pago_mixto:
+        for d in movimiento.detalles_pago:
+            y = _pdf_kv(c, str(d.metodo_pago), _fmt_money(d.monto), y)
+    else:
+        y = _pdf_kv(c, "Metodo", str(movimiento.metodo_pago), y)
+
+    y -= 6
+    y = _pdf_section(c, "Atendido por", y)
+    y = _pdf_kv(c, "Usuario", movimiento.usuario.nombre_completo if movimiento.usuario else "N/A", y)
+    c.showPage()
+    c.save()
+    return _pdf_response(buffer, f"recibo_movimiento_{movimiento.id}.pdf")
+
+
 @router.get("/{caja_id}/cierre-pdf")
 def get_cierre_caja_pdf(
     caja_id: int,
@@ -625,25 +678,33 @@ def registrar_egreso(
             concepto=egreso_data.concepto,
             categoria=egreso_data.categoria,
             monto=egreso_data.monto,
-            metodo_pago=egreso_data.metodo_pago,
+            metodo_pago=egreso_data.metodo_pago if not egreso_data.es_pago_mixto else None,
             numero_factura=egreso_data.numero_factura,
             observaciones=egreso_data.observaciones,
+            tercero_nombre=egreso_data.tercero_nombre,
+            tercero_documento=egreso_data.tercero_documento,
+            es_pago_mixto=1 if egreso_data.es_pago_mixto else 0,
             usuario_id=current_user.id,
             fecha=datetime.utcnow()
         )
         
         db.add(nuevo_egreso)
         
-        # Actualizar totales de la caja según método de pago
-        if egreso_data.metodo_pago == MetodoPago.EFECTIVO:
-            caja_abierta.total_egresos_efectivo += egreso_data.monto
-        elif egreso_data.metodo_pago in [MetodoPago.TRANSFERENCIA_BANCARIA, MetodoPago.NEQUI, MetodoPago.DAVIPLATA]:
-            caja_abierta.total_egresos_transferencia += egreso_data.monto
-        elif egreso_data.metodo_pago in [MetodoPago.TARJETA_DEBITO, MetodoPago.TARJETA_CREDITO]:
-            caja_abierta.total_egresos_tarjeta += egreso_data.monto
+        if egreso_data.es_pago_mixto:
+            for d in (egreso_data.detalles_pago or []):
+                db.add(DetallePagoMovimientoCaja(
+                    movimiento=nuevo_egreso,
+                    metodo_pago=d.metodo_pago,
+                    monto=d.monto,
+                    referencia=d.referencia
+                ))
+                _actualizar_egresos_caja_por_metodo(caja_abierta, d.metodo_pago, d.monto)
+        else:
+            _actualizar_egresos_caja_por_metodo(caja_abierta, egreso_data.metodo_pago, egreso_data.monto)
         
         db.commit()
         db.refresh(nuevo_egreso)
+        db.refresh(nuevo_egreso, ['detalles_pago', 'usuario'])
         
         return _build_movimiento_response(nuevo_egreso)
         
@@ -653,6 +714,77 @@ def registrar_egreso(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error al registrar egreso"
+        )
+
+
+@router.post("/movimientos", response_model=MovimientoCajaResponse, status_code=status.HTTP_201_CREATED)
+def registrar_movimiento(
+    movimiento_data: MovimientoCajaGeneralCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
+):
+    """
+    Registrar un movimiento general (ingreso/egreso) en la caja abierta
+    """
+    if movimiento_data.tipo != TipoMovimiento.INGRESO:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Solo se permiten ingresos en este módulo"
+        )
+    caja_abierta = db.query(Caja).filter(Caja.estado == EstadoCaja.ABIERTA).with_for_update().first()
+    if not caja_abierta:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No hay una caja abierta. Debe abrir caja primero."
+        )
+
+    try:
+        nuevo_mov = MovimientoCaja(
+            caja_id=caja_abierta.id,
+            tipo=movimiento_data.tipo,
+            concepto=movimiento_data.concepto,
+            categoria=movimiento_data.categoria,
+            monto=movimiento_data.monto,
+            metodo_pago=movimiento_data.metodo_pago if not movimiento_data.es_pago_mixto else None,
+            numero_factura=movimiento_data.numero_factura,
+            observaciones=movimiento_data.observaciones,
+            tercero_nombre=movimiento_data.tercero_nombre,
+            tercero_documento=movimiento_data.tercero_documento,
+            es_pago_mixto=1 if movimiento_data.es_pago_mixto else 0,
+            usuario_id=current_user.id,
+            fecha=datetime.utcnow()
+        )
+        db.add(nuevo_mov)
+
+        if movimiento_data.es_pago_mixto:
+            for d in (movimiento_data.detalles_pago or []):
+                db.add(DetallePagoMovimientoCaja(
+                    movimiento=nuevo_mov,
+                    metodo_pago=d.metodo_pago,
+                    monto=d.monto,
+                    referencia=d.referencia
+                ))
+                if movimiento_data.tipo == TipoMovimiento.INGRESO:
+                    _actualizar_caja_por_metodo(caja_abierta, d.metodo_pago, d.monto)
+                else:
+                    _actualizar_egresos_caja_por_metodo(caja_abierta, d.metodo_pago, d.monto)
+        else:
+            if movimiento_data.tipo == TipoMovimiento.INGRESO:
+                _actualizar_caja_por_metodo(caja_abierta, movimiento_data.metodo_pago, movimiento_data.monto)
+            else:
+                _actualizar_egresos_caja_por_metodo(caja_abierta, movimiento_data.metodo_pago, movimiento_data.monto)
+
+        db.commit()
+        db.refresh(nuevo_mov)
+        db.refresh(nuevo_mov, ['detalles_pago', 'usuario'])
+
+        return _build_movimiento_response(nuevo_mov)
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error al registrar movimiento")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al registrar movimiento"
         )
 
 
@@ -684,6 +816,15 @@ def _actualizar_caja_por_metodo(caja: Caja, metodo: MetodoPago, monto: Decimal) 
         caja.total_credismart += monto
     elif metodo == MetodoPago.SISTECREDITO:
         caja.total_sistecredito += monto
+
+
+def _actualizar_egresos_caja_por_metodo(caja: Caja, metodo: MetodoPago, monto: Decimal) -> None:
+    if metodo == MetodoPago.EFECTIVO:
+        caja.total_egresos_efectivo += monto
+    elif metodo in [MetodoPago.NEQUI, MetodoPago.DAVIPLATA, MetodoPago.TRANSFERENCIA_BANCARIA]:
+        caja.total_egresos_transferencia += monto
+    elif metodo in [MetodoPago.TARJETA_DEBITO, MetodoPago.TARJETA_CREDITO]:
+        caja.total_egresos_tarjeta += monto
 
 def _build_caja_resumen(caja: Caja, db: Session) -> CajaResumen:
     """Construir resumen de caja"""
@@ -873,6 +1014,17 @@ def _build_pago_response(pago: Pago) -> PagoResponse:
 
 def _build_movimiento_response(movimiento: MovimientoCaja) -> MovimientoCajaResponse:
     """Construir respuesta de movimiento"""
+    detalles = []
+    if movimiento.es_pago_mixto:
+        detalles = [
+            DetallePagoResponse(
+                id=d.id,
+                metodo_pago=d.metodo_pago,
+                monto=d.monto,
+                referencia=d.referencia
+            )
+            for d in movimiento.detalles_pago
+        ]
     return MovimientoCajaResponse(
         id=movimiento.id,
         caja_id=movimiento.caja_id,
@@ -885,6 +1037,10 @@ def _build_movimiento_response(movimiento: MovimientoCaja) -> MovimientoCajaResp
         comprobante_url=movimiento.comprobante_url,
         fecha=movimiento.fecha,
         observaciones=movimiento.observaciones,
+        tercero_nombre=movimiento.tercero_nombre,
+        tercero_documento=movimiento.tercero_documento,
+        es_pago_mixto=bool(movimiento.es_pago_mixto),
+        detalles_pago=detalles,
         usuario_nombre=movimiento.usuario.nombre_completo,
         created_at=movimiento.created_at
     )

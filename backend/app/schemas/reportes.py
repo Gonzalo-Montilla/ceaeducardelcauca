@@ -129,6 +129,23 @@ class EgresoCajaItem(BaseModel):
         from_attributes = True
 
 
+class MovimientoCajaItem(BaseModel):
+    """Movimiento de caja no asociado a estudiante"""
+    movimiento_id: int
+    tipo: str
+    fecha: datetime
+    concepto: str
+    categoria: Optional[str] = None
+    metodo_pago: Optional[str] = None
+    monto: Decimal
+    tercero_nombre: Optional[str] = None
+    tercero_documento: Optional[str] = None
+    usuario: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 class ReferidoRanking(BaseModel):
     """Ranking de referidos que más estudiantes envían"""
     referido_nombre: str
@@ -194,6 +211,7 @@ class DashboardEjecutivo(BaseModel):
     lista_estudiantes_registrados: List[EstudianteRegistrado]
     lista_estudiantes_pagos: List[EstudiantePago]
     lista_egresos_caja: List[EgresoCajaItem]
+    lista_otros_movimientos: List[MovimientoCajaItem]
     fecha_generacion: datetime
     periodo_inicio: datetime
     periodo_fin: datetime

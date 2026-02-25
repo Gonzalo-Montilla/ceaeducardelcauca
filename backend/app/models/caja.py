@@ -4,6 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 import enum
 from app.core.database import Base
+from app.models.pago import MetodoPago
 
 
 class EstadoCaja(str, enum.Enum):
@@ -114,8 +115,8 @@ class Caja(Base):
         return f"<Caja {self.fecha_apertura.strftime('%Y-%m-%d')} - {self.estado}>"
 
 
-class ConceptoEgreso(str, enum.Enum):
-    """Conceptos comunes de egresos"""
+class ConceptoMovimientoCaja(str, enum.Enum):
+    """Conceptos comunes de movimientos en caja"""
     COMBUSTIBLE = "COMBUSTIBLE"
     MANTENIMIENTO_VEHICULO = "MANTENIMIENTO_VEHICULO"
     SERVICIOS_PUBLICOS = "SERVICIOS_PUBLICOS"
@@ -127,6 +128,11 @@ class ConceptoEgreso(str, enum.Enum):
     IMPUESTOS = "IMPUESTOS"
     PUBLICIDAD = "PUBLICIDAD"
     OTROS = "OTROS"
+    ESTUDIANTE_NO_REGISTRADO = "ESTUDIANTE_NO_REGISTRADO"
+    PAGO_PRESTAMO_EMPLEADO = "PAGO_PRESTAMO_EMPLEADO"
+    VENTA_MATERIAL = "VENTA_MATERIAL"
+    INGRESO_ADMINISTRATIVO = "INGRESO_ADMINISTRATIVO"
+    EGRESO_ADMINISTRATIVO = "EGRESO_ADMINISTRATIVO"
 
 
 class MovimientoCaja(Base):
@@ -139,11 +145,11 @@ class MovimientoCaja(Base):
     # Tipo y concepto
     tipo = Column(SQLEnum(TipoMovimiento), nullable=False)
     concepto = Column(String(255), nullable=False)  # Descripción libre
-    categoria = Column(SQLEnum(ConceptoEgreso))  # Para egresos, categorización
+    categoria = Column(SQLEnum(ConceptoMovimientoCaja))  # Categoría fija
     
     # Monto y método
     monto = Column(Numeric(10, 2), nullable=False)
-    metodo_pago = Column(String(50), nullable=False)  # Almacenado como string
+    metodo_pago = Column(String(50), nullable=True)  # NULL para pagos mixtos
     
     # Documentación
     comprobante_url = Column(Text)  # Foto/escaneo del comprobante
@@ -153,6 +159,10 @@ class MovimientoCaja(Base):
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     fecha = Column(DateTime, default=datetime.utcnow, nullable=False)
     observaciones = Column(Text)
+    tercero_nombre = Column(String(255))
+    tercero_documento = Column(String(50))
+    es_pago_mixto = Column(Integer, default=0, nullable=False)
+    detalles_pago = relationship("DetallePagoMovimientoCaja", back_populates="movimiento", cascade="all, delete-orphan")
     
     # Auditoría
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -163,3 +173,17 @@ class MovimientoCaja(Base):
     
     def __repr__(self):
         return f"<MovimientoCaja {self.tipo} - {self.concepto} - ${self.monto}>"
+
+
+class DetallePagoMovimientoCaja(Base):
+    """Detalle de métodos para movimientos mixtos en caja"""
+    __tablename__ = "detalles_pago_movimiento_caja"
+
+    id = Column(Integer, primary_key=True, index=True)
+    movimiento_id = Column(Integer, ForeignKey("movimientos_caja.id"), nullable=False)
+    metodo_pago = Column(SQLEnum(MetodoPago), nullable=False)
+    monto = Column(Numeric(10, 2), nullable=False)
+    referencia = Column(String(100))
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    movimiento = relationship("MovimientoCaja", back_populates="detalles_pago")

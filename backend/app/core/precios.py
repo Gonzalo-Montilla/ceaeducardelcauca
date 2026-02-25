@@ -29,6 +29,19 @@ PRECIOS_BASE = {
 # Costo adicional por práctica en certificados
 COSTO_PRACTICA = Decimal("100000")
 
+CERTIFICADOS_SIN_PRACTICA = {
+    TipoServicio.CERTIFICADO_MOTO,
+    TipoServicio.CERTIFICADO_B1,
+    TipoServicio.CERTIFICADO_C1,
+    TipoServicio.CERTIFICADO_B1_SIN_PRACTICA,
+    TipoServicio.CERTIFICADO_C1_SIN_PRACTICA,
+    TipoServicio.CERTIFICADO_A2_B1_SIN_PRACTICA,
+    TipoServicio.CERTIFICADO_A2_C1_SIN_PRACTICA,
+}
+
+def es_certificado_sin_practica(tipo_servicio: TipoServicio) -> bool:
+    return tipo_servicio in CERTIFICADOS_SIN_PRACTICA
+
 
 def calcular_precio(
     tipo_servicio: TipoServicio,

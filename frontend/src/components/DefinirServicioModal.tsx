@@ -1,6 +1,8 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { X, DollarSign, FileText, Save } from 'lucide-react';
 import { estudiantesAPI, tarifasAPI } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+import { RolUsuario } from '../types';
 import '../styles/DefinirServicioModal.css';
 
 interface DefinirServicioModalProps {
@@ -17,6 +19,7 @@ interface DefinirServicioModalProps {
 }
 
 export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: DefinirServicioModalProps) => {
+  const { user } = useAuth();
   const [modoServicio, setModoServicio] = useState<'PRIMERA_VEZ' | 'RECATEGORIZACION'>('PRIMERA_VEZ');
   const [categoriaActual, setCategoriaActual] = useState('');
   const [categoriaNueva, setCategoriaNueva] = useState('');
@@ -24,12 +27,14 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
   const [categoria, setCategoria] = useState('');
   const [origenCliente, setOrigenCliente] = useState('DIRECTO');
   const [valorTotal, setValorTotal] = useState('');
+  const [aplicarDescuento, setAplicarDescuento] = useState(false);
   const [referidoPor, setReferidoPor] = useState('');
   const [telefonoReferidor, setTelefonoReferidor] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [tarifas, setTarifas] = useState<any[]>([]);
+  const puedeAplicarDescuento = user?.rol === RolUsuario.ADMIN || user?.rol === RolUsuario.GERENTE;
 
   const getTipoDocumentoLabel = (tipo?: string) => {
     switch (tipo) {
@@ -59,11 +64,11 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
   useEffect(() => {
     if (origenCliente === 'DIRECTO' && tipoServicio) {
       const minimo = calcularPrecioMinimo(tipoServicio);
-      if (minimo && !valorTotal) {
+      if (minimo && (!valorTotal || !aplicarDescuento)) {
         setValorTotal(minimo.toString());
       }
     }
-  }, [tarifas, origenCliente, tipoServicio, valorTotal]);
+  }, [tarifas, origenCliente, tipoServicio, valorTotal, aplicarDescuento]);
 
   const calcularPrecioMinimo = (tipo: string) => {
     const tarifa = tarifas.find((t) => t.tipo_servicio === tipo && t.activo);
@@ -150,6 +155,7 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
 
   const handleOrigenChange = (origen: string) => {
     setOrigenCliente(origen);
+    setAplicarDescuento(false);
     
     // Si cambia a DIRECTO y hay un tipo de servicio seleccionado, establecer precio base
     if (origen === 'DIRECTO' && tipoServicio) {
@@ -185,6 +191,17 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
       setError('No hay tarifa definida para este servicio');
       return;
     }
+    if (origenCliente === 'DIRECTO' && aplicarDescuento) {
+      const valorNumerico = parseInt(valorTotal);
+      if (!valorNumerico || valorNumerico <= 0) {
+        setError('El valor con descuento debe ser mayor a 0');
+        return;
+      }
+      if (minimo > 0 && valorNumerico > minimo) {
+        setError(`El valor con descuento no puede ser mayor a ${formatearMoneda(minimo.toString())}`);
+        return;
+      }
+    }
     if (origenCliente === 'REFERIDO' && minimo > 0 && parseInt(valorTotal) < minimo) {
       setError(`El valor no puede ser menor a ${formatearMoneda(minimo.toString())}`);
       return;
@@ -206,7 +223,9 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
         categoria_actual: modoServicio === 'RECATEGORIZACION' ? categoriaActual : null,
         categoria_nueva: modoServicio === 'RECATEGORIZACION' ? categoriaNueva : null,
         origen_cliente: origenCliente,
-        valor_total_curso: origenCliente === 'REFERIDO' ? parseInt(valorTotal) : null,
+        valor_total_curso: origenCliente === 'REFERIDO'
+          ? parseInt(valorTotal)
+          : (aplicarDescuento ? parseInt(valorTotal) : null),
         referido_por: origenCliente === 'REFERIDO' ? referidoPor : null,
         telefono_referidor: origenCliente === 'REFERIDO' ? telefonoReferidor : null,
         observaciones: observaciones || null
@@ -407,15 +426,31 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
                 Mínimo permitido: {formatearMoneda(calcularPrecioMinimo(tipoServicio).toString())}
               </small>
             )}
+            {origenCliente === 'DIRECTO' && (
+              <div className="help-text">
+                {puedeAplicarDescuento ? (
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={aplicarDescuento}
+                      onChange={(e) => setAplicarDescuento(e.target.checked)}
+                    />
+                    <span>Aplicar descuento</span>
+                  </label>
+                ) : (
+                  <span>Solo Admin/Gerente puede aplicar descuento</span>
+                )}
+              </div>
+            )}
             <div className="input-with-icon">
               <DollarSign size={20} className="input-icon" />
               <input
                 type="text"
                 value={valorTotal}
                 onChange={(e) => setValorTotal(e.target.value.replace(/\D/g, ''))}
-                readOnly={origenCliente === 'DIRECTO'}
+                readOnly={origenCliente === 'DIRECTO' && !aplicarDescuento}
                 required
-                className={`form-input ${origenCliente === 'DIRECTO' ? 'readonly' : ''}`}
+                className={`form-input ${origenCliente === 'DIRECTO' && !aplicarDescuento ? 'readonly' : ''}`}
                 placeholder="Ingrese el valor"
               />
             </div>
