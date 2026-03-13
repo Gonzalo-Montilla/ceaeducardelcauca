@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Search, DollarSign, TrendingUp, TrendingDown, AlertCircle, Plus, X, ChevronDown, Download } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { cajaAPI } from '../services/api';
@@ -56,6 +57,7 @@ interface EstudianteFinanciero {
 }
 
 export const Caja = () => {
+  const location = useLocation();
   const [cajaActual, setCajaActual] = useState<CajaActual | null>(null);
   const [hayCajaAbierta, setHayCajaAbierta] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -74,6 +76,7 @@ export const Caja = () => {
   const [cedula, setCedula] = useState('');
   const [estudiante, setEstudiante] = useState<EstudianteFinanciero | null>(null);
   const [buscando, setBuscando] = useState(false);
+  const montoPagoRef = useRef<HTMLInputElement | null>(null);
   
   // Estados para registrar pago
   const [montoPago, setMontoPago] = useState('');
@@ -199,6 +202,25 @@ export const Caja = () => {
   useEffect(() => {
     cargarCajaActual();
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const cedulaParam = params.get('cedula');
+    if (cedulaParam) {
+      const cedulaLimpia = formatDocumentoBusqueda(cedulaParam);
+      if (cedulaLimpia) {
+        setCedula(cedulaLimpia);
+        handleBuscarEstudiante(cedulaLimpia);
+      }
+    }
+  }, [location.search]);
+
+  useEffect(() => {
+    if (!estudiante) return;
+    setTimeout(() => {
+      montoPagoRef.current?.focus();
+    }, 0);
+  }, [estudiante]);
   
   const cargarCajaActual = async () => {
     try {
@@ -236,8 +258,8 @@ export const Caja = () => {
     }
   };
   
-  const handleBuscarEstudiante = async () => {
-    const cedulaLimpia = formatDocumentoBusqueda(cedula);
+  const handleBuscarEstudiante = async (cedulaOverride?: string) => {
+    const cedulaLimpia = formatDocumentoBusqueda(cedulaOverride ?? cedula);
     if (!cedulaLimpia) {
       alert('Ingrese el documento del estudiante');
       return;
@@ -1004,6 +1026,7 @@ export const Caja = () => {
                       <label>Monto a Pagar</label>
                       <input
                         type="number"
+                        ref={montoPagoRef}
                         value={montoPago}
                         onChange={(e) => setMontoPago(e.target.value)}
                         placeholder="0"

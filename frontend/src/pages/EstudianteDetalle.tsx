@@ -1331,7 +1331,10 @@ export const EstudianteDetalle = () => {
               </div>
             )}
             
-            <button className="btn-pago">
+            <button
+              className="btn-pago"
+              onClick={() => navigate(`/caja?cedula=${encodeURIComponent(estudiante.cedula)}`)}
+            >
               <DollarSign size={18} /> Registrar Pago
             </button>
           </div>
