@@ -616,6 +616,7 @@ def registrar_pago(
         db.refresh(nuevo_pago, ['detalles_pago', 'estudiante', 'usuario'])
 
         _enviar_recibo_pago(nuevo_pago)
+        _intentar_facturar_pago_factus(nuevo_pago, db)
         
         return _build_pago_response(nuevo_pago)
         
@@ -963,6 +964,51 @@ def _enviar_recibo_pago(pago: Pago) -> None:
         logger.warning("No se pudo enviar recibo de pago a %s", estudiante.usuario.email)
 
 
+def _intentar_facturar_pago_factus(pago: Pago, db: Session) -> None:
+    """Emitir factura electrónica en Factus (sin bloquear el pago)."""
+    try:
+        from app.integrations.factus import emitir_factura_pago, FactusError, is_factus_enabled
+    except Exception as exc:
+        logger.warning("Factus no disponible: %s", exc)
+        return
+
+    if not is_factus_enabled() or pago.factura_numero:
+        return
+    if not pago.estudiante or not pago.usuario:
+        return
+
+    try:
+        resultado = emitir_factura_pago(pago, pago.estudiante, pago.estudiante.usuario)
+        if resultado:
+            raw = resultado.get("_raw")
+            pago.factura_numero = resultado.get("factura_numero") or pago.factura_numero
+            pago.factura_url = resultado.get("factura_url") or pago.factura_url
+            pago.factura_xml_url = resultado.get("factura_xml_url") or pago.factura_xml_url
+            pago.factura_cufe = resultado.get("factura_cufe") or pago.factura_cufe
+            has_factura = any([
+                pago.factura_numero,
+                pago.factura_url,
+                pago.factura_xml_url,
+                pago.factura_cufe,
+            ])
+            if has_factura:
+                pago.factura_estado = resultado.get("factura_estado") or "VALIDADO"
+                pago.factura_error = None
+            else:
+                pago.factura_estado = resultado.get("factura_estado") or "PENDIENTE"
+                if raw is not None:
+                    pago.factura_error = f"Factus sin datos de factura: {raw}"
+                else:
+                    pago.factura_error = "Factus no devolvió datos de factura"
+            db.commit()
+            db.refresh(pago)
+    except FactusError as exc:
+        pago.factura_estado = "ERROR"
+        pago.factura_error = str(exc)
+        db.commit()
+        db.refresh(pago)
+
+
 def _build_caja_detalle(caja: Caja, db: Session) -> CajaDetalle:
     """Construir detalle completo de caja"""
     resumen = _build_caja_resumen(caja, db)
@@ -1006,6 +1052,12 @@ def _build_pago_response(pago: Pago) -> PagoResponse:
         observaciones=pago.observaciones,
         es_pago_mixto=bool(pago.es_pago_mixto),
         detalles_pago=detalles,
+        factura_numero=pago.factura_numero,
+        factura_url=pago.factura_url,
+        factura_xml_url=pago.factura_xml_url,
+        factura_cufe=pago.factura_cufe,
+        factura_estado=pago.factura_estado,
+        factura_error=pago.factura_error,
         estudiante_nombre=pago.estudiante.usuario.nombre_completo,
         estudiante_matricula=pago.estudiante.matricula_numero,
         usuario_nombre=pago.usuario.nombre_completo if pago.usuario else None

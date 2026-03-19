@@ -39,6 +39,38 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _get_horas_requeridas(tipo_servicio: Optional[TipoServicio], categoria: Optional[CategoriaLicencia]) -> tuple[int, int]:
+    """Retorna horas teóricas y prácticas según servicio/categoría."""
+    horas_por_servicio = {
+        TipoServicio.LICENCIA_A2: (28, 15),
+        TipoServicio.LICENCIA_B1: (30, 20),
+        TipoServicio.LICENCIA_C1: (36, 30),
+        TipoServicio.COMBO_A2_C1: (36, 45),
+        TipoServicio.COMBO_A2_B1: (30, 36),
+        TipoServicio.CERTIFICADO_B1: (30, 20),
+        TipoServicio.CERTIFICADO_C1: (36, 30),
+        TipoServicio.CERTIFICADO_B1_SIN_PRACTICA: (30, 20),
+        TipoServicio.CERTIFICADO_C1_SIN_PRACTICA: (36, 30),
+        TipoServicio.CERTIFICADO_A2_B1_SIN_PRACTICA: (30, 36),
+        TipoServicio.CERTIFICADO_A2_C1_SIN_PRACTICA: (36, 45),
+        TipoServicio.CERTIFICADO_A2_B1_CON_PRACTICA: (30, 36),
+        TipoServicio.CERTIFICADO_A2_C1_CON_PRACTICA: (36, 45),
+        TipoServicio.RECATEGORIZACION_C1: (36, 30),
+    }
+    if tipo_servicio in horas_por_servicio:
+        return horas_por_servicio[tipo_servicio]
+
+    horas_por_categoria = {
+        CategoriaLicencia.A2: (28, 15),
+        CategoriaLicencia.B1: (30, 20),
+        CategoriaLicencia.C1: (36, 30),
+    }
+    if categoria in horas_por_categoria:
+        return horas_por_categoria[categoria]
+
+    return (0, 0)
+
+
 @router.post("", response_model=EstudianteResponse, status_code=status.HTTP_201_CREATED)
 def create_estudiante(
     estudiante_data: EstudianteCreate,
@@ -489,22 +521,13 @@ def definir_servicio(
                 )
             estudiante.valor_total_curso = servicio_data.valor_total_curso
         
-        # 5. Asignar horas teóricas y prácticas según la categoría
-        horas_map = {
-            CategoriaLicencia.A2: {"teoricas": 28, "practicas": 15},
-            CategoriaLicencia.B1: {"teoricas": 30, "practicas": 20},
-            CategoriaLicencia.C1: {"teoricas": 36, "practicas": 30},
-        }
-
-        if es_certificado_sin_practica(servicio_data.tipo_servicio):
-            estudiante.horas_teoricas_requeridas = 0
-            estudiante.horas_practicas_requeridas = 0
-        elif estudiante.categoria in horas_map:
-            estudiante.horas_teoricas_requeridas = horas_map[estudiante.categoria]["teoricas"]
-            estudiante.horas_practicas_requeridas = horas_map[estudiante.categoria]["practicas"]
-        else:
-            estudiante.horas_teoricas_requeridas = 0
-            estudiante.horas_practicas_requeridas = 0
+        # 5. Asignar horas teóricas y prácticas según servicio/categoría
+        horas_teoricas, horas_practicas = _get_horas_requeridas(
+            servicio_data.tipo_servicio,
+            estudiante.categoria
+        )
+        estudiante.horas_teoricas_requeridas = horas_teoricas
+        estudiante.horas_practicas_requeridas = horas_practicas
 
         if servicio_data.es_recategorizacion:
             datos = dict(estudiante.datos_adicionales or {})
@@ -726,12 +749,6 @@ def acreditar_horas(
             detail="No se pueden acreditar horas a estudiantes inactivos"
         )
 
-    if estudiante.tipo_servicio and es_certificado_sin_practica(estudiante.tipo_servicio):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Este servicio no requiere horas de clase"
-        )
-
     if payload.tipo == "TEORICA":
         nuevo = estudiante.horas_teoricas_completadas + payload.horas
         if estudiante.horas_teoricas_requeridas:
@@ -881,20 +898,12 @@ def ampliar_servicio(
     estudiante.valor_total_curso = nuevo_valor_total
     estudiante.saldo_pendiente = nuevo_saldo
 
-    horas_map = {
-        CategoriaLicencia.A2: {"teoricas": 28, "practicas": 15},
-        CategoriaLicencia.B1: {"teoricas": 30, "practicas": 20},
-        CategoriaLicencia.C1: {"teoricas": 36, "practicas": 30},
-    }
-    if es_certificado_sin_practica(servicio_data.tipo_servicio_nuevo):
-        estudiante.horas_teoricas_requeridas = 0
-        estudiante.horas_practicas_requeridas = 0
-    elif estudiante.categoria in horas_map:
-        estudiante.horas_teoricas_requeridas = horas_map[estudiante.categoria]["teoricas"]
-        estudiante.horas_practicas_requeridas = horas_map[estudiante.categoria]["practicas"]
-    else:
-        estudiante.horas_teoricas_requeridas = 0
-        estudiante.horas_practicas_requeridas = 0
+    horas_teoricas, horas_practicas = _get_horas_requeridas(
+        servicio_data.tipo_servicio_nuevo,
+        estudiante.categoria
+    )
+    estudiante.horas_teoricas_requeridas = horas_teoricas
+    estudiante.horas_practicas_requeridas = horas_practicas
 
     datos = dict(estudiante.datos_adicionales or {})
     ampliaciones = list(datos.get("ampliaciones_servicio", []))
@@ -1010,20 +1019,12 @@ def corregir_servicio(
     estudiante.valor_total_curso = nuevo_valor_total
     estudiante.saldo_pendiente = nuevo_valor_total
 
-    horas_map = {
-        CategoriaLicencia.A2: {"teoricas": 28, "practicas": 15},
-        CategoriaLicencia.B1: {"teoricas": 30, "practicas": 20},
-        CategoriaLicencia.C1: {"teoricas": 36, "practicas": 30},
-    }
-    if es_certificado_sin_practica(payload.tipo_servicio_nuevo):
-        estudiante.horas_teoricas_requeridas = 0
-        estudiante.horas_practicas_requeridas = 0
-    elif estudiante.categoria in horas_map:
-        estudiante.horas_teoricas_requeridas = horas_map[estudiante.categoria]["teoricas"]
-        estudiante.horas_practicas_requeridas = horas_map[estudiante.categoria]["practicas"]
-    else:
-        estudiante.horas_teoricas_requeridas = 0
-        estudiante.horas_practicas_requeridas = 0
+    horas_teoricas, horas_practicas = _get_horas_requeridas(
+        payload.tipo_servicio_nuevo,
+        estudiante.categoria
+    )
+    estudiante.horas_teoricas_requeridas = horas_teoricas
+    estudiante.horas_practicas_requeridas = horas_practicas
 
     datos = dict(estudiante.datos_adicionales or {})
     correcciones = list(datos.get("correcciones_servicio", []))

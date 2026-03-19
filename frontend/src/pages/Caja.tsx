@@ -947,7 +947,12 @@ export const Caja = () => {
               onKeyDown={(e) => e.key === 'Enter' && handleBuscarEstudiante()}
               className="search-input"
             />
-            <button onClick={handleBuscarEstudiante} disabled={buscando} className="btn-search">
+            <button
+              type="button"
+              onClick={() => handleBuscarEstudiante()}
+              disabled={buscando}
+              className="btn-search"
+            >
               <Search size={20} />
               {buscando ? 'Buscando...' : 'Buscar'}
             </button>

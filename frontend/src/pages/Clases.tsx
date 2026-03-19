@@ -59,16 +59,6 @@ export const Clases = () => {
   const [error, setError] = useState('');
   const [servicioSeleccionado, setServicioSeleccionado] = useState<number | 'TODOS'>('TODOS');
 
-  const sinPractica = new Set([
-    'CERTIFICADO_MOTO',
-    'CERTIFICADO_B1',
-    'CERTIFICADO_C1',
-    'CERTIFICADO_B1_SIN_PRACTICA',
-    'CERTIFICADO_C1_SIN_PRACTICA',
-    'CERTIFICADO_A2_B1_SIN_PRACTICA',
-    'CERTIFICADO_A2_C1_SIN_PRACTICA'
-  ]);
-
   const getServicioSeleccionado = () => {
     if (!estudiante) return null;
     const servicios = estudiante.servicios || [];
@@ -150,11 +140,6 @@ export const Clases = () => {
 
   const acreditar = async () => {
     if (!estudiante) return;
-    const tipoServicio = getTipoServicioSeleccionado();
-    if (tipoServicio && sinPractica.has(tipoServicio)) {
-      setError('Este servicio no requiere horas de clase');
-      return;
-    }
     if (!horas || parseInt(horas) <= 0) {
       setError('Las horas deben ser mayores a 0');
       return;

@@ -47,6 +47,10 @@ class Pago(Base):
     # Facturación electrónica
     factura_numero = Column(String(50))
     factura_url = Column(String(500))
+    factura_xml_url = Column(String(500))
+    factura_cufe = Column(String(100))
+    factura_estado = Column(String(50))
+    factura_error = Column(Text)
     
     # Fechas
     fecha_pago = Column(DateTime, nullable=False, default=datetime.utcnow)

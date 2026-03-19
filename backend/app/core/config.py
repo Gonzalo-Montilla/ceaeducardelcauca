@@ -42,6 +42,36 @@ class Settings(BaseSettings):
     HABEAS_CONTACTO: str = "+57 314 3005442"
     HABEAS_CORREO: str = "ceaeducardelcaucasas@gmail.com"
     HABEAS_POLITICA_URL: Optional[str] = None
+
+    # Factus (Facturación electrónica)
+    FACTUS_ENABLED: bool = False
+    FACTUS_BASE_URL: str = "https://api-sandbox.factus.com.co"
+    FACTUS_USERNAME: Optional[str] = None
+    FACTUS_PASSWORD: Optional[str] = None
+    FACTUS_CLIENT_ID: Optional[str] = None
+    FACTUS_CLIENT_SECRET: Optional[str] = None
+    FACTUS_GRANT_TYPE: str = "password"
+    FACTUS_SCOPE: Optional[str] = None
+    FACTUS_TIMEOUT_SECONDS: int = 30
+    FACTUS_NUMBERING_RANGE_ID: Optional[int] = None
+    FACTUS_DOCUMENT_CODE: str = "01"
+    FACTUS_PAYMENT_METHOD_CODE: str = "10"
+    FACTUS_ESTABLISHMENT_NAME: Optional[str] = None
+    FACTUS_ESTABLISHMENT_ADDRESS: Optional[str] = None
+    FACTUS_ESTABLISHMENT_PHONE: Optional[str] = None
+    FACTUS_ESTABLISHMENT_EMAIL: Optional[str] = None
+    FACTUS_ESTABLISHMENT_MUNICIPALITY_ID: Optional[int] = None
+    FACTUS_CUSTOMER_LEGAL_ORG_ID: str = "2"
+    FACTUS_CUSTOMER_TRIBUTE_ID: str = "21"
+    FACTUS_CUSTOMER_IDENTIFICATION_DOCUMENT_ID: int = 3
+    FACTUS_CUSTOMER_MUNICIPALITY_ID: Optional[int] = None
+    FACTUS_ITEM_UNIT_MEASURE_ID: int = 70
+    FACTUS_ITEM_STANDARD_CODE_ID: int = 1
+    FACTUS_ITEM_TRIBUTE_ID: int = 1
+    FACTUS_ITEM_TAX_RATE: str = "0.00"
+    FACTUS_ITEM_IS_EXCLUDED: int = 0
+    FACTUS_ITEM_DISCOUNT_RATE: int = 0
+    FACTUS_ITEM_CODE_REFERENCE: Optional[str] = None
     
     class Config:
         env_file = ".env"

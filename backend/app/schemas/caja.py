@@ -252,6 +252,14 @@ class PagoResponse(BaseModel):
     # Pago mixto
     es_pago_mixto: bool = False
     detalles_pago: list[DetallePagoResponse] = []
+
+    # Facturación electrónica
+    factura_numero: Optional[str] = None
+    factura_url: Optional[str] = None
+    factura_xml_url: Optional[str] = None
+    factura_cufe: Optional[str] = None
+    factura_estado: Optional[str] = None
+    factura_error: Optional[str] = None
     
     # Datos del estudiante
     estudiante_nombre: str

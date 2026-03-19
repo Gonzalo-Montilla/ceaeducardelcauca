@@ -15,7 +15,8 @@ import {
   BookOpen,
   PlusCircle,
   Car as CarIcon,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 import '../styles/EstudianteDetalle.css';
 import '../styles/DefinirServicioModal.css';
@@ -108,6 +109,7 @@ export const EstudianteDetalle = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [editError, setEditError] = useState('');
   const [editFotoBase64, setEditFotoBase64] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [showAmpliarModal, setShowAmpliarModal] = useState(false);
   const [ampliarError, setAmpliarError] = useState('');
   const [ampliarSaving, setAmpliarSaving] = useState(false);
@@ -154,6 +156,21 @@ export const EstudianteDetalle = () => {
   }, [id]);
 
   useEffect(() => {
+    const handleRefrescar = () => {
+      if (!id) return;
+      if (document.visibilityState === 'visible') {
+        cargarEstudiante({ silent: true });
+      }
+    };
+    window.addEventListener('focus', handleRefrescar);
+    document.addEventListener('visibilitychange', handleRefrescar);
+    return () => {
+      window.removeEventListener('focus', handleRefrescar);
+      document.removeEventListener('visibilitychange', handleRefrescar);
+    };
+  }, [id]);
+
+  useEffect(() => {
     if (!showAmpliarModal || !comboTipo) return;
     if (estudiante?.origen_cliente === 'DIRECTO') {
       const minimo = calcularPrecioMinimo(comboTipo);
@@ -169,16 +186,25 @@ export const EstudianteDetalle = () => {
     setServicioVistaId(activo);
   }, [estudiante]);
 
-  const cargarEstudiante = async () => {
+  const cargarEstudiante = async (options?: { silent?: boolean }) => {
+    if (!id) return;
     try {
-      setIsLoading(true);
+      if (options?.silent) {
+        setRefreshing(true);
+      } else {
+        setIsLoading(true);
+      }
       const data = await estudiantesAPI.getById(Number(id));
       setEstudiante(data);
     } catch (err) {
       console.error('Error al cargar estudiante:', err);
       setError('Error al cargar los datos del estudiante');
     } finally {
-      setIsLoading(false);
+      if (options?.silent) {
+        setRefreshing(false);
+      } else {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -1043,6 +1069,13 @@ export const EstudianteDetalle = () => {
           <ArrowLeft size={20} /> Volver
         </button>
         <div className="header-actions">
+          <button
+            className="btn-action"
+            onClick={() => cargarEstudiante({ silent: true })}
+            disabled={refreshing || isLoading}
+          >
+            <RefreshCw size={18} /> {refreshing ? 'Actualizando...' : 'Actualizar'}
+          </button>
           <button className="btn-action" onClick={abrirEditar}>
             <Edit size={18} /> Editar
           </button>
