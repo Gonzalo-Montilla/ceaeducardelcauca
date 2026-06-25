@@ -37,6 +37,11 @@ export const TablaEstudiantesRegistrados = ({ estudiantes }: TablaEstudiantesReg
   };
 
   const getBadgeColor = (estado: string) => {
+    const estadoNormalizado: { [key: string]: string } = {
+      'ACTIVO': 'EN_FORMACION',
+      'INACTIVO': 'RETIRADO'
+    };
+    const estadoKey = estadoNormalizado[estado] || estado;
     const colores: { [key: string]: string } = {
       'PROSPECTO': 'badge-secondary',
       'INSCRITO': 'badge-primary',
@@ -46,7 +51,7 @@ export const TablaEstudiantesRegistrados = ({ estudiantes }: TablaEstudiantesReg
       'DESERTOR': 'badge-danger',
       'RETIRADO': 'badge-danger'
     };
-    return colores[estado] || 'badge-secondary';
+    return colores[estadoKey] || 'badge-secondary';
   };
 
   return (

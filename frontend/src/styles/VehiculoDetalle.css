@@ -301,3 +301,42 @@
   border-radius: 6px;
   padding: 8px 10px;
 }
+
+@media (max-width: 768px) {
+  .detalle-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .export-actions {
+    margin-left: 0;
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .export-actions button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .vehiculo-info-card {
+    grid-template-columns: 1fr;
+  }
+
+  .vehiculo-foto,
+  .vehiculo-foto.placeholder {
+    width: 100%;
+    max-width: 280px;
+    margin: 0 auto;
+  }
+
+  .vehiculo-info-right {
+    grid-template-columns: 1fr;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+}

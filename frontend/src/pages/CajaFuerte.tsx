@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Banknote, CreditCard, Wallet, Download } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
+import { useUIFeedback } from '../contexts/UIFeedbackContext';
 import { cajaFuerteAPI } from '../services/api';
 import '../styles/CajaFuerte.css';
 
@@ -10,10 +11,6 @@ const METODOS = [
   'NEQUI',
   'DAVIPLATA',
   'TRANSFERENCIA_BANCARIA',
-  'TARJETA_DEBITO',
-  'TARJETA_CREDITO',
-  'CREDISMART',
-  'SISTECREDITO',
 ];
 const CATEGORIAS_EGRESO = [
   'ARRENDAMIENTO',
@@ -33,7 +30,15 @@ const CATEGORIAS_INGRESO = [
   'OTROS',
 ];
 
+const onlyDigits = (value: string) => value.replace(/\D/g, '');
+const formatMoneyInput = (value: string | number) => {
+  const digits = onlyDigits(String(value ?? ''));
+  if (!digits) return '';
+  return Number(digits).toLocaleString('es-CO');
+};
+
 export default function CajaFuerte() {
+  const { confirm, showToast } = useUIFeedback();
   const [resumen, setResumen] = useState<any>(null);
   const [movimientos, setMovimientos] = useState<any[]>([]);
   const [inventario, setInventario] = useState<any[]>([]);
@@ -64,6 +69,96 @@ export default function CajaFuerte() {
     () => movDenoms.reduce((acc, item) => acc + item.denominacion * item.cantidad, 0),
     [movDenoms]
   );
+  const montoObjetivo = useMemo(() => {
+    const parsed = Number(form.monto);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  }, [form.monto]);
+  const diferenciaCuadre = useMemo(() => totalMovimiento - montoObjetivo, [totalMovimiento, montoObjetivo]);
+  const estadoCuadre = useMemo(() => {
+    if (montoObjetivo <= 0) {
+      return {
+        clase: 'cuadre-pendiente',
+        texto: 'Pendiente por cuadrar',
+      };
+    }
+    if (diferenciaCuadre === 0) {
+      return {
+        clase: 'cuadre-ok',
+        texto: 'Cuadra: $0',
+      };
+    }
+    if (diferenciaCuadre < 0) {
+      return {
+        clase: 'cuadre-faltante',
+        texto: `Faltan: $${Math.abs(diferenciaCuadre).toLocaleString('es-CO')}`,
+      };
+    }
+    return {
+      clase: 'cuadre-sobrante',
+      texto: `Sobra: $${Math.abs(diferenciaCuadre).toLocaleString('es-CO')}`,
+    };
+  }, [montoObjetivo, diferenciaCuadre]);
+  const inventarioDetalle = useMemo(() => {
+    const cantidades = new Map(
+      inventario.map((item) => [Number(item.denominacion), Number(item.cantidad || 0)])
+    );
+    return DENOMINACIONES.map((denominacion) => {
+      const cantidad = Number(cantidades.get(denominacion) || 0);
+      const subtotal = denominacion * cantidad;
+      return {
+        denominacion,
+        cantidad,
+        subtotal,
+      };
+    });
+  }, [inventario]);
+  const inventarioBilletes = useMemo(
+    () => inventarioDetalle.filter((item) => item.denominacion >= 2000),
+    [inventarioDetalle]
+  );
+  const inventarioMonedas = useMemo(
+    () => inventarioDetalle.filter((item) => item.denominacion < 2000),
+    [inventarioDetalle]
+  );
+  const totalBilletes = useMemo(
+    () => inventarioBilletes.reduce((acc, item) => acc + item.subtotal, 0),
+    [inventarioBilletes]
+  );
+  const totalMonedas = useMemo(
+    () => inventarioMonedas.reduce((acc, item) => acc + item.subtotal, 0),
+    [inventarioMonedas]
+  );
+  const topDenominacionesInventario = useMemo(() => {
+    const top = inventarioDetalle
+      .filter((item) => item.subtotal > 0)
+      .sort((a, b) => b.subtotal - a.subtotal)
+      .slice(0, 3)
+      .map((item) => item.denominacion);
+    return new Set(top);
+  }, [inventarioDetalle]);
+  const saldoDigitalOperativo = Number(resumen?.saldo_nequi || 0) +
+    Number(resumen?.saldo_daviplata || 0) +
+    Number(resumen?.saldo_transferencia_bancaria || 0);
+  const saldoTotalOperativo = Number(resumen?.saldo_efectivo || 0) + saldoDigitalOperativo;
+  const getSaldoDisponiblePorMetodo = (metodo: string) => {
+    const map: Record<string, number> = {
+      EFECTIVO: Number(resumen?.saldo_efectivo || 0),
+      NEQUI: Number(resumen?.saldo_nequi || 0),
+      DAVIPLATA: Number(resumen?.saldo_daviplata || 0),
+      TRANSFERENCIA_BANCARIA: Number(resumen?.saldo_transferencia_bancaria || 0),
+      TARJETA_DEBITO: Number(resumen?.saldo_tarjeta_debito || 0),
+      TARJETA_CREDITO: Number(resumen?.saldo_tarjeta_credito || 0),
+      CREDISMART: Number(resumen?.saldo_credismart || 0),
+      SISTECREDITO: Number(resumen?.saldo_sistecredito || 0),
+    };
+    return map[metodo] ?? 0;
+  };
+  const montoMovimientoValor = Number(form.monto) || 0;
+  const saldoDisponibleMetodo = getSaldoDisponiblePorMetodo(form.metodo_pago);
+  const egresoExcedeDisponible =
+    form.tipo === 'EGRESO' &&
+    montoMovimientoValor > 0 &&
+    montoMovimientoValor > saldoDisponibleMetodo;
 
   const downloadCSV = (filename: string, rows: (string | number)[][]) => {
     const escape = (value: string | number) => {
@@ -142,6 +237,13 @@ export default function CajaFuerte() {
 
   const handleGuardarMovimiento = async () => {
     if (!form.concepto || !form.monto) return;
+    if (form.tipo === 'EGRESO' && Number(form.monto) > getSaldoDisponiblePorMetodo(form.metodo_pago)) {
+      showToast(
+        `Saldo insuficiente en ${form.metodo_pago}. Disponible: $${getSaldoDisponiblePorMetodo(form.metodo_pago).toLocaleString('es-CO')}`,
+        'error'
+      );
+      return;
+    }
     try {
       if (editandoId) {
         const categoriaFinal = categoriaSeleccionada === 'OTROS' ? categoriaCustom : categoriaSeleccionada;
@@ -154,7 +256,7 @@ export default function CajaFuerte() {
         };
         if (form.metodo_pago === 'EFECTIVO') {
           if (totalMovimiento !== Number(form.monto)) {
-            alert('Las denominaciones no cuadran con el monto del movimiento.');
+            showToast('Las denominaciones no cuadran con el monto del movimiento.', 'error');
             return;
           }
           payloadUpdate.inventario_items = movDenoms.map((i) => ({
@@ -174,7 +276,7 @@ export default function CajaFuerte() {
         };
         if (form.metodo_pago === 'EFECTIVO') {
           if (totalMovimiento !== Number(form.monto)) {
-            alert('Las denominaciones no cuadran con el monto del movimiento.');
+            showToast('Las denominaciones no cuadran con el monto del movimiento.', 'error');
             return;
           }
           payload.inventario_items = movDenoms.map((i) => ({
@@ -184,8 +286,9 @@ export default function CajaFuerte() {
         }
         await cajaFuerteAPI.crearMovimiento(payload);
       }
+      showToast(editandoId ? 'Movimiento actualizado correctamente' : 'Movimiento registrado correctamente', 'success');
     } catch (error: any) {
-      alert(error?.response?.data?.detail || 'Error al registrar el movimiento');
+      showToast(error?.response?.data?.detail || 'Error al registrar el movimiento', 'error');
       return;
     }
     setForm({
@@ -207,7 +310,7 @@ export default function CajaFuerte() {
       tipo: mov.tipo,
       metodo_pago: mov.metodo_pago,
       concepto: mov.concepto,
-      monto: mov.monto,
+      monto: onlyDigits(String(mov.monto ?? '')),
       observaciones: mov.observaciones || '',
     });
     if (mov.categoria) {
@@ -235,19 +338,26 @@ export default function CajaFuerte() {
   };
 
   const handleEliminar = async (id: number) => {
-    const ok = window.confirm('¿Eliminar este movimiento?');
+    const ok = await confirm({
+      title: 'Eliminar movimiento',
+      message: '¿Eliminar este movimiento?',
+      confirmText: 'Eliminar',
+      danger: true,
+    });
     if (!ok) return;
     try {
       await cajaFuerteAPI.eliminarMovimiento(id);
       await cargarTodo();
+      showToast('Movimiento eliminado correctamente', 'success');
     } catch (error: any) {
-      alert(error?.response?.data?.detail || 'Error al eliminar el movimiento');
+      showToast(error?.response?.data?.detail || 'Error al eliminar el movimiento', 'error');
     }
   };
 
   const handleMovDenomChange = (denom: number, cantidad: number) => {
+    const safeCantidad = Number.isFinite(cantidad) ? Math.max(0, Math.floor(cantidad)) : 0;
     setMovDenoms((prev) =>
-      prev.map((item) => (item.denominacion === denom ? { ...item, cantidad } : item))
+      prev.map((item) => (item.denominacion === denom ? { ...item, cantidad: safeCantidad } : item))
     );
   };
 
@@ -263,7 +373,7 @@ export default function CajaFuerte() {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error: any) {
-      alert(error?.response?.data?.detail || 'No se pudo generar el recibo');
+      showToast(error?.response?.data?.detail || 'No se pudo generar el recibo', 'error');
     }
   };
 
@@ -298,7 +408,7 @@ export default function CajaFuerte() {
             <div className="resumen-icon primary"><CreditCard size={18} /></div>
             <h3>Saldo Digital</h3>
           </div>
-          <div className="resumen-valor">${Number((resumen?.saldo_total || 0) - (resumen?.saldo_efectivo || 0)).toLocaleString()}</div>
+          <div className="resumen-valor">${saldoDigitalOperativo.toLocaleString()}</div>
           <div className="resumen-subdetalle">
             <div className="detalle-row">
               <span>Nequi</span>
@@ -317,71 +427,119 @@ export default function CajaFuerte() {
         <div className="resumen-card">
           <div className="resumen-header">
             <div className="resumen-icon warning"><Wallet size={18} /></div>
-            <h3>Saldo Total</h3>
+            <h3>Saldo Operativo</h3>
           </div>
-          <div className="resumen-valor">${Number(resumen?.saldo_total || 0).toLocaleString()}</div>
+          <div className="resumen-valor">${saldoTotalOperativo.toLocaleString()}</div>
         </div>
       </div>
 
       <div className="caja-fuerte-grid">
-        <div className="caja-fuerte-section">
-          <h2>Registrar Movimiento</h2>
+        <div className="caja-fuerte-section movimiento-section">
+          <div className="section-head">
+            <div>
+              <h2>Registrar movimiento</h2>
+              <p className="section-subtitle">Diligencia los campos y valida el total antes de registrar.</p>
+            </div>
+            <div className="registro-chips">
+              <span className={`registro-chip ${form.tipo === 'INGRESO' ? 'chip-success' : 'chip-danger'}`}>
+                {form.tipo}
+              </span>
+              <span className="registro-chip chip-neutral">{form.metodo_pago.replaceAll('_', ' ')}</span>
+              <span className="registro-chip chip-primary">
+                Total: ${Number(totalMovimiento).toLocaleString('es-CO')}
+              </span>
+            </div>
+          </div>
           <div className="form-grid">
-            <select
-              value={form.tipo}
-              onChange={(e) => {
-                const nextTipo = e.target.value;
-                setForm({ ...form, tipo: nextTipo });
-                setCategoriaSeleccionada('OTROS');
-                setCategoriaCustom('');
-              }}
-            >
-              <option value="INGRESO">Ingreso</option>
-              <option value="EGRESO">Egreso</option>
-            </select>
-            <select value={form.metodo_pago} onChange={(e) => setForm({ ...form, metodo_pago: e.target.value })}>
-              {METODOS.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-            <input
-              type="text"
-              placeholder="Concepto"
-              value={form.concepto}
-              onChange={(e) => setForm({ ...form, concepto: e.target.value })}
-            />
-            <select
-              value={categoriaSeleccionada}
-              onChange={(e) => setCategoriaSeleccionada(e.target.value)}
-            >
-              {(form.tipo === 'EGRESO' ? CATEGORIAS_EGRESO : CATEGORIAS_INGRESO).map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-            {categoriaSeleccionada === 'OTROS' && (
+            <label className="field-control">
+              <span>Tipo de movimiento</span>
+              <select
+                value={form.tipo}
+                onChange={(e) => {
+                  const nextTipo = e.target.value;
+                  setForm({ ...form, tipo: nextTipo });
+                  setCategoriaSeleccionada('OTROS');
+                  setCategoriaCustom('');
+                }}
+              >
+                <option value="INGRESO">Ingreso</option>
+                <option value="EGRESO">Egreso</option>
+              </select>
+            </label>
+            <label className="field-control">
+              <span>Método de pago</span>
+              <select value={form.metodo_pago} onChange={(e) => setForm({ ...form, metodo_pago: e.target.value })}>
+                {METODOS.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </label>
+            <label className="field-control">
+              <span>Concepto</span>
               <input
                 type="text"
-                placeholder="Especifica la categoría"
-                value={categoriaCustom}
-                onChange={(e) => setCategoriaCustom(e.target.value)}
+                placeholder="Concepto del movimiento"
+                value={form.concepto}
+                onChange={(e) => setForm({ ...form, concepto: e.target.value })}
               />
+            </label>
+            <label className="field-control">
+              <span>Categoría</span>
+              <select
+                value={categoriaSeleccionada}
+                onChange={(e) => setCategoriaSeleccionada(e.target.value)}
+              >
+                {(form.tipo === 'EGRESO' ? CATEGORIAS_EGRESO : CATEGORIAS_INGRESO).map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+            {categoriaSeleccionada === 'OTROS' && (
+              <label className="field-control">
+                <span>Especifica categoría</span>
+                <input
+                  type="text"
+                  placeholder="Ejemplo: ajuste inventario"
+                  value={categoriaCustom}
+                  onChange={(e) => setCategoriaCustom(e.target.value)}
+                />
+              </label>
             )}
-            <input
-              type="number"
-              placeholder="Monto"
-              value={form.monto}
-              onChange={(e) => setForm({ ...form, monto: e.target.value })}
-            />
-            <input
-              type="text"
-              placeholder="Observaciones"
-              value={form.observaciones}
-              onChange={(e) => setForm({ ...form, observaciones: e.target.value })}
-            />
+            <label className="field-control">
+              <span>Monto</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="0"
+                value={formatMoneyInput(form.monto)}
+                onChange={(e) => setForm({ ...form, monto: onlyDigits(e.target.value) })}
+              />
+            </label>
+            <label className="field-control field-span-2">
+              <span>Observaciones</span>
+              <input
+                type="text"
+                placeholder="Observaciones adicionales (opcional)"
+                value={form.observaciones}
+                onChange={(e) => setForm({ ...form, observaciones: e.target.value })}
+              />
+            </label>
           </div>
+          {egresoExcedeDisponible && (
+            <p className="movimiento-warning">
+              El egreso supera el disponible en {form.metodo_pago.replaceAll('_', ' ')} (
+              ${saldoDisponibleMetodo.toLocaleString('es-CO')}).
+            </p>
+          )}
           {form.metodo_pago === 'EFECTIVO' && (
             <div className="mov-denoms">
-              <h3>Denominaciones del movimiento</h3>
+              <div className="subsection-head">
+                <h3>Denominaciones del movimiento</h3>
+                <div className="subsection-chips">
+                  <strong className="inventario-total-chip">Total: ${Number(totalMovimiento).toLocaleString('es-CO')}</strong>
+                  <span className={`cuadre-chip ${estadoCuadre.clase}`}>{estadoCuadre.texto}</span>
+                </div>
+              </div>
               <div className="inventario-grid">
                 {DENOMINACIONES.map((denom) => {
                   const item = movDenoms.find((i) => i.denominacion === denom) || { cantidad: 0 };
@@ -392,16 +550,15 @@ export default function CajaFuerte() {
                         <input
                           type="number"
                           min={0}
-                          value={item.cantidad}
-                          onChange={(e) => handleMovDenomChange(denom, Number(e.target.value))}
+                          placeholder="0"
+                          value={item.cantidad === 0 ? '' : item.cantidad}
+                          onFocus={(e) => e.currentTarget.select()}
+                          onChange={(e) => handleMovDenomChange(denom, e.target.value === '' ? 0 : Number(e.target.value))}
                         />
                       </div>
                     </div>
                   );
                 })}
-              </div>
-              <div className="inventario-total">
-                Total movimiento: ${Number(totalMovimiento).toLocaleString()}
               </div>
             </div>
           )}
@@ -420,28 +577,65 @@ export default function CajaFuerte() {
                 Cancelar edición
               </button>
             )}
-            <button className="btn-primary" onClick={handleGuardarMovimiento}>
+            <button className="btn-primary" onClick={handleGuardarMovimiento} disabled={egresoExcedeDisponible}>
               {editandoId ? 'Guardar Cambios' : 'Registrar'}
             </button>
           </div>
-          <div className="mov-denoms">
-            <h3>Inventario actual (efectivo)</h3>
-            <div className="inventario-grid">
-              {DENOMINACIONES.map((denom) => {
-                const item = inventario.find((i) => i.denominacion === denom) || { cantidad: 0 };
-                return (
-                  <div className="inventario-item readonly" key={denom}>
-                    <span className="denom">${denom.toLocaleString()}</span>
-                    <span className="cantidad">x {Number(item.cantidad || 0)}</span>
-                  </div>
-                );
-              })}
+        </div>
+        <aside className="caja-fuerte-section inventario-section">
+          <div className="inventario-actual-panel">
+            <div className="subsection-head">
+              <h3>Inventario actual (efectivo)</h3>
+              <strong className="inventario-total-chip">
+                Total efectivo: ${Number(inventarioTotal).toLocaleString('es-CO')}
+              </strong>
             </div>
-            <div className="inventario-total">
-              Total efectivo: ${Number(inventarioTotal).toLocaleString()}
+            <div className="inventario-grupo">
+              <div className="inventario-grupo-head">
+                <h4>Billetes</h4>
+                <span>${totalBilletes.toLocaleString('es-CO')}</span>
+              </div>
+              <div className="inventario-grid">
+                {inventarioBilletes.map((item) => (
+                  <div
+                    className={`inventario-item readonly ${topDenominacionesInventario.has(item.denominacion) ? 'top-impact' : ''}`}
+                    key={item.denominacion}
+                  >
+                    <div className="inventario-item-main">
+                      <span className="denom">${item.denominacion.toLocaleString()}</span>
+                      <span className="cantidad">x {item.cantidad}</span>
+                    </div>
+                    <span className="inventario-subtotal">
+                      = ${item.subtotal.toLocaleString('es-CO')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="inventario-grupo">
+              <div className="inventario-grupo-head">
+                <h4>Monedas</h4>
+                <span>${totalMonedas.toLocaleString('es-CO')}</span>
+              </div>
+              <div className="inventario-grid">
+                {inventarioMonedas.map((item) => (
+                  <div
+                    className={`inventario-item readonly ${topDenominacionesInventario.has(item.denominacion) ? 'top-impact' : ''}`}
+                    key={item.denominacion}
+                  >
+                    <div className="inventario-item-main">
+                      <span className="denom">${item.denominacion.toLocaleString()}</span>
+                      <span className="cantidad">x {item.cantidad}</span>
+                    </div>
+                    <span className="inventario-subtotal">
+                      = ${item.subtotal.toLocaleString('es-CO')}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        </aside>
 
       </div>
 

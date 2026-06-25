@@ -148,3 +148,19 @@
   color: var(--text-secondary);
   font-size: 13px;
 }
+
+@media (max-width: 480px) {
+  .login-card {
+    padding: 24px 20px;
+  }
+
+  .login-logo {
+    width: 100%;
+    max-width: 260px;
+    margin-bottom: -20px;
+  }
+
+  .login-header p {
+    font-size: 15px;
+  }
+}

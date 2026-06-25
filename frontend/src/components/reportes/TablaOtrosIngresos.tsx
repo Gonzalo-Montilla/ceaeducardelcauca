@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FilePlus, Eye, Download } from 'lucide-react';
 import { cajaAPI } from '../../services/api';
+import { useUIFeedback } from '../../contexts/UIFeedbackContext';
 
 interface OtrosIngresoItem {
   movimiento_id: number;
@@ -20,6 +21,7 @@ interface TablaOtrosIngresosProps {
 }
 
 export const TablaOtrosIngresos = ({ ingresos }: TablaOtrosIngresosProps) => {
+  const { showToast } = useUIFeedback();
   const [reciboUrl, setReciboUrl] = useState<string | null>(null);
   const [reciboId, setReciboId] = useState<number | null>(null);
   const [cargandoRecibo, setCargandoRecibo] = useState(false);
@@ -51,7 +53,7 @@ export const TablaOtrosIngresos = ({ ingresos }: TablaOtrosIngresosProps) => {
       setReciboId(movimientoId);
     } catch (error) {
       console.error('Error al abrir recibo:', error);
-      alert('No se pudo cargar el recibo');
+      showToast('No se pudo cargar el recibo', 'error');
     } finally {
       setCargandoRecibo(false);
     }
@@ -70,7 +72,7 @@ export const TablaOtrosIngresos = ({ ingresos }: TablaOtrosIngresosProps) => {
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (error) {
       console.error('Error al descargar recibo:', error);
-      alert('No se pudo descargar el recibo');
+      showToast('No se pudo descargar el recibo', 'error');
     }
   };
 

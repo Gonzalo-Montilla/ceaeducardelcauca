@@ -4,6 +4,7 @@ import { estudiantesAPI } from '../services/api';
 import { Search, UserPlus, Eye, Settings, ChevronDown, Users } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { DefinirServicioModal } from '../components/DefinirServicioModal';
+import { useUIFeedback } from '../contexts/UIFeedbackContext';
 import '../styles/Estudiantes.css';
 
 interface Estudiante {
@@ -24,6 +25,7 @@ interface Estudiante {
 }
 
 export const Estudiantes = () => {
+  const { confirm, showToast } = useUIFeedback();
   const navigate = useNavigate();
   const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
   const [busqueda, setBusqueda] = useState('');
@@ -133,6 +135,11 @@ export const Estudiantes = () => {
   };
 
   const getEstadoBadgeClass = (estado: string) => {
+    const estadoNormalizado: { [key: string]: string } = {
+      'ACTIVO': 'EN_FORMACION',
+      'INACTIVO': 'RETIRADO'
+    };
+    const estadoKey = estadoNormalizado[estado] || estado;
     const estados: { [key: string]: string } = {
       'PROSPECTO': 'badge-warning',
       'INSCRITO': 'badge-info',
@@ -142,7 +149,7 @@ export const Estudiantes = () => {
       'DESERTOR': 'badge-danger',
       'RETIRADO': 'badge-danger'
     };
-    return estados[estado] || 'badge-secondary';
+    return estados[estadoKey] || 'badge-secondary';
   };
 
   const handleDefinirServicio = (estudiante: Estudiante) => {
@@ -152,7 +159,11 @@ export const Estudiantes = () => {
 
   const handleReactivar = async (estudiante: Estudiante) => {
     try {
-      const confirmado = window.confirm('¿Deseas reactivar este estudiante para un nuevo servicio?');
+      const confirmado = await confirm({
+        title: 'Reactivar estudiante',
+        message: '¿Deseas reactivar este estudiante para un nuevo servicio?',
+        confirmText: 'Reactivar',
+      });
       if (!confirmado) return;
       const actualizado = await estudiantesAPI.reactivar(estudiante.id);
       setEstudiantes((prev) =>
@@ -160,9 +171,11 @@ export const Estudiantes = () => {
       );
       setEstudianteSeleccionado(actualizado);
       setMostrarModal(true);
+      showToast('Estudiante reactivado correctamente', 'success');
     } catch (err) {
       console.error('Error al reactivar estudiante:', err);
       setError('No se pudo reactivar el estudiante');
+      showToast('No se pudo reactivar el estudiante', 'error');
     }
   };
 

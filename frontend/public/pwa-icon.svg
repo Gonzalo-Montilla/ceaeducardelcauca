@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CEA Educar icono">
+  <rect x="8" y="8" width="496" height="496" rx="94" fill="#ffffff" />
+  <rect x="8.5" y="8.5" width="495" height="495" rx="94" fill="none" stroke="#c7d2fe" stroke-width="1" />
+  <rect x="34" y="136" width="444" height="240" rx="28" fill="#ffffff" />
+  <image
+    href="/logo-real.png"
+    x="38"
+    y="148"
+    width="436"
+    height="216"
+    preserveAspectRatio="xMidYMid meet"
+  />
+</svg>

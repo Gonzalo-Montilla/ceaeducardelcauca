@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FileMinus, Download, Eye } from 'lucide-react';
 import { cajaAPI } from '../../services/api';
+import { useUIFeedback } from '../../contexts/UIFeedbackContext';
 
 interface EgresoItem {
   egreso_id: number;
@@ -17,6 +18,7 @@ interface TablaEgresosCajaProps {
 }
 
 export const TablaEgresosCaja = ({ egresos }: TablaEgresosCajaProps) => {
+  const { showToast } = useUIFeedback();
   const [reciboUrl, setReciboUrl] = useState<string | null>(null);
   const [reciboId, setReciboId] = useState<number | null>(null);
   const [cargandoRecibo, setCargandoRecibo] = useState(false);
@@ -49,7 +51,7 @@ export const TablaEgresosCaja = ({ egresos }: TablaEgresosCajaProps) => {
       setReciboId(egresoId);
     } catch (err) {
       console.error('Error al cargar recibo:', err);
-      alert('No se pudo cargar el recibo');
+      showToast('No se pudo cargar el recibo', 'error');
     } finally {
       setCargandoRecibo(false);
     }
@@ -68,7 +70,7 @@ export const TablaEgresosCaja = ({ egresos }: TablaEgresosCajaProps) => {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Error al descargar recibo:', err);
-      alert('No se pudo descargar el recibo');
+      showToast('No se pudo descargar el recibo', 'error');
     }
   };
 

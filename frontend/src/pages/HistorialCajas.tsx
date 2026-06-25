@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { History, Search, X, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
+import { useUIFeedback } from '../contexts/UIFeedbackContext';
 import { cajaAPI } from '../services/api';
 import '../styles/HistorialCajas.css';
 
@@ -34,6 +35,7 @@ interface CajaHistorial {
 }
 
 export const HistorialCajas = () => {
+  const { showToast } = useUIFeedback();
   const [cajas, setCajas] = useState<CajaHistorial[]>([]);
   const [loading, setLoading] = useState(true);
   const [fechaInicio, setFechaInicio] = useState('');
@@ -82,7 +84,7 @@ export const HistorialCajas = () => {
 
   const handleFiltrar = () => {
     if (fechaInicio && fechaFin && new Date(fechaInicio) > new Date(fechaFin)) {
-      alert('La fecha de inicio no puede ser mayor a la fecha fin');
+      showToast('La fecha de inicio no puede ser mayor a la fecha fin', 'error');
       return;
     }
     setPaginaActual(1);
@@ -224,7 +226,7 @@ export const HistorialCajas = () => {
                     {formatearMoneda(caja.total_ingresos)}
                   </td>
                   <td className="monto-efectivo">
-                    {formatearMoneda(caja.saldo_efectivo_caja)}
+                    {formatearMoneda(caja.efectivo_teorico)}
                   </td>
                   <td className={`diferencia ${getDiferenciaTipo(caja.diferencia)}`}>
                     {getDiferenciaTexto(caja.diferencia)}
@@ -430,8 +432,8 @@ export const HistorialCajas = () => {
                   <span className="total-valor negativo">{formatearMoneda(cajaSeleccionada.total_egresos)}</span>
                 </div>
                 <div className="total-item destacado-total">
-                  <span>Saldo Final Teórico:</span>
-                  <span className="total-valor">{formatearMoneda(cajaSeleccionada.saldo_final_teorico)}</span>
+                  <span>Teórico a Entregar:</span>
+                  <span className="total-valor">{formatearMoneda(cajaSeleccionada.efectivo_teorico)}</span>
                 </div>
               </div>
 

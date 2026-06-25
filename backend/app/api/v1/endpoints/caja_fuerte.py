@@ -70,7 +70,35 @@ def _apply_delta(caja_fuerte: CajaFuerte, metodo, delta: Decimal):
         )
 
 
+def _get_saldo_por_metodo(caja_fuerte: CajaFuerte, metodo: MetodoPago) -> Decimal:
+    if metodo == MetodoPago.EFECTIVO:
+        return Decimal(str(caja_fuerte.saldo_efectivo or 0))
+    if metodo == MetodoPago.NEQUI:
+        return Decimal(str(caja_fuerte.saldo_nequi or 0))
+    if metodo == MetodoPago.DAVIPLATA:
+        return Decimal(str(caja_fuerte.saldo_daviplata or 0))
+    if metodo == MetodoPago.TRANSFERENCIA_BANCARIA:
+        return Decimal(str(caja_fuerte.saldo_transferencia_bancaria or 0))
+    if metodo == MetodoPago.TARJETA_DEBITO:
+        return Decimal(str(caja_fuerte.saldo_tarjeta_debito or 0))
+    if metodo == MetodoPago.TARJETA_CREDITO:
+        return Decimal(str(caja_fuerte.saldo_tarjeta_credito or 0))
+    if metodo == MetodoPago.CREDISMART:
+        return Decimal(str(caja_fuerte.saldo_credismart or 0))
+    if metodo == MetodoPago.SISTECREDITO:
+        return Decimal(str(caja_fuerte.saldo_sistecredito or 0))
+    return Decimal("0")
+
+
 def _apply_movimiento_to_saldos(caja_fuerte: CajaFuerte, tipo: TipoMovimiento, metodo, monto: Decimal):
+    if tipo == TipoMovimiento.EGRESO:
+        saldo_disponible = _get_saldo_por_metodo(caja_fuerte, metodo)
+        monto_decimal = Decimal(str(monto))
+        if monto_decimal > saldo_disponible:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Saldo insuficiente en {metodo.value}. Disponible: ${saldo_disponible:,.0f}; solicitado: ${monto_decimal:,.0f}"
+            )
     delta = monto if tipo == TipoMovimiento.INGRESO else -monto
     _apply_delta(caja_fuerte, metodo, delta)
 

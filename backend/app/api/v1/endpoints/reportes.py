@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, date
 from decimal import Decimal
 
 from app.core.database import get_db
-from app.api.deps import get_current_active_user
+from app.api.deps import get_admin_or_gerente
 from app.models.usuario import Usuario
 from app.models.caja import Caja, MovimientoCaja, EstadoCaja, ConceptoMovimientoCaja, TipoMovimiento
 from app.models.pago import Pago, DetallePago, MetodoPago, EstadoPago
@@ -35,7 +35,7 @@ def get_dashboard_ejecutivo(
     fecha_fin: Optional[datetime] = None,
     comparar_periodo_anterior: bool = False,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_active_user)
+    current_user: Usuario = Depends(get_admin_or_gerente)
 ):
     """
     Dashboard ejecutivo con KPIs y gráficos principales
@@ -96,7 +96,7 @@ def get_dashboard_ejecutivo(
 @router.get("/alertas-operativas", response_model=AlertasOperativas)
 def get_alertas_operativas(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_active_user)
+    current_user: Usuario = Depends(get_admin_or_gerente)
 ):
     ahora = datetime.utcnow()
 
@@ -158,7 +158,7 @@ def get_alertas_operativas(
 def get_alertas_vencimientos(
     dias: int = Query(30, ge=1, le=365),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_active_user)
+    current_user: Usuario = Depends(get_admin_or_gerente)
 ):
     ahora = datetime.utcnow()
     fin = ahora + timedelta(days=dias)
@@ -280,7 +280,7 @@ def get_cierre_financiero(
     fecha_inicio: Optional[datetime] = None,
     fecha_fin: Optional[datetime] = None,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_active_user)
+    current_user: Usuario = Depends(get_admin_or_gerente)
 ):
     if not fecha_fin:
         fecha_fin = datetime.utcnow()
@@ -308,7 +308,11 @@ def get_cierre_financiero(
     total_sistecredito = sum([c.total_sistecredito or Decimal('0') for c in cajas], Decimal('0'))
 
     total_egresos_efectivo = sum([c.total_egresos_efectivo or Decimal('0') for c in cajas], Decimal('0'))
-    saldo_efectivo_teorico = sum([c.saldo_inicial or Decimal('0') for c in cajas], Decimal('0')) + total_efectivo - total_egresos_efectivo
+    saldo_inicial_base = Decimal('0')
+    if cajas:
+        primera_caja = min(cajas, key=lambda c: c.fecha_apertura or datetime.min)
+        saldo_inicial_base = primera_caja.saldo_inicial or Decimal('0')
+    saldo_efectivo_teorico = saldo_inicial_base + total_efectivo - total_egresos_efectivo
 
     cajas_response = [
         CierreCajaItem(
@@ -346,16 +350,14 @@ def get_cierre_financiero(
 # ==================== FUNCIONES AUXILIARES ====================
 
 def _ingresos_caja(caja: Caja) -> Decimal:
-    """Total de ingresos considerando todos los métodos."""
+    """Total de ingresos reales de caja (excluye creditos diferidos)."""
     return (
         (caja.total_ingresos_efectivo or Decimal('0')) +
         (caja.total_nequi or Decimal('0')) +
         (caja.total_daviplata or Decimal('0')) +
         (caja.total_transferencia_bancaria or Decimal('0')) +
         (caja.total_tarjeta_debito or Decimal('0')) +
-        (caja.total_tarjeta_credito or Decimal('0')) +
-        (caja.total_credismart or Decimal('0')) +
-        (caja.total_sistecredito or Decimal('0'))
+        (caja.total_tarjeta_credito or Decimal('0'))
     )
 
 

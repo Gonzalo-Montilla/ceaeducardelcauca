@@ -20,6 +20,7 @@ import { Tarifas } from './pages/Tarifas';
 import { Usuarios } from './pages/Usuarios';
 import { Clases } from './pages/Clases';
 import { RolUsuario } from './types';
+import logo from './assets/cea_educar_final.png';
 
 const MODULE_PATHS: Record<string, string> = {
   dashboard: '/dashboard',
@@ -38,31 +39,46 @@ const MODULE_PATHS: Record<string, string> = {
   tarifas: '/tarifas'
 };
 
+const hasExplicitModulePermissions = (user?: { permisos_modulos?: string[] }) =>
+  Array.isArray(user?.permisos_modulos);
+
 const getHomeRoute = (user?: { rol?: RolUsuario; permisos_modulos?: string[] }) => {
-  if (user?.permisos_modulos && user.permisos_modulos.length > 0) {
-    const first = user.permisos_modulos.find((m) => MODULE_PATHS[m]);
+  if (hasExplicitModulePermissions(user)) {
+    const first = (user?.permisos_modulos || []).find((m) => MODULE_PATHS[m]);
     if (first) return MODULE_PATHS[first];
+    return '/dashboard';
   }
   if (user?.rol === RolUsuario.INSTRUCTOR) return '/clases';
   return '/dashboard';
 };
 
 const hasModuleAccess = (user: any, moduleId: string, roles: RolUsuario[]) => {
-  if (user?.permisos_modulos && user.permisos_modulos.length > 0) {
+  if (hasExplicitModulePermissions(user)) {
     return user.permisos_modulos.includes(moduleId);
   }
   return roles.includes(user?.rol);
 };
 
+const FullPageLoader = () => (
+  <div className="app-loading-screen" role="status" aria-live="polite">
+    <img src={logo} alt="CEA EDUCAR" className="app-loading-logo" />
+    <div className="app-loading-spinner" />
+    <p>Cargando sesión...</p>
+  </div>
+);
+
 const RoleRoute = ({ children, roles, moduleId }: { children: React.ReactNode; roles: RolUsuario[]; moduleId: string }) => {
   const { isAuthenticated, isLoading, user } = useAuth();
   if (isLoading) {
-    return <div>Cargando...</div>;
+    return <FullPageLoader />;
   }
   if (!isAuthenticated) {
     return <Navigate to="/login" />;
   }
   if (!user || !hasModuleAccess(user, moduleId, roles)) {
+    if (user && hasExplicitModulePermissions(user) && !user.permisos_modulos.some((m) => MODULE_PATHS[m])) {
+      return <div>No tienes módulos asignados. Contacta a un administrador.</div>;
+    }
     return <Navigate to={getHomeRoute(user || undefined)} />;
   }
   return <>{children}</>;
@@ -71,7 +87,7 @@ const RoleRoute = ({ children, roles, moduleId }: { children: React.ReactNode; r
 const PublicRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading, user } = useAuth();
   if (isLoading) {
-    return <div>Cargando...</div>;
+    return <FullPageLoader />;
   }
   return !isAuthenticated ? <>{children}</> : <Navigate to={getHomeRoute(user || undefined)} />;
 };
@@ -79,7 +95,7 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
 const HomeRedirect = () => {
   const { isAuthenticated, isLoading, user } = useAuth();
   if (isLoading) {
-    return <div>Cargando...</div>;
+    return <FullPageLoader />;
   }
   if (!isAuthenticated) {
     return <Navigate to="/login" />;

@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Search, DollarSign, TrendingUp, TrendingDown, AlertCircle, Plus, X, ChevronDown, Download } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
+import { useUIFeedback } from '../contexts/UIFeedbackContext';
 import { cajaAPI } from '../services/api';
 import '../styles/Caja.css';
 
@@ -46,6 +47,7 @@ interface EstudianteFinanciero {
   estado: string;
   valor_total_curso?: number;
   saldo_pendiente?: number;
+  saldo_a_favor?: number;
   total_pagado: number;
   fecha_primer_pago?: string;
   fecha_limite_pago?: string;
@@ -56,7 +58,34 @@ interface EstudianteFinanciero {
   ultimo_pago_monto?: number;
 }
 
+const METODO_OPTIONS_FULL = [
+  { value: 'EFECTIVO', label: 'Efectivo' },
+  { value: 'NEQUI', label: 'Nequi' },
+  { value: 'DAVIPLATA', label: 'Daviplata' },
+  { value: 'TRANSFERENCIA_BANCARIA', label: 'Transferencia Bancaria' },
+  { value: 'TARJETA_DEBITO', label: 'Tarjeta Débito' },
+  { value: 'TARJETA_CREDITO', label: 'Tarjeta Crédito' },
+  { value: 'CREDISMART', label: 'CrediSmart' },
+  { value: 'SISTECREDITO', label: 'Sistecredito' },
+];
+
+const METODO_OPTIONS_SHORT = [
+  { value: 'EFECTIVO', label: 'Efectivo' },
+  { value: 'NEQUI', label: 'Nequi' },
+  { value: 'DAVIPLATA', label: 'Daviplata' },
+  { value: 'TRANSFERENCIA_BANCARIA', label: 'Transferencia' },
+  { value: 'TARJETA_DEBITO', label: 'T. Débito' },
+  { value: 'TARJETA_CREDITO', label: 'T. Crédito' },
+  { value: 'CREDISMART', label: 'CrediSmart' },
+  { value: 'SISTECREDITO', label: 'Sistecredito' },
+];
+
+const METODO_EGRESO_OPTIONS = METODO_OPTIONS_FULL.filter(
+  (option) => option.value !== 'CREDISMART' && option.value !== 'SISTECREDITO'
+);
+
 export const Caja = () => {
+  const { confirm, showToast } = useUIFeedback();
   const location = useLocation();
   const [cajaActual, setCajaActual] = useState<CajaActual | null>(null);
   const [hayCajaAbierta, setHayCajaAbierta] = useState(false);
@@ -114,10 +143,53 @@ export const Caja = () => {
   // Confirmación previa de registro
   const [showConfirmacion, setShowConfirmacion] = useState(false);
   const [confirmacionItems, setConfirmacionItems] = useState<Array<{ label: string; valor: number }>>([]);
+  const [confirmacionTipo, setConfirmacionTipo] = useState('');
+  const [confirmacionTotal, setConfirmacionTotal] = useState(0);
   const [confirmacionAction, setConfirmacionAction] = useState<null | (() => Promise<void>)>(null);
   const [confirmando, setConfirmando] = useState(false);
 
   const soloDigitos = (value: string) => value.replace(/\D/g, '');
+  const formatMoneyInput = (value: string) => {
+    const digits = soloDigitos(value);
+    if (!digits) return '';
+    return Number(digits).toLocaleString('es-CO');
+  };
+  const totalPagoMixto = useMemo(
+    () => detallesPago.reduce((sum, d) => sum + (parseFloat(d.monto) || 0), 0),
+    [detallesPago]
+  );
+  const metodosPagoMixtoActivos = useMemo(
+    () => detallesPago.filter((d) => parseFloat(d.monto) > 0).length,
+    [detallesPago]
+  );
+  const estadoPagoMixto = useMemo(() => {
+    if (!esPagoMixto) return null;
+    if (totalPagoMixto <= 0) {
+      return { clase: 'estado-mixto estado-mixto-pendiente', texto: 'Pendiente: define montos' };
+    }
+    if (metodosPagoMixtoActivos < 2) {
+      return { clase: 'estado-mixto estado-mixto-faltante', texto: 'Falta: mínimo 2 métodos con monto' };
+    }
+    return { clase: 'estado-mixto estado-mixto-ok', texto: 'Listo: ya puedes registrar' };
+  }, [esPagoMixto, totalPagoMixto, metodosPagoMixtoActivos]);
+  const totalMovimientoMixto = useMemo(
+    () => detallesMovimiento.reduce((sum, d) => sum + (parseFloat(d.monto) || 0), 0),
+    [detallesMovimiento]
+  );
+  const metodosMovimientoMixtoActivos = useMemo(
+    () => detallesMovimiento.filter((d) => parseFloat(d.monto) > 0).length,
+    [detallesMovimiento]
+  );
+  const estadoMovimientoMixto = useMemo(() => {
+    if (!esPagoMixtoMovimiento) return null;
+    if (totalMovimientoMixto <= 0) {
+      return { clase: 'estado-mixto estado-mixto-pendiente', texto: 'Pendiente: define montos' };
+    }
+    if (metodosMovimientoMixtoActivos < 2) {
+      return { clase: 'estado-mixto estado-mixto-faltante', texto: 'Falta: mínimo 2 métodos con monto' };
+    }
+    return { clase: 'estado-mixto estado-mixto-ok', texto: 'Listo: ya puedes registrar' };
+  }, [esPagoMixtoMovimiento, totalMovimientoMixto, metodosMovimientoMixtoActivos]);
   const formatDocumentoBusqueda = (value: string) => {
     return value.toUpperCase().replace(/[^A-Z0-9\-]/g, '').slice(0, 20);
   };
@@ -198,6 +270,24 @@ export const Caja = () => {
     ];
     downloadCSV(`caja_${cajaActual.id}_${new Date().toISOString().slice(0, 10)}.csv`, rows);
   };
+
+  const promptAndOpenPdf = async (message: string, getBlob: () => Promise<Blob>) => {
+    const openPdf = await confirm({
+      title: 'Abrir soporte PDF',
+      message,
+      confirmText: 'Abrir PDF',
+      cancelText: 'Ahora no',
+    });
+    if (!openPdf) return;
+    try {
+      const blob = await getBlob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch {
+      showToast('No se pudo abrir el PDF', 'error');
+    }
+  };
   
   useEffect(() => {
     cargarCajaActual();
@@ -242,7 +332,7 @@ export const Caja = () => {
   const handleAbrirCaja = async () => {
     try {
       if (!saldoInicial || parseFloat(saldoInicial) < 0) {
-        alert('El saldo inicial debe ser mayor o igual a cero');
+        showToast('El saldo inicial debe ser mayor o igual a cero', 'error');
         return;
       }
       await cajaAPI.abrirCaja({
@@ -252,16 +342,16 @@ export const Caja = () => {
       setShowAbrirCaja(false);
       setSaldoInicial('');
       await cargarCajaActual();
-      alert('Caja abierta exitosamente');
+      showToast('Caja abierta exitosamente', 'success');
     } catch (error: any) {
-      alert(error.response?.data?.detail || 'Error al abrir caja');
+      showToast(error.response?.data?.detail || 'Error al abrir caja', 'error');
     }
   };
   
   const handleBuscarEstudiante = async (cedulaOverride?: string) => {
     const cedulaLimpia = formatDocumentoBusqueda(cedulaOverride ?? cedula);
     if (!cedulaLimpia) {
-      alert('Ingrese el documento del estudiante');
+      showToast('Ingrese el documento del estudiante', 'error');
       return;
     }
     
@@ -270,7 +360,7 @@ export const Caja = () => {
       const response = await cajaAPI.buscarEstudiante(cedulaLimpia);
       setEstudiante(response);
     } catch (error: any) {
-      alert(error.response?.data?.detail || 'Estudiante no encontrado');
+      showToast(error.response?.data?.detail || 'Estudiante no encontrado', 'error');
       setEstudiante(null);
     } finally {
       setBuscando(false);
@@ -279,7 +369,7 @@ export const Caja = () => {
   
   const handleRegistrarPago = async () => {
     if (!estudiante) {
-      alert('Debe buscar un estudiante primero');
+      showToast('Debe buscar un estudiante primero', 'error');
       return;
     }
     
@@ -289,25 +379,33 @@ export const Caja = () => {
       // Validar que haya al menos 2 métodos
       const detallesConMonto = detallesPago.filter(d => parseFloat(d.monto) > 0);
       if (detallesConMonto.length < 2) {
-        alert('Pago mixto debe tener al menos 2 métodos con monto');
+        showToast('Pago mixto debe tener al menos 2 métodos con monto', 'error');
         return;
       }
       montoTotal = detallesPago.reduce((sum, d) => sum + (parseFloat(d.monto) || 0), 0);
     } else {
       if (!montoPago || isNaN(parseFloat(montoPago))) {
-        alert('Ingrese el monto a pagar');
+        showToast('Ingrese el monto a pagar', 'error');
         return;
       }
       montoTotal = parseFloat(montoPago);
     }
     
     if (montoTotal <= 0) {
-      alert('El monto debe ser mayor a cero');
+      showToast('El monto debe ser mayor a cero', 'error');
       return;
     }
     
-    if (estudiante.saldo_pendiente && montoTotal > estudiante.saldo_pendiente) {
-      alert(`El monto (${formatCurrency(montoTotal)}) excede el saldo pendiente (${formatCurrency(estudiante.saldo_pendiente)})`);
+    const saldoPendienteEfectivo = Math.max(
+      (Number(estudiante.saldo_pendiente) || 0) - (Number(estudiante.saldo_a_favor) || 0),
+      0
+    );
+    if (saldoPendienteEfectivo <= 0) {
+      showToast('El estudiante no tiene saldo pendiente por cobrar', 'error');
+      return;
+    }
+    if (saldoPendienteEfectivo > 0 && montoTotal > saldoPendienteEfectivo) {
+      showToast(`El monto (${formatCurrency(montoTotal)}) excede el saldo pendiente (${formatCurrency(saldoPendienteEfectivo)})`, 'error');
       return;
     }
     
@@ -318,6 +416,8 @@ export const Caja = () => {
       : [{ label: getMetodoResumenLabel(detallesPago[0].metodo), valor: montoTotal }];
 
     setConfirmacionItems(resumenItems);
+    setConfirmacionTipo('Registro de pago');
+    setConfirmacionTotal(montoTotal);
     setConfirmacionAction(() => async () => {
       try {
         setRegistrandoPago(true);
@@ -346,15 +446,9 @@ export const Caja = () => {
           });
         }
         
-        alert('Pago registrado exitosamente');
+        showToast('Pago registrado exitosamente', 'success');
         if (pagoResponse?.id) {
-          const abrir = window.confirm('¿Desea abrir el recibo PDF del pago?');
-          if (abrir) {
-            const blob = await cajaAPI.getPagoReciboPdf(pagoResponse.id);
-            const url = URL.createObjectURL(blob);
-            window.open(url, '_blank');
-            setTimeout(() => URL.revokeObjectURL(url), 10000);
-          }
+          await promptAndOpenPdf('¿Desea abrir el recibo PDF del pago?', () => cajaAPI.getPagoReciboPdf(pagoResponse.id));
         }
         setMontoPago('');
         setEsPagoMixto(false);
@@ -363,7 +457,7 @@ export const Caja = () => {
         setEstudiante(null);
         await cargarCajaActual();
       } catch (error: any) {
-        alert(error.response?.data?.detail || 'Error al registrar pago');
+        showToast(error.response?.data?.detail || 'Error al registrar pago', 'error');
       } finally {
         setRegistrandoPago(false);
       }
@@ -374,16 +468,25 @@ export const Caja = () => {
   
   const handleRegistrarEgreso = async () => {
     if (!conceptoEgreso.trim() || !montoEgreso) {
-      alert('Complete todos los campos');
+      showToast('Complete todos los campos', 'error');
       return;
     }
     if (parseFloat(montoEgreso) <= 0) {
-      alert('El monto debe ser mayor a cero');
+      showToast('El monto debe ser mayor a cero', 'error');
+      return;
+    }
+    if (metodoEgreso === 'EFECTIVO' && parseFloat(montoEgreso) > Number(cajaActual?.saldo_efectivo_caja || 0)) {
+      showToast(
+        `Saldo en efectivo insuficiente en caja. Disponible: ${formatCurrency(cajaActual?.saldo_efectivo_caja || 0)}`,
+        'error'
+      );
       return;
     }
     
     const resumenItems = [{ label: getMetodoResumenLabel(metodoEgreso), valor: parseFloat(montoEgreso) }];
     setConfirmacionItems(resumenItems);
+    setConfirmacionTipo('Registro de egreso');
+    setConfirmacionTotal(parseFloat(montoEgreso));
     setConfirmacionAction(() => async () => {
       try {
         const egresoResponse = await cajaAPI.registrarEgreso({
@@ -395,22 +498,16 @@ export const Caja = () => {
           observaciones: null
         });
         
-        alert('Egreso registrado exitosamente');
+        showToast('Egreso registrado exitosamente', 'success');
         if (egresoResponse?.id) {
-          const abrir = window.confirm('¿Desea abrir el recibo PDF del egreso?');
-          if (abrir) {
-            const blob = await cajaAPI.getEgresoReciboPdf(egresoResponse.id);
-            const url = URL.createObjectURL(blob);
-            window.open(url, '_blank');
-            setTimeout(() => URL.revokeObjectURL(url), 10000);
-          }
+          await promptAndOpenPdf('¿Desea abrir el recibo PDF del egreso?', () => cajaAPI.getEgresoReciboPdf(egresoResponse.id));
         }
         setShowEgreso(false);
         setConceptoEgreso('');
         setMontoEgreso('');
         await cargarCajaActual();
       } catch (error: any) {
-        alert(error.response?.data?.detail || 'Error al registrar egreso');
+        showToast(error.response?.data?.detail || 'Error al registrar egreso', 'error');
       }
     });
     setConfirmando(false);
@@ -419,20 +516,20 @@ export const Caja = () => {
 
   const handleRegistrarMovimientoGeneral = async () => {
     if (!conceptoMovimiento.trim() || (!esPagoMixtoMovimiento && !montoMovimiento)) {
-      alert('Complete todos los campos');
+      showToast('Complete todos los campos', 'error');
       return;
     }
     const montoTotal = esPagoMixtoMovimiento
       ? detallesMovimiento.reduce((sum, d) => sum + (parseFloat(d.monto) || 0), 0)
       : parseFloat(montoMovimiento);
     if (montoTotal <= 0) {
-      alert('El monto debe ser mayor a cero');
+      showToast('El monto debe ser mayor a cero', 'error');
       return;
     }
     if (esPagoMixtoMovimiento) {
       const detallesConMonto = detallesMovimiento.filter(d => parseFloat(d.monto) > 0);
       if (detallesConMonto.length < 2) {
-        alert('Pago mixto debe tener al menos 2 métodos con monto');
+        showToast('Pago mixto debe tener al menos 2 métodos con monto', 'error');
         return;
       }
     }
@@ -443,6 +540,8 @@ export const Caja = () => {
       : [{ label: getMetodoResumenLabel(metodoMovimiento), valor: montoTotal }];
 
     setConfirmacionItems(resumenItems);
+    setConfirmacionTipo('Registro de otro ingreso');
+    setConfirmacionTotal(montoTotal);
     setConfirmacionAction(() => async () => {
       try {
         const payload: any = {
@@ -463,15 +562,9 @@ export const Caja = () => {
           payload.metodo_pago = metodoMovimiento;
         }
         const movimientoResponse = await cajaAPI.registrarMovimientoGeneral(payload);
-        alert('Movimiento registrado exitosamente');
+        showToast('Ingreso registrado exitosamente', 'success');
         if (movimientoResponse?.id) {
-          const abrir = window.confirm('¿Desea abrir el recibo PDF del ingreso?');
-          if (abrir) {
-            const blob = await cajaAPI.getMovimientoReciboPdf(movimientoResponse.id);
-            const url = URL.createObjectURL(blob);
-            window.open(url, '_blank');
-            setTimeout(() => URL.revokeObjectURL(url), 10000);
-          }
+          await promptAndOpenPdf('¿Desea abrir el recibo PDF del ingreso?', () => cajaAPI.getMovimientoReciboPdf(movimientoResponse.id));
         }
         setShowMovimientoGeneral(false);
         setConceptoMovimiento('');
@@ -484,7 +577,7 @@ export const Caja = () => {
         setDetallesMovimiento([{metodo: 'EFECTIVO', monto: ''}]);
         await cargarCajaActual();
       } catch (error: any) {
-        alert(error.response?.data?.detail || 'Error al registrar movimiento');
+        showToast(error.response?.data?.detail || 'Error al registrar movimiento', 'error');
       }
     });
     setConfirmando(false);
@@ -493,15 +586,18 @@ export const Caja = () => {
   
   const handleCerrarCaja = async () => {
     if (!efectivoFisico) {
-      alert('Ingrese el efectivo físico contado');
+      showToast('Ingrese el efectivo físico contado', 'error');
       return;
     }
     
     if (!cajaActual) return;
     
-    const confirmacion = window.confirm(
-      '¿Está seguro de cerrar la caja? Esta acción no se puede deshacer.'
-    );
+    const confirmacion = await confirm({
+      title: 'Cerrar caja',
+      message: '¿Está seguro de cerrar la caja? Esta acción no se puede deshacer.',
+      confirmText: 'Cerrar caja',
+      danger: true,
+    });
     
     if (!confirmacion) return;
     
@@ -512,20 +608,14 @@ export const Caja = () => {
         observaciones_cierre: observacionesCierre || null
       });
       
-      alert('Caja cerrada exitosamente');
-      const abrir = window.confirm('¿Desea abrir el soporte PDF de cierre de caja?');
-      if (abrir) {
-        const blob = await cajaAPI.getCierrePdf(cajaActual.id);
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
-        setTimeout(() => URL.revokeObjectURL(url), 10000);
-      }
+      showToast('Caja cerrada exitosamente', 'success');
+      await promptAndOpenPdf('¿Desea abrir el soporte PDF de cierre de caja?', () => cajaAPI.getCierrePdf(cajaActual.id));
       setShowCerrarCaja(false);
       setEfectivoFisico('');
       setObservacionesCierre('');
       await cargarCajaActual();
     } catch (error: any) {
-      alert(error.response?.data?.detail || 'Error al cerrar caja');
+      showToast(error.response?.data?.detail || 'Error al cerrar caja', 'error');
     } finally {
       setCerrandoCaja(false);
     }
@@ -539,6 +629,17 @@ export const Caja = () => {
       minimumFractionDigits: 0
     }).format(value);
   };
+  const efectivoFisicoValor = parseFloat(efectivoFisico) || 0;
+  const baseFijaCierre = Number(cajaActual?.saldo_inicial || 0);
+  const produccionTeoricaEntregable = Math.max(
+    0,
+    Number(cajaActual?.total_ingresos_efectivo || 0) - Number(cajaActual?.total_egresos_efectivo || 0)
+  );
+  const efectivoFisicoEntregable = Math.max(0, efectivoFisicoValor);
+  const diferenciaArqueo = efectivoFisicoEntregable - produccionTeoricaEntregable;
+  const montoEgresoValor = parseFloat(montoEgreso) || 0;
+  const saldoEfectivoDisponibleCaja = Number(cajaActual?.saldo_efectivo_caja || 0);
+  const egresoEfectivoExcedeCaja = metodoEgreso === 'EFECTIVO' && montoEgresoValor > saldoEfectivoDisponibleCaja;
   
   const getEstadoFinancieroColor = (estado: string) => {
     switch (estado) {
@@ -579,9 +680,10 @@ export const Caja = () => {
                 <div className="form-group">
                   <label>Saldo Inicial en Efectivo</label>
                   <input
-                    type="number"
-                    value={saldoInicial}
-                    onChange={(e) => setSaldoInicial(e.target.value)}
+                    type="text"
+                    inputMode="numeric"
+                    value={formatMoneyInput(saldoInicial)}
+                    onChange={(e) => setSaldoInicial(soloDigitos(e.target.value))}
                     placeholder="0"
                     className="form-input"
               min="0"
@@ -619,19 +721,22 @@ export const Caja = () => {
       
       {/* =========================== CAJA FÍSICA =========================== */}
       <div className="seccion-caja-fisica">
-        <h3 
+        <button
+          type="button"
           className="section-title-main collapsable" 
           onClick={() => setMostrarCajaFisica(!mostrarCajaFisica)}
+          aria-expanded={mostrarCajaFisica}
+          aria-controls="seccion-caja-fisica-detalle"
         >
           💵 Caja Física (Dinero Real en Mano)
           <ChevronDown 
             size={24} 
             className={`chevron-icon ${mostrarCajaFisica ? '' : 'rotated'}`}
           />
-        </h3>
+        </button>
         
         {mostrarCajaFisica && (
-        <div className="caja-resumen-grid-main">
+        <div id="seccion-caja-fisica-detalle" className="caja-resumen-grid-main">
           <div className="stat-card">
             <div className="stat-icon" style={{ backgroundColor: '#e0f2fe' }}>
               <DollarSign size={24} color="#0284c7" />
@@ -678,19 +783,22 @@ export const Caja = () => {
       
       {/* =========================== MÉTODOS DIGITALES (FUERA DE CAJA) =========================== */}
       <div className="metodos-digitales-section">
-        <h3 
+        <button
+          type="button"
           className="section-title-main collapsable" 
           onClick={() => setMostrarMetodosDigitales(!mostrarMetodosDigitales)}
+          aria-expanded={mostrarMetodosDigitales}
+          aria-controls="seccion-metodos-digitales-detalle"
         >
           💳 Métodos Digitales (No en Caja Física)
           <ChevronDown 
             size={24} 
             className={`chevron-icon ${mostrarMetodosDigitales ? '' : 'rotated'}`}
           />
-        </h3>
+        </button>
         
         {mostrarMetodosDigitales && (
-        <>
+        <div id="seccion-metodos-digitales-detalle">
         <p className="section-subtitle-white">Dinero recibido pero NO está en caja física - Solo para control y registro</p>
         
         {/* Transferencias */}
@@ -754,25 +862,28 @@ export const Caja = () => {
             </div>
           </div>
         </div>
-        </>
+        </div>
         )}
       </div>
       
       {/* =========================== CRÉDITOS FINANCIERAS (FUERA DE CAJA) =========================== */}
       <div className="creditos-section">
-        <h3 
+        <button
+          type="button"
           className="section-title-main collapsable" 
           onClick={() => setMostrarCreditos(!mostrarCreditos)}
+          aria-expanded={mostrarCreditos}
+          aria-controls="seccion-creditos-detalle"
         >
           🏦 Créditos Financieras (No en Caja)
           <ChevronDown 
             size={24} 
             className={`chevron-icon ${mostrarCreditos ? '' : 'rotated'}`}
           />
-        </h3>
+        </button>
         
         {mostrarCreditos && (
-        <>
+        <div id="seccion-creditos-detalle">
         <p className="section-subtitle">Pagos diferidos - La financiera pagará después. NO entra a caja física.</p>
         <div className="metodos-grid">
           <div className="metodo-card credismart">
@@ -793,25 +904,28 @@ export const Caja = () => {
             <p className="metodo-detalle">Pendiente de pago por financiera</p>
           </div>
         </div>
-        </>
+        </div>
         )}
       </div>
       
       {/* =========================== RESUMEN GENERAL DEL DÍA =========================== */}
       <div className="resumen-general">
-        <h3 
+        <button
+          type="button"
           className="section-title-main collapsable" 
           onClick={() => setMostrarResumen(!mostrarResumen)}
+          aria-expanded={mostrarResumen}
+          aria-controls="seccion-resumen-detalle"
         >
           📊 Resumen General del Día
           <ChevronDown 
             size={24} 
             className={`chevron-icon ${mostrarResumen ? '' : 'rotated'}`}
           />
-        </h3>
+        </button>
         
         {mostrarResumen && (
-        <div className="stats-row">
+        <div id="seccion-resumen-detalle" className="stats-row">
           <div className="stat-summary efectivo">
             <div className="stat-summary-icon">💵</div>
             <div className="stat-summary-content">
@@ -882,6 +996,10 @@ export const Caja = () => {
             </div>
             <div className="modal-body">
               <p className="confirmacion-texto">¿Estás seguro de registrar el movimiento?</p>
+              <div className="confirmacion-meta">
+                <span className="confirmacion-meta-chip">{confirmacionTipo || 'Registro'}</span>
+                <span className="confirmacion-meta-total">Total: {formatCurrency(confirmacionTotal)}</span>
+              </div>
               <div className="confirmacion-resumen">
                 <h4>RESUMEN</h4>
                 <div className="confirmacion-lista">
@@ -925,7 +1043,7 @@ export const Caja = () => {
         </button>
         <button onClick={() => setShowMovimientoGeneral(true)} className="btn-action">
           <Plus size={20} />
-          Registrar Otro Concepto
+          Registrar Otro Ingreso
         </button>
         <button onClick={() => setShowCerrarCaja(true)} className="btn-action btn-danger">
           <X size={20} />
@@ -988,9 +1106,22 @@ export const Caja = () => {
                   <strong className="success">{formatCurrency(estudiante.total_pagado)}</strong>
                 </div>
                 <div className="info-row highlight">
-                  <span>Saldo Pendiente:</span>
-                  <strong className="danger">{formatCurrency(estudiante.saldo_pendiente)}</strong>
+                  <span>Saldo por cobrar:</span>
+                  <strong className="danger">
+                    {formatCurrency(
+                      Math.max(
+                        (Number(estudiante.saldo_pendiente) || 0) - (Number(estudiante.saldo_a_favor) || 0),
+                        0
+                      )
+                    )}
+                  </strong>
                 </div>
+                {(estudiante.saldo_a_favor || 0) > 0 && (
+                  <div className="info-row">
+                    <span>Saldo a Favor:</span>
+                    <strong className="success">{formatCurrency(estudiante.saldo_a_favor)}</strong>
+                  </div>
+                )}
                 {estudiante.dias_restantes !== null && estudiante.dias_restantes !== undefined && (
                   <div className="info-row">
                     <span>Días Restantes:</span>
@@ -1030,10 +1161,11 @@ export const Caja = () => {
                     <div className="form-group">
                       <label>Monto a Pagar</label>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         ref={montoPagoRef}
-                        value={montoPago}
-                        onChange={(e) => setMontoPago(e.target.value)}
+                        value={formatMoneyInput(montoPago)}
+                        onChange={(e) => setMontoPago(soloDigitos(e.target.value))}
                         placeholder="0"
                         className="form-input"
                         min="0"
@@ -1047,14 +1179,11 @@ export const Caja = () => {
                         onChange={(e) => setDetallesPago([{metodo: e.target.value, monto: montoPago}])} 
                         className="form-select"
                       >
-                        <option value="EFECTIVO">Efectivo</option>
-                        <option value="NEQUI">Nequi</option>
-                        <option value="DAVIPLATA">Daviplata</option>
-                        <option value="TRANSFERENCIA_BANCARIA">Transferencia Bancaria</option>
-                        <option value="TARJETA_DEBITO">Tarjeta Débito</option>
-                        <option value="TARJETA_CREDITO">Tarjeta Crédito</option>
-                        <option value="CREDISMART">CrediSmart</option>
-                        <option value="SISTECREDITO">Sistecredito</option>
+                        {METODO_OPTIONS_FULL.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </>
@@ -1074,24 +1203,22 @@ export const Caja = () => {
                             }}
                             className="form-select"
                           >
-                            <option value="EFECTIVO">Efectivo</option>
-                            <option value="NEQUI">Nequi</option>
-                            <option value="DAVIPLATA">Daviplata</option>
-                            <option value="TRANSFERENCIA_BANCARIA">Transferencia</option>
-                            <option value="TARJETA_DEBITO">T. Débito</option>
-                            <option value="TARJETA_CREDITO">T. Crédito</option>
-                            <option value="CREDISMART">CrediSmart</option>
-                            <option value="SISTECREDITO">Sistecredito</option>
+                            {METODO_OPTIONS_SHORT.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
                           </select>
                         </div>
                         <div className="form-group" style={{flex: 1}}>
                           <label>Monto</label>
                           <input
-                            type="number"
-                            value={detalle.monto}
+                            type="text"
+                            inputMode="numeric"
+                            value={formatMoneyInput(detalle.monto)}
                             onChange={(e) => {
                               const newDetalles = [...detallesPago];
-                              newDetalles[index].monto = e.target.value;
+                              newDetalles[index].monto = soloDigitos(e.target.value);
                               setDetallesPago(newDetalles);
                             }}
                             placeholder="0"
@@ -1125,7 +1252,10 @@ export const Caja = () => {
                     </button>
                     
                     <div className="total-mixto">
-                      <strong>Total: {formatCurrency(detallesPago.reduce((sum, d) => sum + (parseFloat(d.monto) || 0), 0))}</strong>
+                      <strong>Total: {formatCurrency(totalPagoMixto)}</strong>
+                      {estadoPagoMixto && (
+                        <span className={estadoPagoMixto.clase}>{estadoPagoMixto.texto}</span>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1176,26 +1306,29 @@ export const Caja = () => {
               <div className="form-group">
                 <label>Monto *</label>
                 <input
-                  type="number"
-                  value={montoEgreso}
-                  onChange={(e) => setMontoEgreso(e.target.value)}
+                  type="text"
+                  inputMode="numeric"
+                  value={formatMoneyInput(montoEgreso)}
+                  onChange={(e) => setMontoEgreso(soloDigitos(e.target.value))}
                   placeholder="0"
                   className="form-input"
                   min="0"
                   step="100"
                 />
+                {egresoEfectivoExcedeCaja && (
+                  <p className="form-helper-error">
+                    El monto supera el disponible en caja ({formatCurrency(saldoEfectivoDisponibleCaja)}).
+                  </p>
+                )}
               </div>
               <div className="form-group">
                 <label>Método de Pago</label>
                 <select value={metodoEgreso} onChange={(e) => setMetodoEgreso(e.target.value)} className="form-select">
-                  <option value="EFECTIVO">Efectivo</option>
-                  <option value="NEQUI">Nequi</option>
-                  <option value="DAVIPLATA">Daviplata</option>
-                  <option value="TRANSFERENCIA_BANCARIA">Transferencia Bancaria</option>
-                  <option value="TARJETA_DEBITO">Tarjeta Débito</option>
-                  <option value="TARJETA_CREDITO">Tarjeta Crédito</option>
-                  <option value="CREDISMART">CrediSmart</option>
-                  <option value="SISTECREDITO">Sistecredito</option>
+                  {METODO_EGRESO_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -1203,7 +1336,12 @@ export const Caja = () => {
               <button onClick={() => setShowEgreso(false)} className="btn-secondary">
                 Cancelar
               </button>
-              <button type="button" onClick={handleRegistrarEgreso} className="btn-primary">
+              <button
+                type="button"
+                onClick={handleRegistrarEgreso}
+                className="btn-primary"
+                disabled={egresoEfectivoExcedeCaja}
+              >
                 Registrar Egreso
               </button>
             </div>
@@ -1216,7 +1354,7 @@ export const Caja = () => {
         <div className="modal-overlay">
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Registrar Otro Concepto</h3>
+              <h3>Registrar Otro Ingreso</h3>
               <button onClick={() => setShowMovimientoGeneral(false)} className="btn-icon">
                 <X size={24} />
               </button>
@@ -1293,9 +1431,10 @@ export const Caja = () => {
                   <div className="form-group">
                     <label>Monto *</label>
                     <input
-                      type="number"
-                      value={montoMovimiento}
-                      onChange={(e) => setMontoMovimiento(e.target.value)}
+                      type="text"
+                      inputMode="numeric"
+                      value={formatMoneyInput(montoMovimiento)}
+                      onChange={(e) => setMontoMovimiento(soloDigitos(e.target.value))}
                       placeholder="0"
                       className="form-input"
                       min="0"
@@ -1309,14 +1448,11 @@ export const Caja = () => {
                       onChange={(e) => setMetodoMovimiento(e.target.value)}
                       className="form-select"
                     >
-                      <option value="EFECTIVO">Efectivo</option>
-                      <option value="NEQUI">Nequi</option>
-                      <option value="DAVIPLATA">Daviplata</option>
-                      <option value="TRANSFERENCIA_BANCARIA">Transferencia Bancaria</option>
-                      <option value="TARJETA_DEBITO">Tarjeta Débito</option>
-                      <option value="TARJETA_CREDITO">Tarjeta Crédito</option>
-                      <option value="CREDISMART">CrediSmart</option>
-                      <option value="SISTECREDITO">Sistecredito</option>
+                      {METODO_OPTIONS_FULL.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </>
@@ -1335,24 +1471,22 @@ export const Caja = () => {
                           }}
                           className="form-select"
                         >
-                          <option value="EFECTIVO">Efectivo</option>
-                          <option value="NEQUI">Nequi</option>
-                          <option value="DAVIPLATA">Daviplata</option>
-                          <option value="TRANSFERENCIA_BANCARIA">Transferencia</option>
-                          <option value="TARJETA_DEBITO">T. Débito</option>
-                          <option value="TARJETA_CREDITO">T. Crédito</option>
-                          <option value="CREDISMART">CrediSmart</option>
-                          <option value="SISTECREDITO">Sistecredito</option>
+                          {METODO_OPTIONS_SHORT.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
                         </select>
                       </div>
                       <div className="form-group" style={{flex: 1}}>
                         <label>Monto</label>
                         <input
-                          type="number"
-                          value={detalle.monto}
+                          type="text"
+                          inputMode="numeric"
+                          value={formatMoneyInput(detalle.monto)}
                           onChange={(e) => {
                             const newDetalles = [...detallesMovimiento];
-                            newDetalles[index].monto = e.target.value;
+                            newDetalles[index].monto = soloDigitos(e.target.value);
                             setDetallesMovimiento(newDetalles);
                           }}
                           placeholder="0"
@@ -1384,7 +1518,10 @@ export const Caja = () => {
                     Agregar Método
                   </button>
                   <div className="total-mixto">
-                    <strong>Total: {formatCurrency(detallesMovimiento.reduce((sum, d) => sum + (parseFloat(d.monto) || 0), 0))}</strong>
+                    <strong>Total: {formatCurrency(totalMovimientoMixto)}</strong>
+                    {estadoMovimientoMixto && (
+                      <span className={estadoMovimientoMixto.clase}>{estadoMovimientoMixto.texto}</span>
+                    )}
                   </div>
                 </div>
               )}
@@ -1517,12 +1654,12 @@ export const Caja = () => {
                     <span className="arqueo-value danger">{formatCurrency(cajaActual.total_egresos_efectivo)}</span>
                   </div>
                   <div className="arqueo-item highlight">
-                    <span className="arqueo-label">=EFECTIVO TEÓRICO:</span>
-                    <span className="arqueo-value-large">{formatCurrency(cajaActual.saldo_efectivo_caja)}</span>
+                    <span className="arqueo-label">=PRODUCCIÓN TEÓRICA A ENTREGAR:</span>
+                    <span className="arqueo-value-large">{formatCurrency(produccionTeoricaEntregable)}</span>
                   </div>
                 </div>
                 <p className="arqueo-nota">
-                  💵 El efectivo teórico es lo que DEBE haber en caja según el sistema
+                  💵 La base fija se conserva en caja; aquí solo se muestra lo teórico a entregar.
                 </p>
               </div>
               
@@ -1530,11 +1667,12 @@ export const Caja = () => {
               <div className="arqueo-conteo">
                 <h4>👆 Conteo Físico de Efectivo</h4>
                 <div className="form-group">
-                  <label>Efectivo Físico Contado *</label>
+                  <label>Efectivo a Entregar *</label>
                   <input
-                    type="number"
-                    value={efectivoFisico}
-                    onChange={(e) => setEfectivoFisico(e.target.value)}
+                    type="text"
+                    inputMode="numeric"
+                    value={formatMoneyInput(efectivoFisico)}
+                    onChange={(e) => setEfectivoFisico(soloDigitos(e.target.value))}
                     placeholder="Ingrese el dinero que realmente hay en caja"
                     className="form-input form-input-large"
                     autoFocus
@@ -1542,26 +1680,37 @@ export const Caja = () => {
                     step="100"
                   />
                 </div>
+                <div className="arqueo-entrega-resumen">
+                  <div className="arqueo-item">
+                    <span className="arqueo-label">Base fija (permanece en caja):</span>
+                    <span className="arqueo-value">{formatCurrency(baseFijaCierre)}</span>
+                  </div>
+                </div>
               </div>
               
               {/* Diferencia */}
               {efectivoFisico && (
                 <div className="arqueo-diferencia">
                   <div className={`diferencia-card ${
-                    parseFloat(efectivoFisico) - cajaActual.saldo_efectivo_caja === 0 ? 'exacto' :
-                    parseFloat(efectivoFisico) - cajaActual.saldo_efectivo_caja > 0 ? 'sobrante' : 'faltante'
+                    diferenciaArqueo === 0 ? 'exacto' :
+                    diferenciaArqueo > 0 ? 'sobrante' : 'faltante'
                   }`}>
                     <h4>
-                      {parseFloat(efectivoFisico) - cajaActual.saldo_efectivo_caja === 0 ? '✅ Caja Cuadrada' :
-                       parseFloat(efectivoFisico) - cajaActual.saldo_efectivo_caja > 0 ? '🔼 Sobrante' : '🔽 Faltante'}
+                      {diferenciaArqueo === 0 ? '✅ Caja Cuadrada' :
+                       diferenciaArqueo > 0 ? '🔼 Sobrante' : '🔽 Faltante'}
                     </h4>
                     <p className="diferencia-monto">
-                      {formatCurrency(Math.abs(parseFloat(efectivoFisico) - cajaActual.saldo_efectivo_caja))}
+                      {formatCurrency(Math.abs(diferenciaArqueo))}
                     </p>
                     <p className="diferencia-detalle">
-                      Efectivo Físico: {formatCurrency(parseFloat(efectivoFisico))} | 
-                      Efectivo Teórico: {formatCurrency(cajaActual.saldo_efectivo_caja)}
+                      Físico a Entregar: {formatCurrency(efectivoFisicoEntregable)} |
+                      Teórico a Entregar: {formatCurrency(produccionTeoricaEntregable)}
                     </p>
+                    {diferenciaArqueo !== 0 && (
+                      <p className="diferencia-alerta">
+                        Registra la justificación en observaciones antes de cerrar.
+                      </p>
+                    )}
                   </div>
                 </div>
               )}

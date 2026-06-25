@@ -2,6 +2,7 @@ import { useState, useEffect, FormEvent } from 'react';
 import { X, DollarSign, FileText, Save } from 'lucide-react';
 import { estudiantesAPI, tarifasAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useUIFeedback } from '../contexts/UIFeedbackContext';
 import { RolUsuario } from '../types';
 import '../styles/DefinirServicioModal.css';
 
@@ -20,6 +21,7 @@ interface DefinirServicioModalProps {
 
 export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: DefinirServicioModalProps) => {
   const { user } = useAuth();
+  const { confirm, showToast } = useUIFeedback();
   const [modoServicio, setModoServicio] = useState<'PRIMERA_VEZ' | 'RECATEGORIZACION'>('PRIMERA_VEZ');
   const [categoriaActual, setCategoriaActual] = useState('');
   const [categoriaNueva, setCategoriaNueva] = useState('');
@@ -231,11 +233,22 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
         observaciones: observaciones || null
       });
 
-      alert('Servicio definido exitosamente');
-      if (window.confirm('¿Desea abrir el contrato en PDF?')) {
-        const pdfBlob = await estudiantesAPI.getContratoPdf(estudiante.id);
-        const fileUrl = URL.createObjectURL(pdfBlob);
-        window.open(fileUrl, '_blank', 'noopener,noreferrer');
+      showToast('Servicio definido exitosamente', 'success');
+      const abrirContrato = await confirm({
+        title: 'Contrato generado',
+        message: '¿Desea abrir el contrato en PDF?',
+        confirmText: 'Abrir contrato',
+        cancelText: 'Ahora no',
+      });
+      if (abrirContrato) {
+        try {
+          const pdfBlob = await estudiantesAPI.getContratoPdf(estudiante.id);
+          const fileUrl = URL.createObjectURL(pdfBlob);
+          window.open(fileUrl, '_blank', 'noopener,noreferrer');
+          setTimeout(() => URL.revokeObjectURL(fileUrl), 10000);
+        } catch {
+          showToast('No se pudo abrir el contrato en PDF', 'error');
+        }
       }
       onSuccess();
       onClose();

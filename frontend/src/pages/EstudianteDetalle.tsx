@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { estudiantesAPI, tarifasAPI } from '../services/api';
+import { useUIFeedback } from '../contexts/UIFeedbackContext';
 import { 
   ArrowLeft, 
   User, 
@@ -87,6 +88,7 @@ interface Estudiante {
   fecha_inscripcion: string;
   valor_total_curso?: number;
   saldo_pendiente?: number;
+  saldo_a_favor?: number;
   progreso_teorico: number;
   progreso_practico: number;
   horas_teoricas_completadas: number;
@@ -95,10 +97,18 @@ interface Estudiante {
   horas_practicas_requeridas: number;
   historial_pagos?: PagoHistorial[];
   servicios?: ServicioHistorialItem[];
+  correcciones_servicio?: Array<{
+    fecha?: string;
+    usuario_nombre?: string;
+    motivo?: string;
+    tipo_anterior?: string;
+    tipo_nuevo?: string;
+  }>;
   servicio_activo_id?: number | null;
 }
 
 export const EstudianteDetalle = () => {
+  const { showToast } = useUIFeedback();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [estudiante, setEstudiante] = useState<Estudiante | null>(null);
@@ -216,7 +226,7 @@ export const EstudianteDetalle = () => {
       setContratoPreviewUrl(fileUrl);
     } catch (err) {
       console.error('Error al descargar contrato:', err);
-      alert('No se pudo cargar el contrato');
+      showToast('No se pudo cargar el contrato', 'error');
     }
   };
 
@@ -288,6 +298,39 @@ export const EstudianteDetalle = () => {
     const practica = Number(tarifa.costo_practica || 0);
     const esCertificado = ['CERTIFICADO_B1', 'CERTIFICADO_C1'].includes(tipo);
     return esCertificado ? base + practica : base;
+  };
+
+  const getHorasRequeridasEstimadas = (tipo?: string, categoria?: string) => {
+    const horasPorServicio: Record<string, { teoricas: number; practicas: number }> = {
+      LICENCIA_A2: { teoricas: 28, practicas: 15 },
+      LICENCIA_B1: { teoricas: 30, practicas: 20 },
+      LICENCIA_C1: { teoricas: 36, practicas: 30 },
+      COMBO_A2_C1: { teoricas: 36, practicas: 45 },
+      COMBO_A2_B1: { teoricas: 30, practicas: 36 },
+      CERTIFICADO_B1: { teoricas: 30, practicas: 20 },
+      CERTIFICADO_C1: { teoricas: 36, practicas: 30 },
+      CERTIFICADO_B1_SIN_PRACTICA: { teoricas: 30, practicas: 20 },
+      CERTIFICADO_C1_SIN_PRACTICA: { teoricas: 36, practicas: 30 },
+      CERTIFICADO_A2_B1_SIN_PRACTICA: { teoricas: 30, practicas: 36 },
+      CERTIFICADO_A2_C1_SIN_PRACTICA: { teoricas: 36, practicas: 45 },
+      CERTIFICADO_A2_B1_CON_PRACTICA: { teoricas: 30, practicas: 36 },
+      CERTIFICADO_A2_C1_CON_PRACTICA: { teoricas: 36, practicas: 45 },
+      RECATEGORIZACION_C1: { teoricas: 36, practicas: 30 },
+    };
+
+    if (tipo && horasPorServicio[tipo]) return horasPorServicio[tipo];
+
+    const horasPorCategoria: Record<string, { teoricas: number; practicas: number }> = {
+      A2: { teoricas: 28, practicas: 15 },
+      B1: { teoricas: 30, practicas: 20 },
+      C1: { teoricas: 36, practicas: 30 },
+    };
+
+    if (categoria && horasPorCategoria[categoria]) return horasPorCategoria[categoria];
+    return {
+      teoricas: Number(estudiante?.horas_teoricas_requeridas || 0),
+      practicas: Number(estudiante?.horas_practicas_requeridas || 0),
+    };
   };
 
   const getServicioLabel = (tipo?: string) => {
@@ -411,6 +454,40 @@ export const EstudianteDetalle = () => {
   const totalAbonado = (estudiante?.valor_total_curso || 0) - (estudiante?.saldo_pendiente || 0);
   const valorComboNumero = parseInt(valorCombo || '0', 10) || 0;
   const nuevoSaldo = Math.max(valorComboNumero - totalAbonado, 0);
+  const previewMigracionHoras = (() => {
+    if (!estudiante || !corregirTipoServicio) return null;
+    const requeridasActualesTeoricas = Number(estudiante.horas_teoricas_requeridas || 0);
+    const requeridasActualesPracticas = Number(estudiante.horas_practicas_requeridas || 0);
+    const completadasActualesTeoricas = Number(estudiante.horas_teoricas_completadas || 0);
+    const completadasActualesPracticas = Number(estudiante.horas_practicas_completadas || 0);
+
+    const requeridasNuevas = getHorasRequeridasEstimadas(corregirTipoServicio, estudiante.categoria);
+
+    const migradasTeoricasRaw = requeridasActualesTeoricas > 0
+      ? Math.round((completadasActualesTeoricas / requeridasActualesTeoricas) * requeridasNuevas.teoricas)
+      : completadasActualesTeoricas;
+    const migradasPracticasRaw = requeridasActualesPracticas > 0
+      ? Math.round((completadasActualesPracticas / requeridasActualesPracticas) * requeridasNuevas.practicas)
+      : completadasActualesPracticas;
+
+    const migradasTeoricas = Math.max(0, Math.min(migradasTeoricasRaw, requeridasNuevas.teoricas));
+    const migradasPracticas = Math.max(0, Math.min(migradasPracticasRaw, requeridasNuevas.practicas));
+
+    return {
+      actuales: {
+        teoricas: completadasActualesTeoricas,
+        practicas: completadasActualesPracticas,
+        reqTeoricas: requeridasActualesTeoricas,
+        reqPracticas: requeridasActualesPracticas,
+      },
+      nuevas: {
+        teoricas: migradasTeoricas,
+        practicas: migradasPracticas,
+        reqTeoricas: requeridasNuevas.teoricas,
+        reqPracticas: requeridasNuevas.practicas,
+      },
+    };
+  })();
 
   const splitNombre = (fullName?: string) => {
     const partes = (fullName || '').trim().split(/\s+/).filter(Boolean);
@@ -602,6 +679,11 @@ export const EstudianteDetalle = () => {
   };
 
   const getEstadoBadgeClass = (estado: string) => {
+    const estadoNormalizado: { [key: string]: string } = {
+      'ACTIVO': 'EN_FORMACION',
+      'INACTIVO': 'RETIRADO'
+    };
+    const estadoKey = estadoNormalizado[estado] || estado;
     const estados: { [key: string]: string } = {
       'PROSPECTO': 'badge-warning',
       'INSCRITO': 'badge-info',
@@ -611,7 +693,7 @@ export const EstudianteDetalle = () => {
       'DESERTOR': 'badge-danger',
       'RETIRADO': 'badge-danger'
     };
-    return estados[estado] || 'badge-secondary';
+    return estados[estadoKey] || 'badge-secondary';
   };
 
   const getTipoDocumentoLabel = (tipo?: string) => {
@@ -995,6 +1077,30 @@ export const EstudianteDetalle = () => {
                   ))}
                 </select>
               </div>
+              {previewMigracionHoras && (
+                <div className="horas-migracion-preview">
+                  <p className="horas-migracion-title">Vista previa de migración de horas</p>
+                  <div className="horas-migracion-row">
+                    <span>Teóricas</span>
+                    <strong>
+                      {previewMigracionHoras.actuales.teoricas}/{previewMigracionHoras.actuales.reqTeoricas}
+                      {' '}→{' '}
+                      {previewMigracionHoras.nuevas.teoricas}/{previewMigracionHoras.nuevas.reqTeoricas}
+                    </strong>
+                  </div>
+                  <div className="horas-migracion-row">
+                    <span>Prácticas</span>
+                    <strong>
+                      {previewMigracionHoras.actuales.practicas}/{previewMigracionHoras.actuales.reqPracticas}
+                      {' '}→{' '}
+                      {previewMigracionHoras.nuevas.practicas}/{previewMigracionHoras.nuevas.reqPracticas}
+                    </strong>
+                  </div>
+                  <small className="help-text">
+                    Se migra avance proporcional para conservar progreso del estudiante.
+                  </small>
+                </div>
+              )}
               {estudiante.origen_cliente === 'REFERIDO' && (
                 <div className="form-group">
                   <label>Valor total del curso *</label>
@@ -1218,15 +1324,15 @@ export const EstudianteDetalle = () => {
                   {resolverValor(servicioVista?.horas_teoricas_completadas, estudiante.horas_teoricas_completadas)} / {resolverValor(servicioVista?.horas_teoricas_requeridas, estudiante.horas_teoricas_requeridas)}
                 </span>
               </div>
-              <div className="progreso-bar">
+              <div className="progreso-horas-bar">
                 {(() => {
                   const teoricasCompletadas = resolverValor(servicioVista?.horas_teoricas_completadas, estudiante.horas_teoricas_completadas);
                   const teoricasRequeridas = resolverValor(servicioVista?.horas_teoricas_requeridas, estudiante.horas_teoricas_requeridas);
                   const progreso = getProgreso(teoricasCompletadas, teoricasRequeridas);
                   return (
                     <>
-                      <div className="progreso-fill" style={{ width: `${progreso}%` }}></div>
-                      <span className="progreso-text">{progreso.toFixed(0)}%</span>
+                      <div className="progreso-horas-fill" style={{ width: `${progreso}%` }}></div>
+                      <span className="progreso-horas-text">{progreso.toFixed(0)}%</span>
                     </>
                   );
                 })()}
@@ -1237,15 +1343,15 @@ export const EstudianteDetalle = () => {
                   {resolverValor(servicioVista?.horas_practicas_completadas, estudiante.horas_practicas_completadas)} / {resolverValor(servicioVista?.horas_practicas_requeridas, estudiante.horas_practicas_requeridas)}
                 </span>
               </div>
-              <div className="progreso-bar">
+              <div className="progreso-horas-bar">
                 {(() => {
                   const practicasCompletadas = resolverValor(servicioVista?.horas_practicas_completadas, estudiante.horas_practicas_completadas);
                   const practicasRequeridas = resolverValor(servicioVista?.horas_practicas_requeridas, estudiante.horas_practicas_requeridas);
                   const progreso = getProgreso(practicasCompletadas, practicasRequeridas);
                   return (
                     <>
-                      <div className="progreso-fill progreso-practica" style={{ width: `${progreso}%` }}></div>
-                      <span className="progreso-text">{progreso.toFixed(0)}%</span>
+                      <div className="progreso-horas-fill progreso-practica" style={{ width: `${progreso}%` }}></div>
+                      <span className="progreso-horas-text">{progreso.toFixed(0)}%</span>
                     </>
                   );
                 })()}
@@ -1317,6 +1423,12 @@ export const EstudianteDetalle = () => {
                 <span className="label">Pagado:</span>
                 <span className="value">{formatearMoneda((estudiante.valor_total_curso || 0) - (estudiante.saldo_pendiente || 0))}</span>
               </div>
+              {(estudiante.saldo_a_favor || 0) > 0 && (
+                <div className="info-row">
+                  <span className="label">Saldo a favor:</span>
+                  <span className="value saldo-favor">{formatearMoneda(estudiante.saldo_a_favor || 0)}</span>
+                </div>
+              )}
             </div>
             
             {/* Historial de Pagos */}
@@ -1374,6 +1486,31 @@ export const EstudianteDetalle = () => {
         )}
 
         {/* Contacto de Emergencia */}
+        {estudiante.correcciones_servicio && estudiante.correcciones_servicio.length > 0 && (
+          <div className="detalle-card">
+            <h2><RefreshCw size={20} /> Historial de Cambios de Servicio</h2>
+            <div className="cambios-servicio-lista">
+              {[...(estudiante.correcciones_servicio || [])]
+                .sort((a, b) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime())
+                .map((cambio, idx) => (
+                  <div key={`${cambio.fecha || 'sin-fecha'}-${idx}`} className="cambio-servicio-item">
+                    <div className="cambio-servicio-head">
+                      <span className="cambio-servicio-fecha">{formatearFechaCorta(cambio.fecha)}</span>
+                      <div className="cambio-servicio-meta">
+                        <span className="cambio-servicio-badge">Corrección</span>
+                        <span className="cambio-servicio-usuario">{cambio.usuario_nombre || 'Usuario no registrado'}</span>
+                      </div>
+                    </div>
+                    <p className="cambio-servicio-tipos">
+                      {getServicioLabel(cambio.tipo_anterior)} {'→'} {getServicioLabel(cambio.tipo_nuevo)}
+                    </p>
+                    <p className="cambio-servicio-motivo">{cambio.motivo || 'Sin motivo registrado'}</p>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
         {estudiante.contacto_emergencia_nombre && (
           <div className="detalle-card">
             <h2><AlertCircle size={20} /> Contacto de Emergencia</h2>

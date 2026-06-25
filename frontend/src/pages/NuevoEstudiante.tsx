@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useUIFeedback } from '../contexts/UIFeedbackContext';
 import { estudiantesAPI } from '../services/api';
 import { Camera, RotateCcw, Check, UserPlus } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import '../styles/NuevoEstudiante.css';
 
 export const NuevoEstudiante = () => {
-  const { user } = useAuth();
+  const { confirm, showToast } = useUIFeedback();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -249,7 +249,7 @@ export const NuevoEstudiante = () => {
       console.log('Estudiante creado:', resultado);
       
       // Navegar al dashboard o mostrar mensaje de éxito
-      alert('Estudiante registrado exitosamente. Matrícula: ' + resultado.matricula_numero);
+      showToast(`Estudiante registrado exitosamente. Matrícula: ${resultado.matricula_numero}`, 'success');
       navigate('/dashboard');
       
     } catch (err: any) {
@@ -667,7 +667,7 @@ export const NuevoEstudiante = () => {
           <button
             type="button"
             className="btn-secondary"
-            onClick={() => {
+            onClick={async () => {
               const hayCambios = Boolean(
                 primerNombre ||
                 segundoNombre ||
@@ -692,8 +692,14 @@ export const NuevoEstudiante = () => {
                 contactoEmergenciaTelefono ||
                 fotoCapturada
               );
-              if (hayCambios && !confirm('Hay cambios sin guardar. ¿Deseas salir?')) {
-                return;
+              if (hayCambios) {
+                const salir = await confirm({
+                  title: 'Salir sin guardar',
+                  message: 'Hay cambios sin guardar. ¿Deseas salir?',
+                  confirmText: 'Salir',
+                  danger: true,
+                });
+                if (!salir) return;
               }
               navigate('/dashboard');
             }}

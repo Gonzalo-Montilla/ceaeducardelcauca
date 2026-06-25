@@ -160,7 +160,8 @@ export const Clases = () => {
         horas: parseInt(horas),
         observaciones: observaciones.trim() || null,
         instructor_id: Number(instructorId),
-        vehiculo_id: tipo === 'PRACTICA' ? Number(vehiculoId) : null
+        vehiculo_id: tipo === 'PRACTICA' ? Number(vehiculoId) : null,
+        servicio_id: servicioSeleccionado === 'TODOS' ? null : Number(servicioSeleccionado)
       });
       const actualizado = await estudiantesAPI.getByCedula(estudiante.cedula);
       setEstudiante(actualizado as Estudiante);

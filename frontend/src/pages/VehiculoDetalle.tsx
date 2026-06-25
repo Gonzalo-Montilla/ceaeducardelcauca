@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, Wrench, Fuel, Paperclip } from 'lucide-react';
+import { useUIFeedback } from '../contexts/UIFeedbackContext';
 import { uploadsAPI, vehiculosAPI } from '../services/api';
 import '../styles/VehiculoDetalle.css';
 
@@ -85,6 +86,7 @@ interface ConsumoResumen {
 const niveles = ['1/4', '1/2', '3/4', 'LLENO'];
 
 export const VehiculoDetalle = () => {
+  const { showToast } = useUIFeedback();
   const { id } = useParams();
   const navigate = useNavigate();
   const [vehiculo, setVehiculo] = useState<Vehiculo | null>(null);
@@ -217,11 +219,11 @@ export const VehiculoDetalle = () => {
 
   const guardarUmbralConsumo = async () => {
     if (!vehiculo?.tipo) {
-      alert('El vehículo no tiene tipo definido');
+      showToast('El vehículo no tiene tipo definido', 'error');
       return;
     }
     if (!umbralKmGalon) {
-      alert('Ingresa un umbral válido');
+      showToast('Ingresa un umbral válido', 'error');
       return;
     }
     await vehiculosAPI.upsertConsumoUmbral(vehiculo.tipo, parseFloat(umbralKmGalon));
@@ -349,7 +351,7 @@ export const VehiculoDetalle = () => {
 
   const guardarMantenimiento = async () => {
     if (!mantDesc && mantTipo === 'FALLA') {
-      alert('Describe la falla o el mantenimiento');
+      showToast('Describe la falla o el mantenimiento', 'error');
       return;
     }
     const nuevo = await vehiculosAPI.createMantenimiento(Number(id), {
@@ -381,7 +383,7 @@ export const VehiculoDetalle = () => {
   const guardarRepuesto = async () => {
     if (!mantenimientoSeleccionado) return;
     if (!repNombre.trim()) {
-      alert('Nombre del repuesto obligatorio');
+      showToast('Nombre del repuesto obligatorio', 'error');
       return;
     }
     await vehiculosAPI.addRepuesto(Number(id), mantenimientoSeleccionado.id, {
@@ -400,7 +402,7 @@ export const VehiculoDetalle = () => {
 
   const guardarCombustible = async () => {
     if (!combKmIni) {
-      alert('Kilometraje inicial es obligatorio');
+      showToast('Kilometraje inicial es obligatorio', 'error');
       return;
     }
     let reciboUrl = combRecibo;

@@ -6,7 +6,7 @@ from datetime import datetime, date
 from decimal import Decimal
 
 from app.core.database import get_db
-from app.api.deps import get_current_active_user
+from app.api.deps import get_current_active_user, get_admin_or_coordinador
 from app.models.usuario import Usuario
 from app.models.clase import Instructor, EstadoInstructor, EstadoDocumentacion, Clase, TipoClase, EstadoClase
 from app.models.estudiante import Estudiante
@@ -146,7 +146,7 @@ def obtener_instructor(
 def crear_instructor(
     instructor_data: InstructorCreate,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_active_user)
+    current_user: Usuario = Depends(get_admin_or_coordinador)
 ):
     """
     Crea un nuevo instructor
@@ -226,7 +226,7 @@ def actualizar_instructor(
     instructor_id: int,
     instructor_data: InstructorUpdate,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_active_user)
+    current_user: Usuario = Depends(get_admin_or_coordinador)
 ):
     """
     Actualiza un instructor existente
@@ -289,7 +289,7 @@ def actualizar_instructor(
 def eliminar_instructor(
     instructor_id: int,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_active_user)
+    current_user: Usuario = Depends(get_admin_or_coordinador)
 ):
     """
     Desactiva un instructor (soft delete)

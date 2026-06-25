@@ -222,10 +222,10 @@ export const Usuarios = () => {
                   <td>{u.is_active ? 'Activo' : 'Inactivo'}</td>
                   <td>{u.last_login ? new Date(u.last_login).toLocaleString('es-CO') : '-'}</td>
                   <td>
-                    <button className="btn-icon" onClick={() => abrirEditar(u)}>
+                    <button className="btn-icon" onClick={() => abrirEditar(u)} aria-label={`Editar usuario ${u.nombre_completo}`} title="Editar usuario">
                       <Pencil size={14} />
                     </button>
-                    <button className="btn-icon" onClick={() => abrirReset(u)}>
+                    <button className="btn-icon" onClick={() => abrirReset(u)} aria-label={`Resetear contraseña de ${u.nombre_completo}`} title="Resetear contraseña">
                       <KeyRound size={14} />
                     </button>
                   </td>
@@ -246,7 +246,7 @@ export const Usuarios = () => {
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{editando ? 'Editar usuario' : 'Nuevo usuario'}</h3>
-              <button className="btn-icon" onClick={() => setShowModal(false)}>×</button>
+              <button className="btn-icon" onClick={() => setShowModal(false)} aria-label="Cerrar modal de usuario" title="Cerrar">×</button>
             </div>
             <div className="modal-body">
               <div className="form-group">
@@ -332,7 +332,7 @@ export const Usuarios = () => {
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Resetear contraseña</h3>
-              <button className="btn-icon" onClick={() => setShowPassModal(false)}>×</button>
+              <button className="btn-icon" onClick={() => setShowPassModal(false)} aria-label="Cerrar modal de contraseña" title="Cerrar">×</button>
             </div>
             <div className="modal-body">
               <div className="form-group">

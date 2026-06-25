@@ -15,12 +15,12 @@ from reportlab.lib import colors
 from app.core.database import get_db
 from app.core.config import settings
 from app.core.email import send_email
-from app.api.deps import get_current_active_user, get_admin_or_coordinador_or_cajero
+from app.api.deps import get_admin_or_coordinador_or_cajero
 from app.models.usuario import Usuario
 from app.models.caja import Caja, MovimientoCaja, EstadoCaja, TipoMovimiento, ConceptoMovimientoCaja, DetallePagoMovimientoCaja
 from app.models.caja_fuerte import CajaFuerte, MovimientoCajaFuerte
 from app.models.pago import Pago, DetallePago, MetodoPago, EstadoPago
-from app.models.estudiante import Estudiante
+from app.models.estudiante import Estudiante, EstadoEstudiante
 from app.schemas.caja import (
     CajaApertura, CajaCierre, CajaResumen, CajaDetalle,
     MovimientoCajaCreate, MovimientoCajaGeneralCreate, MovimientoCajaResponse, DetallePagoResponse,
@@ -30,6 +30,12 @@ from app.schemas.caja import (
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+DIGITALES_TIEMPO_REAL = {
+    MetodoPago.NEQUI,
+    MetodoPago.DAVIPLATA,
+    MetodoPago.TRANSFERENCIA_BANCARIA,
+}
 
 
 # ==================== CAJA ENDPOINTS ====================
@@ -73,7 +79,7 @@ def abrir_caja(
 @router.get("/actual", response_model=Optional[CajaResumen])
 def get_caja_actual(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_active_user)
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
 ):
     """Obtener la caja actualmente abierta"""
     caja = db.query(Caja).filter(Caja.estado == EstadoCaja.ABIERTA).first()
@@ -109,19 +115,27 @@ def cerrar_caja(
             detail="La caja ya está cerrada"
         )
     
-    # Calcular efectivo teórico
-    efectivo_teorico = caja.saldo_final_teorico
+    # Calcular producción teórica en efectivo (sin base fija)
+    efectivo_teorico = Decimal(str(caja.total_ingresos_efectivo or 0)) - Decimal(str(caja.total_egresos_efectivo or 0))
+    if efectivo_teorico < 0:
+        efectivo_teorico = Decimal("0")
+    base_fija = Decimal(str(caja.saldo_inicial or 0))
+    # El frontend envía el efectivo entregado (sin base fija).
+    efectivo_entregado_real = Decimal(str(cierre_data.efectivo_fisico))
+    if efectivo_entregado_real < 0:
+        efectivo_entregado_real = Decimal("0")
     
     # Registrar arqueo
     caja.fecha_cierre = datetime.utcnow()
     caja.usuario_cierre_id = current_user.id
     caja.efectivo_teorico = Decimal(str(efectivo_teorico))
-    caja.efectivo_fisico = cierre_data.efectivo_fisico
-    caja.diferencia = cierre_data.efectivo_fisico - Decimal(str(efectivo_teorico))
+    # Guardamos el físico total contado (base + entregado) para trazabilidad.
+    caja.efectivo_fisico = base_fija + Decimal(str(efectivo_entregado_real))
+    caja.diferencia = Decimal(str(efectivo_entregado_real)) - Decimal(str(efectivo_teorico))
     caja.observaciones_cierre = cierre_data.observaciones_cierre
     caja.estado = EstadoCaja.CERRADA
-    
-    _registrar_ingresos_caja_fuerte_por_cierre(caja, cierre_data.efectivo_fisico, db, current_user)
+
+    _registrar_ingresos_caja_fuerte_por_cierre(caja, efectivo_entregado_real, db, current_user)
 
     db.commit()
     db.refresh(caja)
@@ -157,6 +171,26 @@ def _apply_caja_fuerte_delta(caja_fuerte: CajaFuerte, metodo: MetodoPago, delta:
         caja_fuerte.saldo_sistecredito = Decimal(str(caja_fuerte.saldo_sistecredito)) + delta
 
 
+def _get_caja_fuerte_saldo_por_metodo(caja_fuerte: CajaFuerte, metodo: MetodoPago) -> Decimal:
+    if metodo == MetodoPago.EFECTIVO:
+        return Decimal(str(caja_fuerte.saldo_efectivo or 0))
+    if metodo == MetodoPago.NEQUI:
+        return Decimal(str(caja_fuerte.saldo_nequi or 0))
+    if metodo == MetodoPago.DAVIPLATA:
+        return Decimal(str(caja_fuerte.saldo_daviplata or 0))
+    if metodo == MetodoPago.TRANSFERENCIA_BANCARIA:
+        return Decimal(str(caja_fuerte.saldo_transferencia_bancaria or 0))
+    if metodo == MetodoPago.TARJETA_DEBITO:
+        return Decimal(str(caja_fuerte.saldo_tarjeta_debito or 0))
+    if metodo == MetodoPago.TARJETA_CREDITO:
+        return Decimal(str(caja_fuerte.saldo_tarjeta_credito or 0))
+    if metodo == MetodoPago.CREDISMART:
+        return Decimal(str(caja_fuerte.saldo_credismart or 0))
+    if metodo == MetodoPago.SISTECREDITO:
+        return Decimal(str(caja_fuerte.saldo_sistecredito or 0))
+    return Decimal("0")
+
+
 def _registrar_ingresos_caja_fuerte_por_cierre(
     caja: Caja,
     efectivo_entregado: Decimal,
@@ -183,7 +217,7 @@ def _registrar_ingresos_caja_fuerte_por_cierre(
         _apply_caja_fuerte_delta(caja_fuerte, metodo, Decimal(str(monto)))
         db.add(mov)
 
-    registrar(MetodoPago.EFECTIVO, efectivo_entregado, f"CIERRE CAJA #{caja.id} - EFECTIVO")
+    registrar(MetodoPago.EFECTIVO, efectivo_entregado, f"CIERRE CAJA #{caja.id} - PRODUCCION EFECTIVO")
 
 
 def _registrar_ingreso_caja_fuerte_por_pago(
@@ -193,7 +227,7 @@ def _registrar_ingreso_caja_fuerte_por_pago(
     db: Session,
     current_user: Usuario
 ):
-    if metodo == MetodoPago.EFECTIVO:
+    if metodo not in DIGITALES_TIEMPO_REAL:
         return
     caja_fuerte = _get_or_create_caja_fuerte(db)
     concepto = f"PAGO #{pago.id} - {metodo.value}"
@@ -213,10 +247,48 @@ def _registrar_ingreso_caja_fuerte_por_pago(
     db.add(mov)
 
 
+def _registrar_egreso_caja_fuerte_por_movimiento(
+    movimiento: MovimientoCaja,
+    metodo: MetodoPago,
+    monto: Decimal,
+    db: Session,
+    current_user: Usuario
+):
+    if metodo not in DIGITALES_TIEMPO_REAL:
+        return
+
+    caja_fuerte = _get_or_create_caja_fuerte(db)
+    monto_decimal = Decimal(str(monto))
+    saldo_disponible = _get_caja_fuerte_saldo_por_metodo(caja_fuerte, metodo)
+    if monto_decimal > saldo_disponible:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Saldo insuficiente en tesoreria para {metodo.value}. "
+                f"Disponible: ${saldo_disponible:,.0f}; solicitado: ${monto_decimal:,.0f}"
+            )
+        )
+
+    mov = MovimientoCajaFuerte(
+        caja_fuerte_id=caja_fuerte.id,
+        caja_id=movimiento.caja_id,
+        tipo=TipoMovimiento.EGRESO,
+        metodo_pago=metodo,
+        concepto=f"EGRESO CAJA #{movimiento.id} - {metodo.value}",
+        categoria="EGRESO_CAJA",
+        monto=monto_decimal,
+        fecha=datetime.utcnow(),
+        observaciones=f"Descuento digital por egreso de caja #{movimiento.id}",
+        usuario_id=current_user.id,
+    )
+    _apply_caja_fuerte_delta(caja_fuerte, metodo, -monto_decimal)
+    db.add(mov)
+
+
 @router.get("/dashboard", response_model=DashboardCaja)
 def get_dashboard(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_active_user)
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
 ):
     """
     Dashboard de caja con resumen y alertas
@@ -258,27 +330,38 @@ def get_dashboard(
         
         dashboard.ultimos_egresos = [_build_movimiento_response(m) for m in ultimos_egresos]
     
-    # Alertas: Estudiantes próximos a vencer (90 días)
+    # Alertas financieras basadas en fecha límite (primer pago + 90 días)
     hoy = datetime.now()
-    fecha_limite = hoy - timedelta(days=83)  # 90 - 7 = 83 (faltan 7 días)
-    
-    # Contar estudiantes con saldo pendiente y próximos a vencer
-    dashboard.estudiantes_proximos_vencer = db.query(Estudiante).join(Pago).filter(
-        and_(
-            Estudiante.saldo_pendiente > 0,
-            Pago.fecha_pago >= fecha_limite,
-            Pago.fecha_pago < hoy - timedelta(days=90)
+    primer_pago_subq = (
+        db.query(
+            Pago.estudiante_id.label("estudiante_id"),
+            func.min(Pago.fecha_pago).label("fecha_primer_pago")
         )
-    ).distinct().count()
-    
-    # Estudiantes vencidos (más de 90 días sin pagar completo)
-    fecha_vencida = hoy - timedelta(days=90)
-    dashboard.estudiantes_vencidos = db.query(Estudiante).join(Pago).filter(
-        and_(
-            Estudiante.saldo_pendiente > 0,
-            Pago.fecha_pago < fecha_vencida
-        )
-    ).distinct().count()
+        .filter(Pago.estado == EstadoPago.COMPLETADO)
+        .group_by(Pago.estudiante_id)
+        .subquery()
+    )
+    estudiantes_con_saldo = (
+        db.query(primer_pago_subq.c.fecha_primer_pago)
+        .join(Estudiante, Estudiante.id == primer_pago_subq.c.estudiante_id)
+        .filter(Estudiante.saldo_pendiente > 0)
+        .all()
+    )
+
+    proximos_vencer = 0
+    vencidos = 0
+    for row in estudiantes_con_saldo:
+        if not row.fecha_primer_pago:
+            continue
+        fecha_limite = row.fecha_primer_pago + timedelta(days=90)
+        dias_restantes = (fecha_limite - hoy).days
+        if dias_restantes < 0:
+            vencidos += 1
+        elif dias_restantes <= 7:
+            proximos_vencer += 1
+
+    dashboard.estudiantes_proximos_vencer = proximos_vencer
+    dashboard.estudiantes_vencidos = vencidos
     
     return dashboard
 
@@ -290,7 +373,7 @@ def get_historial_cajas(
     fecha_inicio: Optional[datetime] = None,
     fecha_fin: Optional[datetime] = None,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_active_user)
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
 ):
     """Obtener historial de cajas cerradas con filtros"""
     # Solo cajas cerradas
@@ -313,7 +396,7 @@ def get_historial_cajas(
 def get_recibo_pago_pdf(
     pago_id: int,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_active_user)
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
 ):
     pago = db.query(Pago).filter(Pago.id == pago_id).first()
     if not pago:
@@ -330,7 +413,7 @@ def get_recibo_pago_pdf(
 def get_recibo_egreso_pdf(
     egreso_id: int,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_active_user)
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
 ):
     egreso = db.query(MovimientoCaja).filter(
         MovimientoCaja.id == egreso_id,
@@ -372,7 +455,7 @@ def get_recibo_egreso_pdf(
 def get_recibo_movimiento_pdf(
     movimiento_id: int,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_active_user)
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
 ):
     movimiento = db.query(MovimientoCaja).filter(
         MovimientoCaja.id == movimiento_id
@@ -425,7 +508,7 @@ def get_recibo_movimiento_pdf(
 def get_cierre_caja_pdf(
     caja_id: int,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_active_user)
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
 ):
     caja = db.query(Caja).filter(Caja.id == caja_id).first()
     if not caja:
@@ -454,6 +537,16 @@ def get_cierre_caja_pdf(
     y = _pdf_kv(c, "Egresos", _fmt_money(caja.total_egresos), y)
     y = _pdf_kv(c, "Efectivo teorico", _fmt_money(caja.efectivo_teorico or 0), y)
     y = _pdf_kv(c, "Efectivo fisico", _fmt_money(caja.efectivo_fisico or 0), y)
+    base_fija = Decimal(str(caja.saldo_inicial or 0))
+    produccion_teorica = Decimal(str(caja.total_ingresos_efectivo or 0)) - Decimal(str(caja.total_egresos_efectivo or 0))
+    if produccion_teorica < 0:
+        produccion_teorica = Decimal("0")
+    efectivo_entregado = (caja.efectivo_fisico or Decimal("0")) - base_fija
+    if efectivo_entregado < 0:
+        efectivo_entregado = Decimal("0")
+    y = _pdf_kv(c, "Base fija en caja", _fmt_money(base_fija), y)
+    y = _pdf_kv(c, "Produccion teorica (efectivo)", _fmt_money(produccion_teorica), y)
+    y = _pdf_kv(c, "Efectivo entregado (produccion)", _fmt_money(efectivo_entregado), y)
     y = _pdf_kv(c, "Diferencia", _fmt_money(caja.diferencia or 0), y)
 
     # Detalle de egresos
@@ -542,13 +635,39 @@ def registrar_pago(
             detail="Estudiante no encontrado"
         )
     
-    # Verificar que el monto no exceda el saldo pendiente
-    if estudiante.saldo_pendiente is not None and pago_data.monto > estudiante.saldo_pendiente:
+    # Solo se permiten pagos para estudiantes con servicio definido
+    if estudiante.valor_total_curso is None or estudiante.saldo_pendiente is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El monto excede el saldo pendiente (${estudiante.saldo_pendiente})"
+            detail="El estudiante debe tener un servicio definido antes de registrar pagos"
         )
-    if estudiante.saldo_pendiente is not None and estudiante.saldo_pendiente <= 0:
+    if estudiante.estado == EstadoEstudiante.PROSPECTO:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se pueden registrar pagos para estudiantes en estado PROSPECTO"
+        )
+
+    # Aplicar saldo a favor automáticamente antes de validar el pago.
+    datos_estudiante = dict(estudiante.datos_adicionales or {})
+    saldo_a_favor_actual = Decimal(str(datos_estudiante.get("saldo_a_favor") or 0))
+    saldo_pendiente_actual = Decimal(str(estudiante.saldo_pendiente or 0))
+    if saldo_a_favor_actual > 0 and saldo_pendiente_actual > 0:
+        saldo_aplicado = min(saldo_a_favor_actual, saldo_pendiente_actual)
+        saldo_pendiente_actual = saldo_pendiente_actual - saldo_aplicado
+        saldo_a_favor_actual = saldo_a_favor_actual - saldo_aplicado
+        estudiante.saldo_pendiente = saldo_pendiente_actual
+        datos_estudiante["saldo_a_favor"] = float(saldo_a_favor_actual)
+        estudiante.datos_adicionales = datos_estudiante
+
+    monto_pago = Decimal(str(pago_data.monto))
+
+    # Verificar que el monto no exceda el saldo pendiente
+    if monto_pago > saldo_pendiente_actual:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El monto excede el saldo pendiente (${saldo_pendiente_actual})"
+        )
+    if saldo_pendiente_actual <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="El estudiante no tiene saldo pendiente"
@@ -606,8 +725,8 @@ def registrar_pago(
             )
         
         # Actualizar saldo del estudiante
-        if estudiante.saldo_pendiente:
-            estudiante.saldo_pendiente -= pago_data.monto
+        if estudiante.saldo_pendiente is not None:
+            estudiante.saldo_pendiente = max(Decimal("0"), saldo_pendiente_actual - monto_pago)
         
         db.commit()
         db.refresh(nuevo_pago)
@@ -620,6 +739,9 @@ def registrar_pago(
         
         return _build_pago_response(nuevo_pago)
         
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         logger.exception("Error al registrar pago")
@@ -633,7 +755,7 @@ def registrar_pago(
 def buscar_estudiante_financiero(
     cedula: str,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_active_user)
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
 ):
     """
     Buscar estudiante por cédula y obtener su información financiera
@@ -672,6 +794,41 @@ def registrar_egreso(
         )
     
     try:
+        metodos_no_permitidos = {MetodoPago.CREDISMART, MetodoPago.SISTECREDITO}
+        if egreso_data.es_pago_mixto:
+            for d in (egreso_data.detalles_pago or []):
+                if d.metodo_pago in metodos_no_permitidos:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="No se permiten metodos de credito (CREDISMART/SISTECREDITO) en egresos"
+                    )
+        elif egreso_data.metodo_pago in metodos_no_permitidos:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se permiten metodos de credito (CREDISMART/SISTECREDITO) en egresos"
+            )
+
+        # Validar disponibilidad por método de pago para egresos
+        montos_por_metodo: dict[MetodoPago, Decimal] = {}
+        if egreso_data.es_pago_mixto:
+            for d in (egreso_data.detalles_pago or []):
+                montos_por_metodo[d.metodo_pago] = montos_por_metodo.get(d.metodo_pago, Decimal("0")) + Decimal(str(d.monto))
+        else:
+            metodo_simple = egreso_data.metodo_pago
+            if metodo_simple is not None:
+                montos_por_metodo[metodo_simple] = Decimal(str(egreso_data.monto))
+
+        for metodo, monto_solicitado in montos_por_metodo.items():
+            saldo_disponible = _saldo_disponible_caja_por_metodo(caja_abierta, metodo, db)
+            if monto_solicitado > saldo_disponible:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Saldo insuficiente en {metodo.value}. "
+                        f"Disponible: ${saldo_disponible:,.0f}; solicitado: ${monto_solicitado:,.0f}"
+                    )
+                )
+
         # Crear el movimiento
         nuevo_egreso = MovimientoCaja(
             caja_id=caja_abierta.id,
@@ -690,6 +847,7 @@ def registrar_egreso(
         )
         
         db.add(nuevo_egreso)
+        db.flush()
         
         if egreso_data.es_pago_mixto:
             for d in (egreso_data.detalles_pago or []):
@@ -700,8 +858,22 @@ def registrar_egreso(
                     referencia=d.referencia
                 ))
                 _actualizar_egresos_caja_por_metodo(caja_abierta, d.metodo_pago, d.monto)
+                _registrar_egreso_caja_fuerte_por_movimiento(
+                    nuevo_egreso,
+                    d.metodo_pago,
+                    d.monto,
+                    db,
+                    current_user
+                )
         else:
             _actualizar_egresos_caja_por_metodo(caja_abierta, egreso_data.metodo_pago, egreso_data.monto)
+            _registrar_egreso_caja_fuerte_por_movimiento(
+                nuevo_egreso,
+                egreso_data.metodo_pago,
+                egreso_data.monto,
+                db,
+                current_user
+            )
         
         db.commit()
         db.refresh(nuevo_egreso)
@@ -709,6 +881,9 @@ def registrar_egreso(
         
         return _build_movimiento_response(nuevo_egreso)
         
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         logger.exception("Error al registrar egreso")
@@ -826,6 +1001,54 @@ def _actualizar_egresos_caja_por_metodo(caja: Caja, metodo: MetodoPago, monto: D
         caja.total_egresos_transferencia += monto
     elif metodo in [MetodoPago.TARJETA_DEBITO, MetodoPago.TARJETA_CREDITO]:
         caja.total_egresos_tarjeta += monto
+
+
+def _ingresos_por_metodo_en_caja(caja: Caja, metodo: MetodoPago) -> Decimal:
+    if metodo == MetodoPago.EFECTIVO:
+        return Decimal(str((caja.saldo_inicial or Decimal("0")) + (caja.total_ingresos_efectivo or Decimal("0"))))
+    if metodo == MetodoPago.NEQUI:
+        return Decimal(str(caja.total_nequi or Decimal("0")))
+    if metodo == MetodoPago.DAVIPLATA:
+        return Decimal(str(caja.total_daviplata or Decimal("0")))
+    if metodo == MetodoPago.TRANSFERENCIA_BANCARIA:
+        return Decimal(str(caja.total_transferencia_bancaria or Decimal("0")))
+    if metodo == MetodoPago.TARJETA_DEBITO:
+        return Decimal(str(caja.total_tarjeta_debito or Decimal("0")))
+    if metodo == MetodoPago.TARJETA_CREDITO:
+        return Decimal(str(caja.total_tarjeta_credito or Decimal("0")))
+    if metodo == MetodoPago.CREDISMART:
+        return Decimal(str(caja.total_credismart or Decimal("0")))
+    if metodo == MetodoPago.SISTECREDITO:
+        return Decimal(str(caja.total_sistecredito or Decimal("0")))
+    return Decimal("0")
+
+
+def _egresos_por_metodo_en_caja(caja_id: int, metodo: MetodoPago, db: Session) -> Decimal:
+    egreso_simple = db.query(func.coalesce(func.sum(MovimientoCaja.monto), 0)).filter(
+        MovimientoCaja.caja_id == caja_id,
+        MovimientoCaja.tipo == TipoMovimiento.EGRESO,
+        MovimientoCaja.es_pago_mixto == 0,
+        MovimientoCaja.metodo_pago == metodo
+    ).scalar() or Decimal("0")
+
+    egreso_mixto = db.query(func.coalesce(func.sum(DetallePagoMovimientoCaja.monto), 0)).join(
+        MovimientoCaja,
+        DetallePagoMovimientoCaja.movimiento_id == MovimientoCaja.id
+    ).filter(
+        MovimientoCaja.caja_id == caja_id,
+        MovimientoCaja.tipo == TipoMovimiento.EGRESO,
+        MovimientoCaja.es_pago_mixto == 1,
+        DetallePagoMovimientoCaja.metodo_pago == metodo
+    ).scalar() or Decimal("0")
+
+    return Decimal(str(egreso_simple)) + Decimal(str(egreso_mixto))
+
+
+def _saldo_disponible_caja_por_metodo(caja: Caja, metodo: MetodoPago, db: Session) -> Decimal:
+    ingresos = _ingresos_por_metodo_en_caja(caja, metodo)
+    egresos = _egresos_por_metodo_en_caja(caja.id, metodo, db)
+    saldo = ingresos - egresos
+    return saldo if saldo > 0 else Decimal("0")
 
 def _build_caja_resumen(caja: Caja, db: Session) -> CajaResumen:
     """Construir resumen de caja"""
@@ -1198,6 +1421,9 @@ def _pdf_response(buffer: BytesIO, filename: str) -> Response:
 
 def _build_estudiante_financiero(estudiante: Estudiante, db: Session) -> EstudianteFinanciero:
     """Construir información financiera del estudiante"""
+    datos = dict(estudiante.datos_adicionales or {})
+    saldo_a_favor = Decimal(str(datos.get("saldo_a_favor") or 0))
+
     # Obtener historial de pagos
     pagos = db.query(Pago).filter(
         and_(
@@ -1249,6 +1475,7 @@ def _build_estudiante_financiero(estudiante: Estudiante, db: Session) -> Estudia
         estado=estudiante.estado.value,
         valor_total_curso=estudiante.valor_total_curso,
         saldo_pendiente=estudiante.saldo_pendiente,
+        saldo_a_favor=saldo_a_favor,
         total_pagado=total_pagado,
         fecha_inscripcion=estudiante.fecha_inscripcion,
         fecha_primer_pago=fecha_primer_pago,

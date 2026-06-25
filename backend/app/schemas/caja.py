@@ -291,6 +291,7 @@ class EstudianteFinanciero(BaseModel):
     # Financiero
     valor_total_curso: Optional[Decimal]
     saldo_pendiente: Optional[Decimal]
+    saldo_a_favor: Decimal = Decimal('0')
     total_pagado: Decimal = Decimal('0')
     
     # Fechas y plazos

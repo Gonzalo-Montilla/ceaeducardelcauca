@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   Home, 
@@ -11,7 +11,7 @@ import {
   DollarSign,
   FileText,
   GraduationCap,
-  MoreVertical,
+  LogOut,
   History,
   Shield,
   Bell,
@@ -30,7 +30,19 @@ interface LayoutProps {
 export const Layout = ({ children }: LayoutProps) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [sidebarExpanded, setSidebarExpanded] = useState(true);
+  const location = useLocation();
+  const [sidebarExpanded, setSidebarExpanded] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return !window.matchMedia('(max-width: 1024px)').matches;
+  });
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    document.body.style.overflow = mobileMenuOpen ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileMenuOpen]);
 
   const handleLogout = () => {
     logout();
@@ -64,12 +76,12 @@ export const Layout = ({ children }: LayoutProps) => {
   });
 
   const isActive = (path: string) => {
-    return window.location.pathname === path;
+    return location.pathname === path || location.pathname.startsWith(`${path}/`);
   };
 
   return (
     <div className="layout-container">
-      <aside className={`sidebar ${sidebarExpanded ? 'expanded' : 'collapsed'}`}>
+      <aside className={`sidebar ${sidebarExpanded ? 'expanded' : 'collapsed'} ${mobileMenuOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-logo">
           <img src={logo} alt="CEA EDUCAR" className="sidebar-logo-img" />
         </div>
@@ -86,6 +98,7 @@ export const Layout = ({ children }: LayoutProps) => {
                 onClick={(e) => {
                   e.preventDefault();
                   navigate(item.path);
+                  setMobileMenuOpen(false);
                 }}
               >
                 <span className="nav-icon"><Icon size={22} /></span>
@@ -95,29 +108,52 @@ export const Layout = ({ children }: LayoutProps) => {
           })}
         </nav>
       </aside>
+      {mobileMenuOpen && (
+        <button
+          type="button"
+          className="sidebar-backdrop"
+          aria-label="Cerrar menú"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
 
       <div className={`main-wrapper ${sidebarExpanded ? 'expanded' : 'collapsed'}`}>
         <header className="dashboard-header">
-          <div className="header-content">
-            <div className="header-title">
+          <div className="dashboard-header-content">
+            <div className="dashboard-header-title">
               <button
                 type="button"
                 className="sidebar-toggle"
-                onClick={() => setSidebarExpanded((prev) => !prev)}
+                onClick={() => {
+                  const isMobile = window.matchMedia('(max-width: 1024px)').matches;
+                  if (isMobile) {
+                    setMobileMenuOpen((prev) => !prev);
+                    return;
+                  }
+                  setSidebarExpanded((prev) => !prev);
+                }}
                 title={sidebarExpanded ? 'Contraer menú' : 'Expandir menú'}
+                aria-label="Alternar menú lateral"
               >
                 <Menu size={18} />
               </button>
-              <div className="header-brand">
-                <h1>CEA EDUCAR</h1>
+              <div className="dashboard-header-brand">
+                <h1>CEA EDUCAR DEL CAUCA S.A.S</h1>
                 <span>Panel administrativo</span>
               </div>
             </div>
-            <div className="header-actions">
-              <span className="user-role-badge">{user?.rol}</span>
+            <div className="dashboard-header-actions">
+              <span className={`user-role-badge role-${String(user?.rol || '').toLowerCase()}`}>{user?.rol}</span>
               <span className="user-name">{user?.nombre_completo}</span>
-              <button onClick={handleLogout} className="icon-button" title="Cerrar sesión">
-                <MoreVertical size={20} />
+              <span className="header-divider" aria-hidden="true" />
+              <button
+                onClick={handleLogout}
+                className="icon-button logout-button"
+                title="Cerrar sesión"
+                aria-label="Cerrar sesión"
+              >
+                <LogOut size={18} />
+                <span className="logout-text">Salir</span>
               </button>
             </div>
           </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, GraduationCap } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
+import { useUIFeedback } from '../contexts/UIFeedbackContext';
 import { tarifasAPI } from '../services/api';
 import '../styles/Tarifas.css';
 
@@ -31,6 +32,7 @@ const tiposServicio = [
 ];
 
 export const Tarifas = () => {
+  const { confirm, showToast } = useUIFeedback();
   const [tarifas, setTarifas] = useState<Tarifa[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -90,8 +92,10 @@ export const Tarifas = () => {
       };
       if (editando) {
         await tarifasAPI.update(editando.id, payload);
+        showToast('Tarifa actualizada correctamente', 'success');
       } else {
         await tarifasAPI.create(payload);
+        showToast('Tarifa creada correctamente', 'success');
       }
       setShowModal(false);
       await cargarTarifas();
@@ -101,13 +105,20 @@ export const Tarifas = () => {
   };
 
   const desactivar = async (t: Tarifa) => {
-    const ok = window.confirm(`¿Desactivar tarifa ${t.tipo_servicio}?`);
+    const ok = await confirm({
+      title: 'Desactivar tarifa',
+      message: `¿Deseas desactivar la tarifa ${t.tipo_servicio}?`,
+      confirmText: 'Desactivar',
+      danger: true,
+    });
     if (!ok) return;
     try {
       await tarifasAPI.delete(t.id);
       await cargarTarifas();
+      showToast('Tarifa desactivada correctamente', 'success');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Error al desactivar la tarifa');
+      showToast(err.response?.data?.detail || 'Error al desactivar la tarifa', 'error');
     }
   };
 
@@ -156,10 +167,10 @@ export const Tarifas = () => {
                   <td>{formatearMoneda(Number(t.costo_practica || 0))}</td>
                   <td>{t.activo ? 'Activa' : 'Inactiva'}</td>
                   <td>
-                    <button className="btn-icon" onClick={() => abrirEditar(t)}>
+                    <button className="btn-icon" onClick={() => abrirEditar(t)} aria-label={`Editar tarifa ${t.tipo_servicio}`} title="Editar tarifa">
                       <Pencil size={14} />
                     </button>
-                    <button className="btn-icon danger" onClick={() => desactivar(t)}>
+                    <button className="btn-icon danger" onClick={() => desactivar(t)} aria-label={`Desactivar tarifa ${t.tipo_servicio}`} title="Desactivar tarifa">
                       <Trash2 size={14} />
                     </button>
                   </td>
@@ -180,7 +191,7 @@ export const Tarifas = () => {
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{editando ? 'Editar Tarifa' : 'Nueva Tarifa'}</h3>
-              <button className="btn-icon" onClick={() => setShowModal(false)}>×</button>
+              <button className="btn-icon" onClick={() => setShowModal(false)} aria-label="Cerrar modal de tarifas" title="Cerrar">×</button>
             </div>
             <div className="modal-body">
               <div className="form-group">

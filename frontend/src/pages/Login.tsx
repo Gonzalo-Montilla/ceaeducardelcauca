@@ -27,7 +27,7 @@ export const Login = () => {
         return;
       }
       await login(email, password);
-      navigate('/dashboard');
+      navigate('/');
     } catch (err: any) {
       console.error('Error al iniciar sesión:', err);
       setError(err.response?.data?.detail || 'Error al iniciar sesión. Verifica tus credenciales.');

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, field_validator
 import re
-from typing import Optional, List, TYPE_CHECKING
+from typing import Optional, List, TYPE_CHECKING, Dict, Any
 from datetime import date, datetime
 from decimal import Decimal
 from app.models.estudiante import CategoriaLicencia, EstadoEstudiante, OrigenCliente, TipoServicio
@@ -233,6 +233,7 @@ class EstudianteResponse(BaseModel):
     horas_practicas_requeridas: int = 0
     valor_total_curso: Optional[Decimal] = None  # Opcional hasta definir servicio
     saldo_pendiente: Optional[Decimal] = None
+    saldo_a_favor: Optional[Decimal] = None
     created_at: datetime
     updated_at: Optional[datetime]
     nombre_completo: str
@@ -246,6 +247,7 @@ class EstudianteResponse(BaseModel):
     historial_pagos: List = []  # List[PagoResponse] causaría circular import, se popula manualmente
     clases_historial: List = []
     servicios: List = []
+    correcciones_servicio: List[Dict[str, Any]] = []
     servicio_activo_id: Optional[int] = None
 
     class Config:
@@ -335,6 +337,7 @@ class AcreditarHorasRequest(BaseModel):
     observaciones: Optional[str] = None
     instructor_id: Optional[int] = None
     vehiculo_id: Optional[int] = None
+    servicio_id: Optional[int] = None
 
     @field_validator('tipo')
     @classmethod
@@ -349,4 +352,11 @@ class AcreditarHorasRequest(BaseModel):
     def validate_horas(cls, v: int) -> int:
         if v <= 0:
             raise ValueError('Las horas deben ser mayores a 0')
+        return v
+
+    @field_validator('servicio_id')
+    @classmethod
+    def validate_servicio_id(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and v <= 0:
+            raise ValueError('servicio_id debe ser mayor a 0')
         return v

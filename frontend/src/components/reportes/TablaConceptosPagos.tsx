@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FileText, Download, Eye } from 'lucide-react';
 import { cajaAPI } from '../../services/api';
+import { useUIFeedback } from '../../contexts/UIFeedbackContext';
 
 interface PagoConcepto {
   pago_id: number;
@@ -20,6 +21,7 @@ interface TablaConceptosPagosProps {
 }
 
 export const TablaConceptosPagos = ({ pagos }: TablaConceptosPagosProps) => {
+  const { showToast } = useUIFeedback();
   const [reciboUrl, setReciboUrl] = useState<string | null>(null);
   const [reciboNombre, setReciboNombre] = useState<string>('');
   const [cargandoRecibo, setCargandoRecibo] = useState(false);
@@ -68,7 +70,7 @@ export const TablaConceptosPagos = ({ pagos }: TablaConceptosPagosProps) => {
       setReciboNombre(`recibo_pago_${pagoId}.pdf`);
     } catch (err) {
       console.error('Error al cargar recibo:', err);
-      alert('No se pudo cargar el recibo');
+      showToast('No se pudo cargar el recibo', 'error');
     } finally {
       setCargandoRecibo(false);
     }
@@ -97,7 +99,7 @@ export const TablaConceptosPagos = ({ pagos }: TablaConceptosPagosProps) => {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Error al descargar recibo:', err);
-      alert('No se pudo descargar el recibo');
+      showToast('No se pudo descargar el recibo', 'error');
     }
   };
 

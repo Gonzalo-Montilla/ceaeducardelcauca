@@ -68,63 +68,313 @@
   gap: 8px;
   background: var(--surface);
   border: 1px solid var(--border);
-  padding: 8px 12px;
-  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  border-radius: 12px;
+  transition: all 0.2s;
+}
+
+.search-box svg {
+  color: #94a3b8;
+}
+
+.search-box:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
 }
 
 .search-box input {
   border: none;
   outline: none;
   width: 100%;
+  background: transparent;
+  font-size: 15px;
 }
 
-.vehiculos-table table {
+.vehiculos-filtros select {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 10px 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.total-label {
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 999px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  justify-self: end;
+}
+
+.vehiculos-results {
   width: 100%;
-  border-collapse: collapse;
+}
+
+.vehiculos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 24px;
+}
+
+.vehiculo-card {
   background: var(--surface);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
   border: 1px solid var(--border);
+  overflow: hidden;
 }
 
-.vehiculos-table th,
-.vehiculos-table td {
-  padding: 12px 10px;
+.vehiculo-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.vehiculo-card.collapsed {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.vehiculo-card.expanded {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+.vehiculo-card-inactivo {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.vehiculos-container .card-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
   border-bottom: 1px solid var(--border);
-  text-align: left;
-  font-size: 0.95rem;
+  position: relative;
 }
 
-.acciones {
+.vehiculos-container .card-header.clickeable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.vehiculos-container .card-header.clickeable:hover {
+  background-color: var(--surface-2);
+}
+
+.vehiculo-card.collapsed .card-header {
+  border-bottom: none;
+}
+
+.vehiculos-container .estudiante-foto {
+  flex-shrink: 0;
+}
+
+.vehiculos-container .foto-placeholder {
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.vehiculo-foto-thumb {
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  object-fit: cover;
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+
+.vehiculo-foto-thumb-inactivo {
+  box-shadow: 0 0 0 2px #fee2e2;
+  filter: saturate(0.85);
+}
+
+.vehiculos-container .estudiante-info {
+  flex: 1;
+  min-width: 0;
+  margin-right: 12px;
+}
+
+.chevron-toggle {
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
+  color: var(--text-secondary);
+}
+
+.chevron-toggle.rotated {
+  transform: rotate(-90deg);
+}
+
+.vehiculos-container .estudiante-info h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vehiculos-container .estudiante-info .cedula {
+  margin: 0 0 2px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vehiculos-container .estudiante-info .matricula {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vehiculos-container .card-body {
+  padding: 20px;
+}
+
+.vehiculos-container .card-body .info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+
+.vehiculos-container .card-body .info-row:last-child {
+  margin-bottom: 0;
+}
+
+.vehiculos-container .card-body .label {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.vehiculos-container .card-body .value {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.vehiculos-container .card-footer {
+  border-top: 1px solid #f1f5f9;
+  background: #f8fafc;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.card-actions {
   display: flex;
   gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
-.btn-icon {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px;
+.btn-ver {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background-color: white;
+  color: #3b82f6;
+  border: 1px solid #3b82f6;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
+  transition: all 0.2s;
 }
 
-.btn-icon.danger {
-  color: #dc2626;
+.btn-ver:hover {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.btn-editar {
+  color: #0f766e;
+  border-color: #14b8a6;
+}
+
+.btn-editar:hover {
+  background-color: #14b8a6;
+  color: #fff;
+}
+
+.btn-desactivar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background-color: #fff1f2;
+  color: #be123c;
+  border: 1px solid #fecdd3;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-desactivar:hover {
+  background-color: #ffe4e6;
 }
 
 .badge {
-  padding: 4px 8px;
+  padding: 6px 12px;
   border-radius: 999px;
-  font-size: 0.8rem;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .badge-activo {
-  background: #dcfce7;
-  color: #166534;
+  background-color: #d1fae5;
+  color: #065f46;
 }
 
 .badge-inactivo {
   background: #fee2e2;
+  color: #991b1b;
+}
+
+.badge-success {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.badge-danger {
+  background-color: #fee2e2;
   color: #991b1b;
 }
 
@@ -216,6 +466,51 @@
 .pagination {
   display: flex;
   justify-content: center;
-  gap: 12px;
+  gap: 14px;
   align-items: center;
+  margin-top: 8px;
+}
+
+.pagination button {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #1e293b;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pagination button:hover:not(:disabled) {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.pagination button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pagination span {
+  font-weight: 600;
+  color: #475569;
+}
+
+@media (max-width: 920px) {
+  .vehiculos-container {
+    padding: 18px;
+  }
+
+  .vehiculos-filtros {
+    grid-template-columns: 1fr;
+  }
+
+  .total-label {
+    justify-self: start;
+  }
+
+  .vehiculos-grid {
+    grid-template-columns: 1fr;
+  }
 }

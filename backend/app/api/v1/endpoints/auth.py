@@ -1,17 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body, Query
 from sqlalchemy.orm import Session
 from datetime import datetime
 from app.core.database import get_db
 from app.core.security import verify_password, get_password_hash, create_access_token, create_refresh_token
 from app.models.usuario import Usuario
-from app.schemas.auth import UserLogin, UserRegister, Token, UserResponse
-from app.api.deps import get_current_active_user
+from app.schemas.auth import UserLogin, UserRegister, Token, UserResponse, RefreshTokenRequest
+from app.api.deps import get_current_active_user, get_admin_user
 
 router = APIRouter()
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def register(user_data: UserRegister, db: Session = Depends(get_db)):
+def register(
+    user_data: UserRegister,
+    db: Session = Depends(get_db),
+    _current_user: Usuario = Depends(get_admin_user)
+):
     """
     Registrar un nuevo usuario
     """
@@ -95,13 +99,24 @@ def get_current_user_info(current_user: Usuario = Depends(get_current_active_use
 
 
 @router.post("/refresh", response_model=Token)
-def refresh_token(refresh_token_str: str, db: Session = Depends(get_db)):
+def refresh_token(
+    refresh_token_str: str | None = Query(default=None),
+    refresh_payload: RefreshTokenRequest | None = Body(default=None),
+    db: Session = Depends(get_db)
+):
     """
     Refrescar el access token usando el refresh token
     """
     from app.core.security import decode_token
     
-    payload = decode_token(refresh_token_str)
+    refresh_token_value = refresh_token_str or (refresh_payload.refresh_token if refresh_payload else None)
+    if not refresh_token_value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debe enviar refresh_token_str por query o refresh_token en el body"
+        )
+
+    payload = decode_token(refresh_token_value)
     if not payload or payload.get("type") != "refresh":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

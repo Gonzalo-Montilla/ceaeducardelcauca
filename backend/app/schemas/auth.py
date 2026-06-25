@@ -33,6 +33,11 @@ class TokenData(BaseModel):
     user_id: int
 
 
+class RefreshTokenRequest(BaseModel):
+    """Schema para refrescar tokens desde body JSON"""
+    refresh_token: str
+
+
 class UserResponse(BaseModel):
     """Schema para respuesta de usuario"""
     id: int
@@ -46,6 +51,7 @@ class UserResponse(BaseModel):
     is_verified: bool
     created_at: datetime
     last_login: Optional[datetime]
+    permisos_modulos: Optional[list[str]] = None
 
     class Config:
         from_attributes = True

@@ -77,6 +77,13 @@ const Alertas = () => {
     cargar();
   }, [dias]);
 
+  const getAlertaItemClass = (diasRestantes?: number) => {
+    if (typeof diasRestantes === 'number' && diasRestantes < 0) {
+      return 'alerta-item alerta-item-vencida';
+    }
+    return 'alerta-item';
+  };
+
   return (
     <div className="alertas-container">
       <PageHeader
@@ -108,7 +115,7 @@ const Alertas = () => {
           ) : (
             <div className="alertas-list">
               {documentos.map((d) => (
-                <div key={`${d.vehiculo_id}-${d.documento}`} className="alerta-item">
+                <div key={`${d.vehiculo_id}-${d.documento}`} className={getAlertaItemClass(d.dias_restantes)}>
                   <div>
                     <strong>{d.documento}</strong> • {d.placa}
                   </div>
@@ -128,7 +135,7 @@ const Alertas = () => {
           ) : (
             <div className="alertas-list">
               {documentosInstructor.map((d) => (
-                <div key={`${d.instructor_id}-${d.documento}`} className="alerta-item">
+                <div key={`${d.instructor_id}-${d.documento}`} className={getAlertaItemClass(d.dias_restantes)}>
                   <div>
                     <strong>{d.documento}</strong> • {d.nombre_completo}
                   </div>
@@ -148,7 +155,7 @@ const Alertas = () => {
           ) : (
             <div className="alertas-list">
               {pins.map((p) => (
-                <div key={p.estudiante_id} className="alerta-item">
+                <div key={p.estudiante_id} className={getAlertaItemClass(p.dias_restantes)}>
                   <div>
                     <strong>{p.nombre_completo}</strong> • {p.cedula}
                   </div>
@@ -168,7 +175,7 @@ const Alertas = () => {
           ) : (
             <div className="alertas-list">
               {pagos.map((p) => (
-                <div key={p.pago_id} className="alerta-item">
+                <div key={p.pago_id} className={getAlertaItemClass(-Math.abs(p.dias_mora || 0))}>
                   <div>
                     <strong>{p.nombre_completo}</strong> • ${Number(p.monto).toLocaleString('es-CO')}
                   </div>
@@ -188,7 +195,7 @@ const Alertas = () => {
           ) : (
             <div className="alertas-list">
               {compromisos.map((c) => (
-                <div key={c.cuota_id} className="alerta-item">
+                <div key={c.cuota_id} className={getAlertaItemClass(c.dias_restantes)}>
                   <div>
                     <strong>{c.nombre_completo}</strong> • ${Number(c.saldo_cuota).toLocaleString('es-CO')}
                   </div>

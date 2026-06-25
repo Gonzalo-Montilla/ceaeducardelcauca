@@ -179,6 +179,35 @@
   font-size: 12px;
 }
 
+.horas-migracion-preview {
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.horas-migracion-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e3a8a;
+}
+
+.horas-migracion-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.horas-migracion-row:last-of-type {
+  margin-bottom: 0;
+}
+
 .radio-group {
   display: flex;
   flex-direction: column;

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { LoginRequest, RegisterRequest, TokenResponse, Usuario, Estudiante } from '../types';
+import type { LoginRequest, RegisterRequest, TokenResponse, Usuario, Estudiante, PagoCreate } from '../types';
 
 const RAW_API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
 const API_URL = RAW_API_URL.endsWith('/api/v1')
@@ -28,26 +28,35 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    const originalRequest = error.config as any;
+    const isRefreshCall = typeof originalRequest?.url === 'string' && originalRequest.url.includes('/auth/refresh');
+
+    if (error.response?.status === 401 && !originalRequest?._retry && !isRefreshCall) {
       // Token expirado, intentar refrescar
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
         try {
-          const response = await axios.post(`${API_URL}/auth/refresh`, {
-            refresh_token: refreshToken,
+          originalRequest._retry = true;
+          const response = await axios.post(`${API_URL}/auth/refresh`, null, {
+            params: { refresh_token_str: refreshToken },
           });
-          const { access_token } = response.data;
+          const { access_token, refresh_token } = response.data;
           localStorage.setItem('access_token', access_token);
+          localStorage.setItem('refresh_token', refresh_token);
           
           // Reintentar la petición original
-          error.config.headers.Authorization = `Bearer ${access_token}`;
-          return axios(error.config);
+          originalRequest.headers.Authorization = `Bearer ${access_token}`;
+          return api(originalRequest);
         } catch (refreshError) {
           // Si falla el refresh, limpiar tokens y redirigir al login
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
           window.location.href = '/login';
         }
+      } else {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        window.location.href = '/login';
       }
     }
     return Promise.reject(error);
@@ -150,7 +159,14 @@ export const estudiantesAPI = {
 
   acreditarHoras: async (
     id: number,
-    data: { tipo: string; horas: number; observaciones?: string | null; instructor_id?: number | null; vehiculo_id?: number | null }
+    data: {
+      tipo: string;
+      horas: number;
+      observaciones?: string | null;
+      instructor_id?: number | null;
+      vehiculo_id?: number | null;
+      servicio_id?: number | null;
+    }
   ): Promise<Estudiante> => {
     const response = await api.post<Estudiante>(`/estudiantes/${id}/acreditar-horas`, data);
     return response.data;
@@ -191,14 +207,7 @@ export const cajaAPI = {
     return response.data;
   },
 
-  registrarPago: async (data: {
-    estudiante_id: number;
-    monto: number;
-    metodo_pago: string;
-    concepto: string;
-    referencia_pago?: string | null;
-    observaciones?: string | null;
-  }): Promise<any> => {
+  registrarPago: async (data: PagoCreate): Promise<any> => {
     const response = await api.post('/caja/pagos', data);
     return response.data;
   },
