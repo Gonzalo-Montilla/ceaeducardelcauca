@@ -47,8 +47,10 @@
 }
 
 .sidebar.expanded .sidebar-logo-img {
-  width: 442px;
-  height: 202px;
+  width: 100%;
+  max-width: 210px;
+  height: auto;
+  max-height: 92px;
   transform: none;
   filter: drop-shadow(0 4px 10px rgba(29, 78, 216, 0.16));
 }
@@ -60,8 +62,8 @@
 }
 
 .sidebar.expanded .sidebar-logo {
-  min-height: 218px;
-  padding: 12px 8px 12px;
+  min-height: 110px;
+  padding: 10px 10px;
 }
 
 .sidebar.collapsed .sidebar-logo {
