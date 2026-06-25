@@ -57,7 +57,6 @@ export const Vehiculos = () => {
   const [numeroChasis, setNumeroChasis] = useState('');
   const [kilometrajeActual, setKilometrajeActual] = useState('');
   const [fotoUrl, setFotoUrl] = useState('');
-  const [fotoArchivo, setFotoArchivo] = useState<File | null>(null);
   const [responsableId, setResponsableId] = useState('');
   const [instructores, setInstructores] = useState<any[]>([]);
   const [tarjetasExpandidas, setTarjetasExpandidas] = useState<Set<number>>(new Set());
@@ -128,7 +127,6 @@ export const Vehiculos = () => {
     setNumeroChasis('');
     setKilometrajeActual('');
     setFotoUrl('');
-    setFotoArchivo(null);
     setResponsableId('');
     setMostrarModal(true);
   };
@@ -148,7 +146,6 @@ export const Vehiculos = () => {
     setNumeroChasis((vehiculo as any).numero_chasis || '');
     setKilometrajeActual(vehiculo.kilometraje_actual ? String(vehiculo.kilometraje_actual) : '');
     setFotoUrl(vehiculo.foto_url || '');
-    setFotoArchivo(null);
     setResponsableId(vehiculo.responsable_instructor_id ? String(vehiculo.responsable_instructor_id) : '');
     setMostrarModal(true);
   };
@@ -160,7 +157,6 @@ export const Vehiculos = () => {
         const base64 = reader.result as string;
         const res = await uploadsAPI.uploadVehiculoFoto(base64);
         setFotoUrl(res.foto_url);
-        setFotoArchivo(file);
       } catch (err: any) {
         const detail = err?.response?.data?.detail;
         const msg = Array.isArray(detail) ? detail[0]?.msg : detail;

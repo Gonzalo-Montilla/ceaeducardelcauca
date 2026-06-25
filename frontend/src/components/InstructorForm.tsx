@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, User, Camera, RotateCcw, Check, Upload, FileText, AlertCircle, Award, Calendar, ArrowRight, ArrowLeft } from 'lucide-react';
+import { X, User, Camera, RotateCcw, Check, Upload, FileText, AlertCircle, Award, ArrowRight, ArrowLeft } from 'lucide-react';
 import { instructoresAPI, authAPI, usuariosAPI } from '../services/api';
 import '../styles/InstructorForm.css';
 import '../styles/InstructorFormExtras.css';
@@ -177,7 +177,7 @@ export const InstructorForm = ({ instructor, onClose, onSuccess }: InstructorFor
 
   // ==================== FUNCIONES DE PDFs ====================
   
-  const handlePdfSelect = async (e: React.ChangeEvent<HTMLInputElement>, tipo: 'cedula' | 'licencia' | 'certificado') => {
+  const handlePdfSelect = (e: React.ChangeEvent<HTMLInputElement>, tipo: 'cedula' | 'licencia' | 'certificado') => {
     const file = e.target.files?.[0];
     if (!file) return;
     

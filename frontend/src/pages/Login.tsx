@@ -3,8 +3,9 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { authAPI } from '../services/api';
-import logo from '../assets/cea_educar_final.png';
 import '../styles/Login.css';
+
+const logo = '/logo-real.png';
 
 export const Login = () => {
   const [email, setEmail] = useState('');

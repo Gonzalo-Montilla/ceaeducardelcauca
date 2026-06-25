@@ -333,7 +333,7 @@ export const NuevoEstudiante = () => {
               </div>
             ) : (
               <div className="foto-preview">
-                <img src={fotoCapturada} alt="Foto del estudiante" />
+                <img src={fotoCapturada || ''} alt="Foto del estudiante" />
                 <div className="foto-actions">
                   <button
                     type="button"

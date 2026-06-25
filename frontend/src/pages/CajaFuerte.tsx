@@ -444,7 +444,7 @@ export default function CajaFuerte() {
               <span className={`registro-chip ${form.tipo === 'INGRESO' ? 'chip-success' : 'chip-danger'}`}>
                 {form.tipo}
               </span>
-              <span className="registro-chip chip-neutral">{form.metodo_pago.replaceAll('_', ' ')}</span>
+              <span className="registro-chip chip-neutral">{form.metodo_pago.replace(/_/g, ' ')}</span>
               <span className="registro-chip chip-primary">
                 Total: ${Number(totalMovimiento).toLocaleString('es-CO')}
               </span>
@@ -527,7 +527,7 @@ export default function CajaFuerte() {
           </div>
           {egresoExcedeDisponible && (
             <p className="movimiento-warning">
-              El egreso supera el disponible en {form.metodo_pago.replaceAll('_', ' ')} (
+              El egreso supera el disponible en {form.metodo_pago.replace(/_/g, ' ')} (
               ${saldoDisponibleMetodo.toLocaleString('es-CO')}).
             </p>
           )}

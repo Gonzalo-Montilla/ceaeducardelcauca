@@ -69,11 +69,6 @@ export const Clases = () => {
     return servicios.find((s) => s.id === id) || null;
   };
 
-  const getTipoServicioSeleccionado = () => {
-    const servicio = getServicioSeleccionado();
-    return servicio?.tipo_servicio || estudiante?.tipo_servicio || null;
-  };
-
   const resolverValor = (valorServicio?: number, fallback?: number) => {
     if (valorServicio === undefined || valorServicio === null) return fallback || 0;
     if (valorServicio === 0 && (fallback || 0) > 0) return fallback || 0;

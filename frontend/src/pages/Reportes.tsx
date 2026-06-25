@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   BarChart3, DollarSign, Users, TrendingUp, AlertCircle,
   Calendar, CreditCard, PieChart, Download
@@ -27,6 +27,7 @@ interface DashboardData {
   ranking_referidos: any[];
   lista_estudiantes_registrados: any[];
   lista_estudiantes_pagos: any[];
+  lista_egresos_caja: any[];
   lista_otros_movimientos: any[];
 }
 
@@ -123,9 +124,9 @@ export const Reportes = () => {
     grafico_egresos,
     ranking_referidos,
     lista_estudiantes_registrados,
-  lista_estudiantes_pagos,
-  lista_otros_movimientos,
-  lista_egresos_caja
+    lista_estudiantes_pagos,
+    lista_otros_movimientos,
+    lista_egresos_caja
   } = dashboard!;
 
   // Preparar datos para gráfico de línea (ingresos)
@@ -196,13 +197,13 @@ export const Reportes = () => {
       ['Ingresos por periodo'],
       ['Periodo', 'Ingresos']
     ];
-    datosIngresosLinea.forEach((d) => rows.push([d.mes, d.ingresos]));
+    datosIngresosLinea.forEach((d: { mes: string; ingresos: number }) => rows.push([d.mes, d.ingresos]));
     rows.push([]);
     rows.push(['Métodos de pago', 'Monto', 'Porcentaje']);
-    datosMetodosPago.forEach((d) => rows.push([d.nombre, d.valor, d.porcentaje]));
+    datosMetodosPago.forEach((d: { nombre: string; valor: number; porcentaje: number }) => rows.push([d.nombre, d.valor, d.porcentaje]));
     rows.push([]);
     rows.push(['Egresos por categoría', 'Monto']);
-    datosEgresos.forEach((d) => rows.push([d.categoria, d.monto]));
+    datosEgresos.forEach((d: { categoria: string; monto: number }) => rows.push([d.categoria, d.monto]));
     downloadCSV(`reportes_${new Date().toISOString().slice(0, 10)}.csv`, rows);
   };
 
@@ -338,7 +339,7 @@ export const Reportes = () => {
                 formatter={(value: any) => formatearMoneda(value)}
               />
               <Bar dataKey="valor" name="Monto">
-                {datosMetodosPago.map((entry, index) => (
+                {datosMetodosPago.map((_: { nombre: string; valor: number; porcentaje: number }, index: number) => (
                   <Cell key={`cell-${index}`} fill={COLORES_METODOS[index % COLORES_METODOS.length]} />
                 ))}
               </Bar>
@@ -359,12 +360,18 @@ export const Reportes = () => {
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ nombre, porcentaje }) => `${nombre}: ${typeof porcentaje === 'number' ? porcentaje.toFixed(1) : '0.0'}%`}
+                label={(props: any) => {
+                  const nombre = props?.payload?.nombre || '';
+                  const porcentaje = typeof props?.payload?.porcentaje === 'number'
+                    ? props.payload.porcentaje
+                    : ((props?.percent || 0) * 100);
+                  return `${nombre}: ${porcentaje.toFixed(1)}%`;
+                }}
                 outerRadius={100}
                 fill="#8884d8"
                 dataKey="valor"
               >
-                {datosEstudiantes.map((entry, index) => (
+                {datosEstudiantes.map((entry: { color: string }, index: number) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>

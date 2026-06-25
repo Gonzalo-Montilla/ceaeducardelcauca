@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { X, DollarSign, FileText, Save } from 'lucide-react';
+import { X, DollarSign, Save } from 'lucide-react';
 import { estudiantesAPI, tarifasAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useUIFeedback } from '../contexts/UIFeedbackContext';

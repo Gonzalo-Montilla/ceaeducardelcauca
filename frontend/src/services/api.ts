@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { LoginRequest, RegisterRequest, TokenResponse, Usuario, Estudiante, PagoCreate } from '../types';
+import type { LoginRequest, RegisterRequest, TokenResponse, Usuario } from '../types';
 
 const RAW_API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
 const API_URL = RAW_API_URL.endsWith('/api/v1')
@@ -112,8 +112,8 @@ export const estudiantesAPI = {
     return response.data;
   },
 
-  getById: async (id: number): Promise<Estudiante> => {
-    const response = await api.get<Estudiante>(`/estudiantes/${id}`);
+  getById: async (id: number): Promise<any> => {
+    const response = await api.get(`/estudiantes/${id}`);
     return response.data;
   },
 
@@ -122,13 +122,13 @@ export const estudiantesAPI = {
     return response.data;
   },
 
-  reactivar: async (id: number): Promise<Estudiante> => {
-    const response = await api.put<Estudiante>(`/estudiantes/${id}/reactivar`);
+  reactivar: async (id: number): Promise<any> => {
+    const response = await api.put(`/estudiantes/${id}/reactivar`);
     return response.data;
   },
 
-  update: async (id: number, data: Partial<Estudiante>): Promise<Estudiante> => {
-    const response = await api.put<Estudiante>(`/estudiantes/${id}`, data);
+  update: async (id: number, data: any): Promise<any> => {
+    const response = await api.put(`/estudiantes/${id}`, data);
     return response.data;
   },
 
@@ -136,24 +136,24 @@ export const estudiantesAPI = {
     await api.delete(`/estudiantes/${id}`);
   },
 
-  definirServicio: async (id: number, data: any): Promise<Estudiante> => {
-    const response = await api.put<Estudiante>(`/estudiantes/${id}/definir-servicio`, data);
+  definirServicio: async (id: number, data: any): Promise<any> => {
+    const response = await api.put(`/estudiantes/${id}/definir-servicio`, data);
     return response.data;
   },
 
   ampliarServicio: async (
     id: number,
     data: { tipo_servicio_nuevo: string; valor_total_curso?: number | null; observaciones?: string | null }
-  ): Promise<Estudiante> => {
-    const response = await api.put<Estudiante>(`/estudiantes/${id}/ampliar-servicio`, data);
+  ): Promise<any> => {
+    const response = await api.put(`/estudiantes/${id}/ampliar-servicio`, data);
     return response.data;
   },
 
   corregirServicio: async (
     id: number,
     data: { tipo_servicio_nuevo: string; valor_total_curso?: number | null; motivo: string; password: string }
-  ): Promise<Estudiante> => {
-    const response = await api.put<Estudiante>(`/estudiantes/${id}/corregir-servicio`, data);
+  ): Promise<any> => {
+    const response = await api.put(`/estudiantes/${id}/corregir-servicio`, data);
     return response.data;
   },
 
@@ -167,8 +167,8 @@ export const estudiantesAPI = {
       vehiculo_id?: number | null;
       servicio_id?: number | null;
     }
-  ): Promise<Estudiante> => {
-    const response = await api.post<Estudiante>(`/estudiantes/${id}/acreditar-horas`, data);
+  ): Promise<any> => {
+    const response = await api.post(`/estudiantes/${id}/acreditar-horas`, data);
     return response.data;
   },
 
@@ -179,6 +179,17 @@ export const estudiantesAPI = {
 };
 
 // Caja endpoints
+type PagoPayload = {
+  estudiante_id: number;
+  monto: number;
+  metodo_pago?: string;
+  concepto?: string;
+  referencia_pago?: string;
+  observaciones?: string;
+  es_pago_mixto?: boolean;
+  detalles_pago?: { metodo_pago: string; monto: number; referencia?: string }[];
+};
+
 export const cajaAPI = {
   abrirCaja: async (data: { saldo_inicial: number; observaciones_apertura?: string | null }): Promise<any> => {
     const response = await api.post('/caja/abrir', data);
@@ -207,7 +218,7 @@ export const cajaAPI = {
     return response.data;
   },
 
-  registrarPago: async (data: PagoCreate): Promise<any> => {
+  registrarPago: async (data: PagoPayload): Promise<any> => {
     const response = await api.post('/caja/pagos', data);
     return response.data;
   },

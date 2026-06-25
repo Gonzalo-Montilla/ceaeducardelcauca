@@ -20,8 +20,9 @@ import {
   Wallet
 } from 'lucide-react';
 import { RolUsuario } from '../types';
-import logo from '../assets/cea_educar_final.png';
 import '../styles/Layout.css';
+
+const logo = '/logo-real.png';
 
 interface LayoutProps {
   children: React.ReactNode;

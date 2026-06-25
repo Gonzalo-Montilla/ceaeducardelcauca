@@ -13,9 +13,7 @@ import {
   DollarSign,
   Edit,
   Download,
-  BookOpen,
   PlusCircle,
-  Car as CarIcon,
   AlertCircle,
   RefreshCw
 } from 'lucide-react';

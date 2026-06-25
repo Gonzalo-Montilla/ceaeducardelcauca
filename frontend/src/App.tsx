@@ -20,7 +20,8 @@ import { Tarifas } from './pages/Tarifas';
 import { Usuarios } from './pages/Usuarios';
 import { Clases } from './pages/Clases';
 import { RolUsuario } from './types';
-import logo from './assets/cea_educar_final.png';
+
+const logo = '/logo-real.png';
 
 const MODULE_PATHS: Record<string, string> = {
   dashboard: '/dashboard',
@@ -76,7 +77,7 @@ const RoleRoute = ({ children, roles, moduleId }: { children: React.ReactNode; r
     return <Navigate to="/login" />;
   }
   if (!user || !hasModuleAccess(user, moduleId, roles)) {
-    if (user && hasExplicitModulePermissions(user) && !user.permisos_modulos.some((m) => MODULE_PATHS[m])) {
+    if (user && hasExplicitModulePermissions(user) && !user.permisos_modulos?.some((m) => MODULE_PATHS[m])) {
       return <div>No tienes módulos asignados. Contacta a un administrador.</div>;
     }
     return <Navigate to={getHomeRoute(user || undefined)} />;
