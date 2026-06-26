@@ -7,21 +7,27 @@
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
-  "background_color": "#f8fafc",
+  "background_color": "#1027B8",
   "theme_color": "#1027B8",
   "orientation": "portrait-primary",
   "lang": "es-CO",
   "categories": ["education", "business", "productivity"],
   "icons": [
     {
-      "src": "/pwa-icon.svg",
+      "src": "/favicon-educar.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/pwa-icon.svg",
-      "sizes": "192x192 512x512",
+      "src": "/favicon-educar.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon-educar.svg",
+      "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any"
     }

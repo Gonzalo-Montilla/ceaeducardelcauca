@@ -1,4 +1,4 @@
-const CACHE_VERSION = "cea-educar-pwa-v3";
+const CACHE_VERSION = "cea-educar-pwa-v4";
 const APP_SHELL_CACHE = `app-shell-${CACHE_VERSION}`;
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 
@@ -7,7 +7,6 @@ const APP_SHELL_FILES = [
   "/index.html",
   "/manifest.webmanifest",
   "/favicon-educar.svg",
-  "/pwa-icon.svg",
   "/logo-real.png"
 ];
 
