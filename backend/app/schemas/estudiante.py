@@ -308,6 +308,16 @@ class DefinirServicioRequest(BaseModel):
         return v
 
 
+class ServicioCatalogoItem(BaseModel):
+    tipo_servicio: TipoServicio
+    label: str
+    categoria: str
+    permite_ampliar_combo: bool = False
+    activo: bool = False
+    precio_base: Optional[Decimal] = None
+    costo_practica: Optional[Decimal] = None
+
+
 class AmpliarServicioRequest(BaseModel):
     """Schema para ampliar servicio a combo"""
     tipo_servicio_nuevo: TipoServicio

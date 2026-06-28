@@ -300,7 +300,10 @@ def get_cierre_financiero(
     total_transferencias = sum([c.total_ingresos_transferencia or Decimal('0') for c in cajas], Decimal('0'))
     total_tarjetas = sum([c.total_ingresos_tarjeta or Decimal('0') for c in cajas], Decimal('0'))
     total_nequi = sum([c.total_nequi or Decimal('0') for c in cajas], Decimal('0'))
+    total_nequi_escuela = sum([c.total_nequi_escuela or Decimal('0') for c in cajas], Decimal('0'))
+    total_nequi_gerencia = sum([c.total_nequi_gerencia or Decimal('0') for c in cajas], Decimal('0'))
     total_daviplata = sum([c.total_daviplata or Decimal('0') for c in cajas], Decimal('0'))
+    total_bre_b = sum([c.total_bre_b or Decimal('0') for c in cajas], Decimal('0'))
     total_transferencia_bancaria = sum([c.total_transferencia_bancaria or Decimal('0') for c in cajas], Decimal('0'))
     total_tarjeta_debito = sum([c.total_tarjeta_debito or Decimal('0') for c in cajas], Decimal('0'))
     total_tarjeta_credito = sum([c.total_tarjeta_credito or Decimal('0') for c in cajas], Decimal('0'))
@@ -337,7 +340,10 @@ def get_cierre_financiero(
         total_transferencias=total_transferencias,
         total_tarjetas=total_tarjetas,
         total_nequi=total_nequi,
+        total_nequi_escuela=total_nequi_escuela,
+        total_nequi_gerencia=total_nequi_gerencia,
         total_daviplata=total_daviplata,
+        total_bre_b=total_bre_b,
         total_transferencia_bancaria=total_transferencia_bancaria,
         total_tarjeta_debito=total_tarjeta_debito,
         total_tarjeta_credito=total_tarjeta_credito,
@@ -354,7 +360,10 @@ def _ingresos_caja(caja: Caja) -> Decimal:
     return (
         (caja.total_ingresos_efectivo or Decimal('0')) +
         (caja.total_nequi or Decimal('0')) +
+        (caja.total_nequi_escuela or Decimal('0')) +
+        (caja.total_nequi_gerencia or Decimal('0')) +
         (caja.total_daviplata or Decimal('0')) +
+        (caja.total_bre_b or Decimal('0')) +
         (caja.total_transferencia_bancaria or Decimal('0')) +
         (caja.total_tarjeta_debito or Decimal('0')) +
         (caja.total_tarjeta_credito or Decimal('0'))
@@ -804,7 +813,10 @@ def _sumar_ingresos_por_metodo_periodo(db: Session, fecha_inicio: date, fecha_fi
     totales = {
         'Efectivo': Decimal('0'),
         'Nequi': Decimal('0'),
+        'Nequi Escuela': Decimal('0'),
+        'Nequi Gerencia': Decimal('0'),
         'Daviplata': Decimal('0'),
+        'Bre-B': Decimal('0'),
         'Transferencia Bancaria': Decimal('0'),
         'Tarjeta Débito': Decimal('0'),
         'Tarjeta Crédito': Decimal('0'),
@@ -860,7 +872,10 @@ def _map_metodo_label(metodo) -> Optional[str]:
     etiquetas = {
         MetodoPago.EFECTIVO.value: 'Efectivo',
         MetodoPago.NEQUI.value: 'Nequi',
+        MetodoPago.NEQUI_ESCUELA.value: 'Nequi Escuela',
+        MetodoPago.NEQUI_GERENCIA.value: 'Nequi Gerencia',
         MetodoPago.DAVIPLATA.value: 'Daviplata',
+        MetodoPago.BRE_B.value: 'Bre-B',
         MetodoPago.TRANSFERENCIA_BANCARIA.value: 'Transferencia Bancaria',
         MetodoPago.TARJETA_DEBITO.value: 'Tarjeta Débito',
         MetodoPago.TARJETA_CREDITO.value: 'Tarjeta Crédito',

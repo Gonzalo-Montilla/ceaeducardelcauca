@@ -3,14 +3,21 @@ import { Banknote, CreditCard, Wallet, Download } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import { useUIFeedback } from '../contexts/UIFeedbackContext';
 import { cajaFuerteAPI } from '../services/api';
+import { printReciboTermico } from '../components/recibos/ReciboTermico';
 import '../styles/CajaFuerte.css';
 
 const DENOMINACIONES = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50];
-const METODOS = [
-  'EFECTIVO',
-  'NEQUI',
-  'DAVIPLATA',
-  'TRANSFERENCIA_BANCARIA',
+const METODOS_FORM = [
+  { value: 'EFECTIVO', label: 'Efectivo' },
+  { value: 'NEQUI_ESCUELA', label: 'Nequi Escuela' },
+  { value: 'NEQUI_GERENCIA', label: 'Nequi Gerencia' },
+  { value: 'BRE_B', label: 'Bre-B' },
+  { value: 'DAVIPLATA', label: 'Daviplata' },
+  { value: 'TRANSFERENCIA_BANCARIA', label: 'Transferencia Bancaria' },
+];
+const METODOS_FILTRO = [
+  ...METODOS_FORM,
+  { value: 'NEQUI', label: 'Nequi (Legado)' },
 ];
 const CATEGORIAS_EGRESO = [
   'ARRENDAMIENTO',
@@ -19,6 +26,8 @@ const CATEGORIAS_EGRESO = [
   'PAPELERIA',
   'MANTENIMIENTO',
   'COMBUSTIBLE',
+  'DERECHOS_TRANSITO',
+  'EXAMENES_MEDICOS',
   'IMPUESTOS',
   'PUBLICIDAD',
   'OTROS',
@@ -137,14 +146,20 @@ export default function CajaFuerte() {
     return new Set(top);
   }, [inventarioDetalle]);
   const saldoDigitalOperativo = Number(resumen?.saldo_nequi || 0) +
+    Number(resumen?.saldo_nequi_escuela || 0) +
+    Number(resumen?.saldo_nequi_gerencia || 0) +
     Number(resumen?.saldo_daviplata || 0) +
+    Number(resumen?.saldo_bre_b || 0) +
     Number(resumen?.saldo_transferencia_bancaria || 0);
   const saldoTotalOperativo = Number(resumen?.saldo_efectivo || 0) + saldoDigitalOperativo;
   const getSaldoDisponiblePorMetodo = (metodo: string) => {
     const map: Record<string, number> = {
       EFECTIVO: Number(resumen?.saldo_efectivo || 0),
       NEQUI: Number(resumen?.saldo_nequi || 0),
+      NEQUI_ESCUELA: Number(resumen?.saldo_nequi_escuela || 0),
+      NEQUI_GERENCIA: Number(resumen?.saldo_nequi_gerencia || 0),
       DAVIPLATA: Number(resumen?.saldo_daviplata || 0),
+      BRE_B: Number(resumen?.saldo_bre_b || 0),
       TRANSFERENCIA_BANCARIA: Number(resumen?.saldo_transferencia_bancaria || 0),
       TARJETA_DEBITO: Number(resumen?.saldo_tarjeta_debito || 0),
       TARJETA_CREDITO: Number(resumen?.saldo_tarjeta_credito || 0),
@@ -377,6 +392,32 @@ export default function CajaFuerte() {
     }
   };
 
+  const handleReciboTermico = (mov: any) => {
+    try {
+      const data = {
+        documento: mov.tipo === 'INGRESO' ? 'RECIBO_INGRESO' : 'RECIBO_EGRESO',
+        id: mov.id,
+        fecha: mov.fecha,
+        concepto: mov.concepto,
+        categoria: mov.categoria || undefined,
+        metodo_pago: mov.metodo_pago,
+        monto_total: Number(mov.monto || 0),
+        es_pago_mixto: false,
+        detalles_metodo: mov.metodo_pago
+          ? [{ metodo: mov.metodo_pago, monto: Number(mov.monto || 0) }]
+          : [],
+        tercero_nombre: mov.tercero_nombre || undefined,
+        tercero_documento: mov.tercero_documento || undefined,
+        usuario_nombre: mov.usuario_nombre || undefined,
+        observaciones: mov.observaciones || undefined,
+        empresa_nombre: 'CEA EDUCAR',
+      };
+      printReciboTermico(data);
+    } catch {
+      showToast('No se pudo imprimir recibo termico', 'error');
+    }
+  };
+
   return (
     <div className="caja-fuerte-container">
       <PageHeader
@@ -411,7 +452,19 @@ export default function CajaFuerte() {
           <div className="resumen-valor">${saldoDigitalOperativo.toLocaleString()}</div>
           <div className="resumen-subdetalle">
             <div className="detalle-row">
-              <span>Nequi</span>
+              <span>Nequi Escuela</span>
+              <strong>${Number(resumen?.saldo_nequi_escuela || 0).toLocaleString()}</strong>
+            </div>
+            <div className="detalle-row">
+              <span>Nequi Gerencia</span>
+              <strong>${Number(resumen?.saldo_nequi_gerencia || 0).toLocaleString()}</strong>
+            </div>
+            <div className="detalle-row">
+              <span>Bre-B</span>
+              <strong>${Number(resumen?.saldo_bre_b || 0).toLocaleString()}</strong>
+            </div>
+            <div className="detalle-row">
+              <span>Nequi (Legado)</span>
               <strong>${Number(resumen?.saldo_nequi || 0).toLocaleString()}</strong>
             </div>
             <div className="detalle-row">
@@ -469,8 +522,8 @@ export default function CajaFuerte() {
             <label className="field-control">
               <span>Método de pago</span>
               <select value={form.metodo_pago} onChange={(e) => setForm({ ...form, metodo_pago: e.target.value })}>
-                {METODOS.map((m) => (
-                  <option key={m} value={m}>{m}</option>
+                {METODOS_FORM.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
                 ))}
               </select>
             </label>
@@ -649,8 +702,8 @@ export default function CajaFuerte() {
           </select>
           <select value={filtros.metodo_pago} onChange={(e) => setFiltros({ ...filtros, metodo_pago: e.target.value })}>
             <option value="">Todos los métodos</option>
-            {METODOS.map((m) => (
-              <option key={m} value={m}>{m}</option>
+            {METODOS_FILTRO.map((m) => (
+              <option key={m.value} value={m.value}>{m.label}</option>
             ))}
           </select>
           <input type="date" value={filtros.fecha_inicio} onChange={(e) => setFiltros({ ...filtros, fecha_inicio: e.target.value })} />
@@ -682,9 +735,14 @@ export default function CajaFuerte() {
                   <td>{mov.usuario_nombre}</td>
                   <td className="acciones">
                     {mov.tipo === 'EGRESO' && (
-                      <button className="btn-secondary" onClick={() => handleRecibo(mov.id)}>
-                        Recibo
-                      </button>
+                      <>
+                        <button className="btn-secondary" onClick={() => handleRecibo(mov.id)}>
+                          Recibo
+                        </button>
+                        <button className="btn-secondary" onClick={() => handleReciboTermico(mov)}>
+                          Termico
+                        </button>
+                      </>
                     )}
                     {!mov.caja_id && (
                       <>

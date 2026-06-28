@@ -308,7 +308,10 @@ class CierreFinancieroResponse(BaseModel):
     total_transferencias: Decimal
     total_tarjetas: Decimal
     total_nequi: Decimal
+    total_nequi_escuela: Decimal
+    total_nequi_gerencia: Decimal
     total_daviplata: Decimal
+    total_bre_b: Decimal
     total_transferencia_bancaria: Decimal
     total_tarjeta_debito: Decimal
     total_tarjeta_credito: Decimal

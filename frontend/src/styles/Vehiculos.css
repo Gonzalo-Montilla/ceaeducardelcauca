@@ -348,6 +348,40 @@
   background-color: #ffe4e6;
 }
 
+/* Aislar acciones para evitar colisiones con otros módulos */
+.vehiculos-container .card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+.vehiculos-container .card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.vehiculos-container .btn-ver,
+.vehiculos-container .btn-desactivar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 7px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.vehiculos-container .btn-ver svg,
+.vehiculos-container .btn-desactivar svg {
+  width: 15px;
+  height: 15px;
+}
+
 .badge {
   padding: 6px 12px;
   border-radius: 999px;
@@ -512,5 +546,21 @@
 
   .vehiculos-grid {
     grid-template-columns: 1fr;
+  }
+
+  .vehiculos-container .card-footer {
+    padding: 12px 14px;
+    gap: 8px;
+  }
+
+  .vehiculos-container .card-actions {
+    gap: 6px;
+  }
+
+  .vehiculos-container .btn-ver,
+  .vehiculos-container .btn-desactivar {
+    min-height: 34px;
+    padding: 6px 10px;
+    font-size: 12px;
   }
 }

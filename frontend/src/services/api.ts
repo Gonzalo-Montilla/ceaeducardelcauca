@@ -96,6 +96,15 @@ export const authAPI = {
 
 // Estudiantes endpoints
 export const estudiantesAPI = {
+  getCatalogoServicios: async (params?: { solo_activos?: boolean; incluir_sin_tarifa?: boolean }): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (params?.solo_activos !== undefined) queryParams.append('solo_activos', String(params.solo_activos));
+    if (params?.incluir_sin_tarifa !== undefined) queryParams.append('incluir_sin_tarifa', String(params.incluir_sin_tarifa));
+    const query = queryParams.toString();
+    const response = await api.get(`/estudiantes/catalogo-servicios${query ? `?${query}` : ''}`);
+    return response.data;
+  },
+
   create: async (data: any): Promise<any> => {
     const response = await api.post('/estudiantes/', data);
     return response.data;
@@ -260,14 +269,26 @@ export const cajaAPI = {
     const response = await api.get(`/caja/pagos/${id}/recibo-pdf`, { responseType: 'blob' });
     return response.data;
   },
+  getPagoReciboTermico: async (id: number): Promise<any> => {
+    const response = await api.get(`/caja/pagos/${id}/recibo-termico`);
+    return response.data;
+  },
 
   getEgresoReciboPdf: async (id: number): Promise<Blob> => {
     const response = await api.get(`/caja/egresos/${id}/recibo-pdf`, { responseType: 'blob' });
     return response.data;
   },
+  getEgresoReciboTermico: async (id: number): Promise<any> => {
+    const response = await api.get(`/caja/egresos/${id}/recibo-termico`);
+    return response.data;
+  },
 
   getCierrePdf: async (id: number): Promise<Blob> => {
     const response = await api.get(`/caja/${id}/cierre-pdf`, { responseType: 'blob' });
+    return response.data;
+  },
+  getMovimientoReciboTermico: async (movimientoId: number): Promise<any> => {
+    const response = await api.get(`/caja/movimientos/${movimientoId}/recibo-termico`);
     return response.data;
   },
 
@@ -576,6 +597,14 @@ export const vehiculosAPI = {
 export const tarifasAPI = {
   getAll: async (): Promise<any> => {
     const response = await api.get('/tarifas');
+    return response.data;
+  },
+  getCatalogoServicios: async (params?: { solo_activos?: boolean; incluir_sin_tarifa?: boolean }): Promise<any[]> => {
+    const queryParams = new URLSearchParams();
+    if (params?.solo_activos !== undefined) queryParams.append('solo_activos', String(params.solo_activos));
+    if (params?.incluir_sin_tarifa !== undefined) queryParams.append('incluir_sin_tarifa', String(params.incluir_sin_tarifa));
+    const query = queryParams.toString();
+    const response = await api.get(`/estudiantes/catalogo-servicios${query ? `?${query}` : ''}`);
     return response.data;
   },
   create: async (data: any): Promise<any> => {

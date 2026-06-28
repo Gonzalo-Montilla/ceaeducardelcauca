@@ -47,7 +47,10 @@ export const TablaEstudiantesPagos = ({ pagos }: TablaEstudiantesPagosProps) => 
     const colores: { [key: string]: string } = {
       'EFECTIVO': 'badge-success',
       'NEQUI': 'badge-nequi',
+      'NEQUI_ESCUELA': 'badge-nequi',
+      'NEQUI_GERENCIA': 'badge-nequi',
       'DAVIPLATA': 'badge-daviplata',
+      'BRE_B': 'badge-primary',
       'TRANSFERENCIA_BANCARIA': 'badge-primary',
       'TARJETA_DEBITO': 'badge-info',
       'TARJETA_CREDITO': 'badge-warning',
@@ -58,7 +61,10 @@ export const TablaEstudiantesPagos = ({ pagos }: TablaEstudiantesPagosProps) => 
     const nombres: { [key: string]: string } = {
       'EFECTIVO': 'Efectivo',
       'NEQUI': 'Nequi',
+      'NEQUI_ESCUELA': 'Nequi Escuela',
+      'NEQUI_GERENCIA': 'Nequi Gerencia',
       'DAVIPLATA': 'Daviplata',
+      'BRE_B': 'Bre-B',
       'TRANSFERENCIA_BANCARIA': 'Transferencia',
       'TARJETA_DEBITO': 'Tarjeta Débito',
       'TARJETA_CREDITO': 'Tarjeta Crédito',

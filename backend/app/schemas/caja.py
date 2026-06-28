@@ -62,7 +62,10 @@ class CajaResumen(BaseModel):
     
     # Transferencias separadas
     total_nequi: Decimal = Decimal('0')
+    total_nequi_escuela: Decimal = Decimal('0')
+    total_nequi_gerencia: Decimal = Decimal('0')
     total_daviplata: Decimal = Decimal('0')
+    total_bre_b: Decimal = Decimal('0')
     total_transferencia_bancaria: Decimal = Decimal('0')
     
     # Tarjetas separadas
@@ -193,6 +196,36 @@ class MovimientoCajaResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+# ==================== RECIBO TERMICO ====================
+class ReciboTermicoDetalleMetodo(BaseModel):
+    metodo: str
+    monto: Decimal
+    referencia: Optional[str] = None
+
+
+class ReciboTermicoData(BaseModel):
+    documento: str
+    id: int
+    fecha: datetime
+    concepto: str
+    categoria: Optional[str] = None
+    metodo_pago: Optional[str] = None
+    monto_total: Decimal
+    es_pago_mixto: bool = False
+    detalles_metodo: list[ReciboTermicoDetalleMetodo] = []
+    referencia_pago: Optional[str] = None
+    estudiante_nombre: Optional[str] = None
+    estudiante_documento: Optional[str] = None
+    estudiante_matricula: Optional[str] = None
+    tercero_nombre: Optional[str] = None
+    tercero_documento: Optional[str] = None
+    usuario_nombre: Optional[str] = None
+    observaciones: Optional[str] = None
+    empresa_nombre: str = "CEA EDUCAR"
+    empresa_nit: Optional[str] = None
+    empresa_contacto: Optional[str] = None
 
 
 # ==================== PAGO SCHEMAS (actualizados) ====================

@@ -328,6 +328,40 @@
   color: white;
 }
 
+/* Aislar estilos del módulo para evitar colisiones con otros CSS globales */
+.estudiantes-container .card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+.estudiantes-container .card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.estudiantes-container .btn-definir,
+.estudiantes-container .btn-ver {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 7px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.estudiantes-container .btn-definir svg,
+.estudiantes-container .btn-ver svg {
+  width: 15px;
+  height: 15px;
+}
+
 /* Estados vacíos y loading */
 .loading-container {
   text-align: center;
@@ -445,5 +479,21 @@
 
   .estudiantes-grid {
     grid-template-columns: 1fr;
+  }
+
+  .estudiantes-container .card-footer {
+    gap: 8px;
+    padding: 12px 14px;
+  }
+
+  .estudiantes-container .card-actions {
+    gap: 6px;
+  }
+
+  .estudiantes-container .btn-definir,
+  .estudiantes-container .btn-ver {
+    min-height: 34px;
+    padding: 6px 10px;
+    font-size: 12px;
   }
 }

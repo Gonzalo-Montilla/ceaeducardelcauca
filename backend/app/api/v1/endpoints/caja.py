@@ -25,7 +25,8 @@ from app.schemas.caja import (
     CajaApertura, CajaCierre, CajaResumen, CajaDetalle,
     MovimientoCajaCreate, MovimientoCajaGeneralCreate, MovimientoCajaResponse, DetallePagoResponse,
     PagoCreate, PagoResponse,
-    EstudianteFinanciero, DashboardCaja
+    EstudianteFinanciero, DashboardCaja,
+    ReciboTermicoData, ReciboTermicoDetalleMetodo
 )
 
 router = APIRouter()
@@ -33,7 +34,10 @@ logger = logging.getLogger(__name__)
 
 DIGITALES_TIEMPO_REAL = {
     MetodoPago.NEQUI,
+    MetodoPago.NEQUI_ESCUELA,
+    MetodoPago.NEQUI_GERENCIA,
     MetodoPago.DAVIPLATA,
+    MetodoPago.BRE_B,
     MetodoPago.TRANSFERENCIA_BANCARIA,
 }
 
@@ -157,8 +161,14 @@ def _apply_caja_fuerte_delta(caja_fuerte: CajaFuerte, metodo: MetodoPago, delta:
         caja_fuerte.saldo_efectivo = Decimal(str(caja_fuerte.saldo_efectivo)) + delta
     elif metodo == MetodoPago.NEQUI:
         caja_fuerte.saldo_nequi = Decimal(str(caja_fuerte.saldo_nequi)) + delta
+    elif metodo == MetodoPago.NEQUI_ESCUELA:
+        caja_fuerte.saldo_nequi_escuela = Decimal(str(caja_fuerte.saldo_nequi_escuela)) + delta
+    elif metodo == MetodoPago.NEQUI_GERENCIA:
+        caja_fuerte.saldo_nequi_gerencia = Decimal(str(caja_fuerte.saldo_nequi_gerencia)) + delta
     elif metodo == MetodoPago.DAVIPLATA:
         caja_fuerte.saldo_daviplata = Decimal(str(caja_fuerte.saldo_daviplata)) + delta
+    elif metodo == MetodoPago.BRE_B:
+        caja_fuerte.saldo_bre_b = Decimal(str(caja_fuerte.saldo_bre_b)) + delta
     elif metodo == MetodoPago.TRANSFERENCIA_BANCARIA:
         caja_fuerte.saldo_transferencia_bancaria = Decimal(str(caja_fuerte.saldo_transferencia_bancaria)) + delta
     elif metodo == MetodoPago.TARJETA_DEBITO:
@@ -176,8 +186,14 @@ def _get_caja_fuerte_saldo_por_metodo(caja_fuerte: CajaFuerte, metodo: MetodoPag
         return Decimal(str(caja_fuerte.saldo_efectivo or 0))
     if metodo == MetodoPago.NEQUI:
         return Decimal(str(caja_fuerte.saldo_nequi or 0))
+    if metodo == MetodoPago.NEQUI_ESCUELA:
+        return Decimal(str(caja_fuerte.saldo_nequi_escuela or 0))
+    if metodo == MetodoPago.NEQUI_GERENCIA:
+        return Decimal(str(caja_fuerte.saldo_nequi_gerencia or 0))
     if metodo == MetodoPago.DAVIPLATA:
         return Decimal(str(caja_fuerte.saldo_daviplata or 0))
+    if metodo == MetodoPago.BRE_B:
+        return Decimal(str(caja_fuerte.saldo_bre_b or 0))
     if metodo == MetodoPago.TRANSFERENCIA_BANCARIA:
         return Decimal(str(caja_fuerte.saldo_transferencia_bancaria or 0))
     if metodo == MetodoPago.TARJETA_DEBITO:
@@ -409,6 +425,20 @@ def get_recibo_pago_pdf(
     return _pdf_response(BytesIO(pdf_bytes), f"recibo_pago_{pago.id}.pdf")
 
 
+@router.get("/pagos/{pago_id}/recibo-termico", response_model=ReciboTermicoData)
+def get_recibo_pago_termico(
+    pago_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
+):
+    pago = db.query(Pago).filter(Pago.id == pago_id).first()
+    if not pago:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pago no encontrado")
+
+    db.refresh(pago, ['detalles_pago', 'estudiante', 'usuario'])
+    return _build_recibo_termico_pago(pago)
+
+
 @router.get("/egresos/{egreso_id}/recibo-pdf")
 def get_recibo_egreso_pdf(
     egreso_id: int,
@@ -449,6 +479,23 @@ def get_recibo_egreso_pdf(
     c.showPage()
     c.save()
     return _pdf_response(buffer, f"recibo_egreso_{egreso.id}.pdf")
+
+
+@router.get("/egresos/{egreso_id}/recibo-termico", response_model=ReciboTermicoData)
+def get_recibo_egreso_termico(
+    egreso_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
+):
+    egreso = db.query(MovimientoCaja).filter(
+        MovimientoCaja.id == egreso_id,
+        MovimientoCaja.tipo == TipoMovimiento.EGRESO
+    ).first()
+    if not egreso:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Egreso no encontrado")
+
+    db.refresh(egreso, ['detalles_pago', 'usuario'])
+    return _build_recibo_termico_movimiento(egreso)
 
 
 @router.get("/movimientos/{movimiento_id}/recibo-pdf")
@@ -502,6 +549,22 @@ def get_recibo_movimiento_pdf(
     c.showPage()
     c.save()
     return _pdf_response(buffer, f"recibo_movimiento_{movimiento.id}.pdf")
+
+
+@router.get("/movimientos/{movimiento_id}/recibo-termico", response_model=ReciboTermicoData)
+def get_recibo_movimiento_termico(
+    movimiento_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
+):
+    movimiento = db.query(MovimientoCaja).filter(
+        MovimientoCaja.id == movimiento_id
+    ).first()
+    if not movimiento:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Movimiento no encontrado")
+
+    db.refresh(movimiento, ['detalles_pago', 'usuario'])
+    return _build_recibo_termico_movimiento(movimiento)
 
 
 @router.get("/{caja_id}/cierre-pdf")
@@ -974,8 +1037,17 @@ def _actualizar_caja_por_metodo(caja: Caja, metodo: MetodoPago, monto: Decimal) 
     elif metodo == MetodoPago.NEQUI:
         caja.total_nequi += monto
         caja.total_ingresos_transferencia += monto  # Legacy
+    elif metodo == MetodoPago.NEQUI_ESCUELA:
+        caja.total_nequi_escuela += monto
+        caja.total_ingresos_transferencia += monto  # Legacy
+    elif metodo == MetodoPago.NEQUI_GERENCIA:
+        caja.total_nequi_gerencia += monto
+        caja.total_ingresos_transferencia += monto  # Legacy
     elif metodo == MetodoPago.DAVIPLATA:
         caja.total_daviplata += monto
+        caja.total_ingresos_transferencia += monto  # Legacy
+    elif metodo == MetodoPago.BRE_B:
+        caja.total_bre_b += monto
         caja.total_ingresos_transferencia += monto  # Legacy
     elif metodo == MetodoPago.TRANSFERENCIA_BANCARIA:
         caja.total_transferencia_bancaria += monto
@@ -997,7 +1069,14 @@ def _actualizar_caja_por_metodo(caja: Caja, metodo: MetodoPago, monto: Decimal) 
 def _actualizar_egresos_caja_por_metodo(caja: Caja, metodo: MetodoPago, monto: Decimal) -> None:
     if metodo == MetodoPago.EFECTIVO:
         caja.total_egresos_efectivo += monto
-    elif metodo in [MetodoPago.NEQUI, MetodoPago.DAVIPLATA, MetodoPago.TRANSFERENCIA_BANCARIA]:
+    elif metodo in [
+        MetodoPago.NEQUI,
+        MetodoPago.NEQUI_ESCUELA,
+        MetodoPago.NEQUI_GERENCIA,
+        MetodoPago.DAVIPLATA,
+        MetodoPago.BRE_B,
+        MetodoPago.TRANSFERENCIA_BANCARIA
+    ]:
         caja.total_egresos_transferencia += monto
     elif metodo in [MetodoPago.TARJETA_DEBITO, MetodoPago.TARJETA_CREDITO]:
         caja.total_egresos_tarjeta += monto
@@ -1008,8 +1087,14 @@ def _ingresos_por_metodo_en_caja(caja: Caja, metodo: MetodoPago) -> Decimal:
         return Decimal(str((caja.saldo_inicial or Decimal("0")) + (caja.total_ingresos_efectivo or Decimal("0"))))
     if metodo == MetodoPago.NEQUI:
         return Decimal(str(caja.total_nequi or Decimal("0")))
+    if metodo == MetodoPago.NEQUI_ESCUELA:
+        return Decimal(str(caja.total_nequi_escuela or Decimal("0")))
+    if metodo == MetodoPago.NEQUI_GERENCIA:
+        return Decimal(str(caja.total_nequi_gerencia or Decimal("0")))
     if metodo == MetodoPago.DAVIPLATA:
         return Decimal(str(caja.total_daviplata or Decimal("0")))
+    if metodo == MetodoPago.BRE_B:
+        return Decimal(str(caja.total_bre_b or Decimal("0")))
     if metodo == MetodoPago.TRANSFERENCIA_BANCARIA:
         return Decimal(str(caja.total_transferencia_bancaria or Decimal("0")))
     if metodo == MetodoPago.TARJETA_DEBITO:
@@ -1080,7 +1165,10 @@ def _build_caja_resumen(caja: Caja, db: Session) -> CajaResumen:
         total_egresos_tarjeta=caja.total_egresos_tarjeta,
         # Transferencias separadas
         total_nequi=caja.total_nequi or Decimal('0'),
+        total_nequi_escuela=caja.total_nequi_escuela or Decimal('0'),
+        total_nequi_gerencia=caja.total_nequi_gerencia or Decimal('0'),
         total_daviplata=caja.total_daviplata or Decimal('0'),
+        total_bre_b=caja.total_bre_b or Decimal('0'),
         total_transferencia_bancaria=caja.total_transferencia_bancaria or Decimal('0'),
         # Tarjetas separadas
         total_tarjeta_debito=caja.total_tarjeta_debito or Decimal('0'),
@@ -1318,6 +1406,108 @@ def _build_movimiento_response(movimiento: MovimientoCaja) -> MovimientoCajaResp
         detalles_pago=detalles,
         usuario_nombre=movimiento.usuario.nombre_completo,
         created_at=movimiento.created_at
+    )
+
+
+def _format_metodo_pago(metodo) -> str:
+    if not metodo:
+        return "N/A"
+    if hasattr(metodo, "value"):
+        return metodo.value
+    return str(metodo)
+
+
+def _empresa_contacto_texto() -> str:
+    contacto = settings.HABEAS_CONTACTO or ""
+    correo = settings.HABEAS_CORREO or ""
+    if contacto and correo:
+        return f"{contacto} | {correo}"
+    return contacto or correo or ""
+
+
+def _build_recibo_termico_pago(pago: Pago) -> ReciboTermicoData:
+    detalles = []
+    if pago.es_pago_mixto and pago.detalles_pago:
+        detalles = [
+            ReciboTermicoDetalleMetodo(
+                metodo=_format_metodo_pago(d.metodo_pago),
+                monto=d.monto,
+                referencia=d.referencia
+            )
+            for d in pago.detalles_pago
+        ]
+    elif pago.metodo_pago:
+        detalles = [
+            ReciboTermicoDetalleMetodo(
+                metodo=_format_metodo_pago(pago.metodo_pago),
+                monto=pago.monto,
+                referencia=pago.referencia_pago
+            )
+        ]
+
+    estudiante = pago.estudiante
+    estudiante_usuario = estudiante.usuario if estudiante and estudiante.usuario else None
+
+    return ReciboTermicoData(
+        documento="RECIBO_PAGO",
+        id=pago.id,
+        fecha=pago.fecha_pago,
+        concepto=pago.concepto,
+        metodo_pago=_format_metodo_pago(pago.metodo_pago) if pago.metodo_pago else None,
+        monto_total=pago.monto,
+        es_pago_mixto=bool(pago.es_pago_mixto),
+        detalles_metodo=detalles,
+        referencia_pago=pago.referencia_pago,
+        estudiante_nombre=estudiante_usuario.nombre_completo if estudiante_usuario else None,
+        estudiante_documento=estudiante_usuario.cedula if estudiante_usuario else None,
+        estudiante_matricula=estudiante.matricula_numero if estudiante else None,
+        usuario_nombre=pago.usuario.nombre_completo if pago.usuario else None,
+        observaciones=pago.observaciones,
+        empresa_nombre="CEA EDUCAR",
+        empresa_nit=settings.HABEAS_NIT,
+        empresa_contacto=_empresa_contacto_texto()
+    )
+
+
+def _build_recibo_termico_movimiento(movimiento: MovimientoCaja) -> ReciboTermicoData:
+    detalles = []
+    if movimiento.es_pago_mixto and movimiento.detalles_pago:
+        detalles = [
+            ReciboTermicoDetalleMetodo(
+                metodo=_format_metodo_pago(d.metodo_pago),
+                monto=d.monto,
+                referencia=d.referencia
+            )
+            for d in movimiento.detalles_pago
+        ]
+    elif movimiento.metodo_pago:
+        detalles = [
+            ReciboTermicoDetalleMetodo(
+                metodo=_format_metodo_pago(movimiento.metodo_pago),
+                monto=movimiento.monto
+            )
+        ]
+
+    tipo_doc = "RECIBO_INGRESO" if movimiento.tipo == TipoMovimiento.INGRESO else "RECIBO_EGRESO"
+    categoria = movimiento.categoria.value if movimiento.categoria else None
+
+    return ReciboTermicoData(
+        documento=tipo_doc,
+        id=movimiento.id,
+        fecha=movimiento.fecha,
+        concepto=movimiento.concepto,
+        categoria=categoria,
+        metodo_pago=_format_metodo_pago(movimiento.metodo_pago) if movimiento.metodo_pago else None,
+        monto_total=movimiento.monto,
+        es_pago_mixto=bool(movimiento.es_pago_mixto),
+        detalles_metodo=detalles,
+        tercero_nombre=movimiento.tercero_nombre,
+        tercero_documento=movimiento.tercero_documento,
+        usuario_nombre=movimiento.usuario.nombre_completo if movimiento.usuario else None,
+        observaciones=movimiento.observaciones,
+        empresa_nombre="CEA EDUCAR",
+        empresa_nit=settings.HABEAS_NIT,
+        empresa_contacto=_empresa_contacto_texto()
     )
 
 

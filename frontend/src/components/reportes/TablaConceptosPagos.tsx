@@ -51,7 +51,10 @@ export const TablaConceptosPagos = ({ pagos }: TablaConceptosPagosProps) => {
     const nombres: { [key: string]: string } = {
       'EFECTIVO': 'Efectivo',
       'NEQUI': 'Nequi',
+      'NEQUI_ESCUELA': 'Nequi Escuela',
+      'NEQUI_GERENCIA': 'Nequi Gerencia',
       'DAVIPLATA': 'Daviplata',
+      'BRE_B': 'Bre-B',
       'TRANSFERENCIA_BANCARIA': 'Transferencia',
       'TARJETA_DEBITO': 'Tarjeta Débito',
       'TARJETA_CREDITO': 'Tarjeta Crédito',

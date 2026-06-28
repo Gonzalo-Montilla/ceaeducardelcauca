@@ -1,0 +1,26 @@
+.recibo-termico-preview {
+  width: 80mm;
+  max-width: 100%;
+  background: #fff;
+  border: 1px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 12px;
+  font-family: Arial, sans-serif;
+  color: #111827;
+}
+
+.recibo-termico-preview h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.recibo-termico-preview p {
+  margin: 3px 0;
+  font-size: 12px;
+}
+
+.recibo-termico-preview strong {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 14px;
+}

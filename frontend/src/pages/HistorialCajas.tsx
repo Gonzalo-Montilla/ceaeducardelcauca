@@ -22,7 +22,10 @@ interface CajaHistorial {
   saldo_efectivo_caja: number;
   total_ingresos_efectivo: number;
   total_nequi: number;
+  total_nequi_escuela: number;
+  total_nequi_gerencia: number;
   total_daviplata: number;
+  total_bre_b: number;
   total_transferencia_bancaria: number;
   total_tarjeta_debito: number;
   total_tarjeta_credito: number;
@@ -340,8 +343,20 @@ export const HistorialCajas = () => {
                     <div className="metodo-grupo">
                       <h4>Transferencias</h4>
                       <div className="metodo-item">
-                        <span>Nequi</span>
-                        <span className="monto">{formatearMoneda(cajaSeleccionada.total_nequi)}</span>
+                        <span>Nequi Escuela</span>
+                        <span className="monto">{formatearMoneda(cajaSeleccionada.total_nequi_escuela || 0)}</span>
+                      </div>
+                      <div className="metodo-item">
+                        <span>Nequi Gerencia</span>
+                        <span className="monto">{formatearMoneda(cajaSeleccionada.total_nequi_gerencia || 0)}</span>
+                      </div>
+                      <div className="metodo-item">
+                        <span>Bre-B</span>
+                        <span className="monto">{formatearMoneda(cajaSeleccionada.total_bre_b || 0)}</span>
+                      </div>
+                      <div className="metodo-item">
+                        <span>Nequi (Legado)</span>
+                        <span className="monto">{formatearMoneda(cajaSeleccionada.total_nequi || 0)}</span>
                       </div>
                       <div className="metodo-item">
                         <span>Daviplata</span>

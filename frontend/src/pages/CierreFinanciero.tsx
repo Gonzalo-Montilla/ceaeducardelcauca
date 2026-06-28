@@ -24,7 +24,10 @@ type CierreResponse = {
   total_transferencias: number;
   total_tarjetas: number;
   total_nequi: number;
+  total_nequi_escuela: number;
+  total_nequi_gerencia: number;
   total_daviplata: number;
+  total_bre_b: number;
   total_transferencia_bancaria: number;
   total_tarjeta_debito: number;
   total_tarjeta_credito: number;

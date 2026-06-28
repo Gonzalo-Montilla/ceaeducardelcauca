@@ -13,10 +13,13 @@ interface Tarifa {
   activo: boolean;
 }
 
-const tiposServicio = [
+const tiposServicioFallback = [
   { value: 'LICENCIA_A2', label: 'Licencia A2 (Moto)' },
   { value: 'LICENCIA_B1', label: 'Licencia B1 (Automóvil)' },
   { value: 'LICENCIA_C1', label: 'Licencia C1 (Camioneta)' },
+  { value: 'LICENCIA_A2_REFRENDACION', label: 'Licencia A2 + Refrendación' },
+  { value: 'LICENCIA_B1_REFRENDACION', label: 'Licencia B1 + Refrendación' },
+  { value: 'LICENCIA_C1_REFRENDACION', label: 'Licencia C1 + Refrendación' },
   { value: 'RECATEGORIZACION_C1', label: 'Recategorización C1' },
   { value: 'COMBO_A2_B1', label: 'Combo A2 + B1' },
   { value: 'COMBO_A2_C1', label: 'Combo A2 + C1' },
@@ -34,6 +37,7 @@ const tiposServicio = [
 export const Tarifas = () => {
   const { confirm, showToast } = useUIFeedback();
   const [tarifas, setTarifas] = useState<Tarifa[]>([]);
+  const [tiposServicio, setTiposServicio] = useState(tiposServicioFallback);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -58,7 +62,25 @@ export const Tarifas = () => {
 
   useEffect(() => {
     cargarTarifas();
+    cargarCatalogoServicios();
   }, []);
+
+  const cargarCatalogoServicios = async () => {
+    try {
+      const data = await tarifasAPI.getCatalogoServicios({ solo_activos: false, incluir_sin_tarifa: true });
+      if (Array.isArray(data) && data.length > 0) {
+        const opciones = data
+          .filter((s: any) => s?.tipo_servicio)
+          .map((s: any) => ({
+            value: String(s.tipo_servicio),
+            label: String(s.label || s.tipo_servicio),
+          }));
+        setTiposServicio(opciones);
+      }
+    } catch (err) {
+      console.error('Error al cargar catálogo de servicios:', err);
+    }
+  };
 
   const abrirNueva = () => {
     setEditando(null);

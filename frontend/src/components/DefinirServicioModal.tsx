@@ -1,6 +1,6 @@
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, FormEvent, useMemo } from 'react';
 import { X, DollarSign, Save } from 'lucide-react';
-import { estudiantesAPI, tarifasAPI } from '../services/api';
+import { estudiantesAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useUIFeedback } from '../contexts/UIFeedbackContext';
 import { RolUsuario } from '../types';
@@ -35,7 +35,7 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
   const [observaciones, setObservaciones] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [tarifas, setTarifas] = useState<any[]>([]);
+  const [catalogoServicios, setCatalogoServicios] = useState<any[]>([]);
   const puedeAplicarDescuento = user?.rol === RolUsuario.ADMIN || user?.rol === RolUsuario.GERENTE;
 
   const getTipoDocumentoLabel = (tipo?: string) => {
@@ -52,15 +52,15 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
   };
 
   useEffect(() => {
-    const cargarTarifas = async () => {
+    const cargarCatalogo = async () => {
       try {
-        const data = await tarifasAPI.getAll();
-        setTarifas(data || []);
+        const data = await estudiantesAPI.getCatalogoServicios({ solo_activos: true });
+        setCatalogoServicios(data || []);
       } catch (err) {
-        console.error('Error al cargar tarifas:', err);
+        console.error('Error al cargar catálogo de servicios:', err);
       }
     };
-    cargarTarifas();
+    cargarCatalogo();
   }, []);
 
   useEffect(() => {
@@ -70,13 +70,13 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
         setValorTotal(minimo.toString());
       }
     }
-  }, [tarifas, origenCliente, tipoServicio, valorTotal, aplicarDescuento]);
+  }, [catalogoServicios, origenCliente, tipoServicio, valorTotal, aplicarDescuento]);
 
   const calcularPrecioMinimo = (tipo: string) => {
-    const tarifa = tarifas.find((t) => t.tipo_servicio === tipo && t.activo);
-    if (!tarifa) return 0;
-    const base = Number(tarifa.precio_base || 0);
-    const practica = Number(tarifa.costo_practica || 0);
+    const servicio = catalogoServicios.find((s) => s.tipo_servicio === tipo && s.activo);
+    if (!servicio) return 0;
+    const base = Number(servicio.precio_base || 0);
+    const practica = Number(servicio.costo_practica || 0);
     const esCertificado = ['CERTIFICADO_B1', 'CERTIFICADO_C1'].includes(tipo);
     return esCertificado ? base + practica : base;
   };
@@ -87,22 +87,67 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
     { value: 'C1', label: 'C1' }
   ];
 
-  const tiposServicio = [
-    { value: 'LICENCIA_A2', label: 'Licencia A2 (Moto)', categoria: 'A2' },
-    { value: 'LICENCIA_B1', label: 'Licencia B1 (Automóvil)', categoria: 'B1' },
-    { value: 'LICENCIA_C1', label: 'Licencia C1 (Camioneta)', categoria: 'C1' },
-    { value: 'COMBO_A2_B1', label: 'Combo A2 + B1', categoria: 'A2,B1' },
-    { value: 'COMBO_A2_C1', label: 'Combo A2 + C1', categoria: 'A2,C1' },
-    { value: 'CERTIFICADO_MOTO', label: 'Certificado Moto', categoria: 'A2' },
-    { value: 'CERTIFICADO_B1', label: 'Certificado B1', categoria: 'B1' },
-    { value: 'CERTIFICADO_C1', label: 'Certificado C1', categoria: 'C1' },
-    { value: 'CERTIFICADO_B1_SIN_PRACTICA', label: 'Certificado B1 sin práctica', categoria: 'B1' },
-    { value: 'CERTIFICADO_C1_SIN_PRACTICA', label: 'Certificado C1 sin práctica', categoria: 'C1' },
-    { value: 'CERTIFICADO_A2_B1_SIN_PRACTICA', label: 'Certificado A2 + B1 sin práctica', categoria: 'A2,B1' },
-    { value: 'CERTIFICADO_A2_C1_SIN_PRACTICA', label: 'Certificado A2 + C1 sin práctica', categoria: 'A2,C1' },
-    { value: 'CERTIFICADO_A2_B1_CON_PRACTICA', label: 'Certificado A2 + B1 con práctica', categoria: 'A2,B1' },
-    { value: 'CERTIFICADO_A2_C1_CON_PRACTICA', label: 'Certificado A2 + C1 con práctica', categoria: 'A2,C1' },
-  ];
+  const SERVICIO_LABELS: Record<string, string> = {
+    LICENCIA_A2: 'Licencia A2 (Moto)',
+    LICENCIA_B1: 'Licencia B1 (Automóvil)',
+    LICENCIA_C1: 'Licencia C1 (Camioneta)',
+    LICENCIA_A2_REFRENDACION: 'Licencia A2 + Refrendación',
+    LICENCIA_B1_REFRENDACION: 'Licencia B1 + Refrendación',
+    LICENCIA_C1_REFRENDACION: 'Licencia C1 + Refrendación',
+    COMBO_A2_B1: 'Combo A2 + B1',
+    COMBO_A2_C1: 'Combo A2 + C1',
+    CERTIFICADO_MOTO: 'Certificado Moto',
+    CERTIFICADO_B1: 'Certificado B1',
+    CERTIFICADO_C1: 'Certificado C1',
+    CERTIFICADO_B1_SIN_PRACTICA: 'Certificado B1 sin práctica',
+    CERTIFICADO_C1_SIN_PRACTICA: 'Certificado C1 sin práctica',
+    CERTIFICADO_A2_B1_SIN_PRACTICA: 'Certificado A2 + B1 sin práctica',
+    CERTIFICADO_A2_C1_SIN_PRACTICA: 'Certificado A2 + C1 sin práctica',
+    CERTIFICADO_A2_B1_CON_PRACTICA: 'Certificado A2 + B1 con práctica',
+    CERTIFICADO_A2_C1_CON_PRACTICA: 'Certificado A2 + C1 con práctica',
+  };
+
+  const inferirCategoriaDesdeTipo = (tipo: string) => {
+    if (tipo.includes('A2') && tipo.includes('B1')) return 'A2,B1';
+    if (tipo.includes('A2') && tipo.includes('C1')) return 'A2,C1';
+    if (tipo.includes('A2') || tipo.includes('MOTO')) return 'A2';
+    if (tipo.includes('B1')) return 'B1';
+    if (tipo.includes('C1')) return 'C1';
+    return '';
+  };
+
+  const formatearLabelServicio = (tipo: string) => {
+    const labelConocido = SERVICIO_LABELS[tipo];
+    if (labelConocido) return labelConocido;
+    return tipo
+      .replace(/_/g, ' ')
+      .toLowerCase()
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  };
+
+  const tiposServicioDisponibles = useMemo(() => {
+    const baseFallback = Object.keys(SERVICIO_LABELS);
+    const catalogoActivo = catalogoServicios
+      .filter((s) => s?.activo && s?.tipo_servicio)
+      .map((s) => ({
+        value: String(s.tipo_servicio),
+        label: String(s.label || formatearLabelServicio(String(s.tipo_servicio))),
+        categoria: String(s.categoria || inferirCategoriaDesdeTipo(String(s.tipo_servicio))),
+      }))
+      .filter((s) => !!s.categoria);
+
+    if (catalogoActivo.length) {
+      return catalogoActivo;
+    }
+
+    return baseFallback
+      .map((tipo) => ({
+        value: tipo,
+        label: formatearLabelServicio(tipo),
+        categoria: inferirCategoriaDesdeTipo(tipo),
+      }))
+      .filter((s) => !!s.categoria);
+  }, [catalogoServicios]);
 
   const categoriaToTipo = (categoriaValue: string) => {
     const mapa: Record<string, string> = {
@@ -125,7 +170,7 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
   };
 
   const handleTipoServicioChange = (tipo: string) => {
-    const servicioSeleccionado = tiposServicio.find(s => s.value === tipo);
+    const servicioSeleccionado = tiposServicioDisponibles.find(s => s.value === tipo);
     if (!servicioSeleccionado) {
       setTipoServicio('');
       setCategoria('');
@@ -361,7 +406,7 @@ export const DefinirServicioModal = ({ estudiante, onClose, onSuccess }: Definir
                 className="form-select"
               >
                 <option value="">Seleccione un servicio</option>
-                {tiposServicio.map(servicio => (
+                {tiposServicioDisponibles.map(servicio => (
                   <option key={servicio.value} value={servicio.value}>
                     {servicio.label}
                   </option>

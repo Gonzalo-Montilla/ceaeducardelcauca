@@ -10,7 +10,10 @@ class CajaFuerteResumen(BaseModel):
     id: int
     saldo_efectivo: Decimal
     saldo_nequi: Decimal
+    saldo_nequi_escuela: Decimal
+    saldo_nequi_gerencia: Decimal
     saldo_daviplata: Decimal
+    saldo_bre_b: Decimal
     saldo_transferencia_bancaria: Decimal
     saldo_tarjeta_debito: Decimal
     saldo_tarjeta_credito: Decimal

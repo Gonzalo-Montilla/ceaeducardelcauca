@@ -4,6 +4,7 @@ import { Search, DollarSign, TrendingUp, TrendingDown, AlertCircle, Plus, X, Che
 import { PageHeader } from '../components/PageHeader';
 import { useUIFeedback } from '../contexts/UIFeedbackContext';
 import { cajaAPI } from '../services/api';
+import { printReciboTermico } from '../components/recibos/ReciboTermico';
 import '../styles/Caja.css';
 
 interface CajaActual {
@@ -23,7 +24,10 @@ interface CajaActual {
   total_egresos_tarjeta: number;
   // Transferencias separadas
   total_nequi: number;
+  total_nequi_escuela: number;
+  total_nequi_gerencia: number;
   total_daviplata: number;
+  total_bre_b: number;
   total_transferencia_bancaria: number;
   // Tarjetas separadas
   total_tarjeta_debito: number;
@@ -60,7 +64,9 @@ interface EstudianteFinanciero {
 
 const METODO_OPTIONS_FULL = [
   { value: 'EFECTIVO', label: 'Efectivo' },
-  { value: 'NEQUI', label: 'Nequi' },
+  { value: 'NEQUI_ESCUELA', label: 'Nequi Escuela' },
+  { value: 'NEQUI_GERENCIA', label: 'Nequi Gerencia' },
+  { value: 'BRE_B', label: 'Bre-B' },
   { value: 'DAVIPLATA', label: 'Daviplata' },
   { value: 'TRANSFERENCIA_BANCARIA', label: 'Transferencia Bancaria' },
   { value: 'TARJETA_DEBITO', label: 'Tarjeta Débito' },
@@ -71,7 +77,9 @@ const METODO_OPTIONS_FULL = [
 
 const METODO_OPTIONS_SHORT = [
   { value: 'EFECTIVO', label: 'Efectivo' },
-  { value: 'NEQUI', label: 'Nequi' },
+  { value: 'NEQUI_ESCUELA', label: 'Nequi Escuela' },
+  { value: 'NEQUI_GERENCIA', label: 'Nequi Gerencia' },
+  { value: 'BRE_B', label: 'Bre-B' },
   { value: 'DAVIPLATA', label: 'Daviplata' },
   { value: 'TRANSFERENCIA_BANCARIA', label: 'Transferencia' },
   { value: 'TARJETA_DEBITO', label: 'T. Débito' },
@@ -197,7 +205,10 @@ export const Caja = () => {
     const labels: Record<string, string> = {
       EFECTIVO: 'EFECTIVO',
       NEQUI: 'NEQUI',
+      NEQUI_ESCUELA: 'NEQUI ESCUELA',
+      NEQUI_GERENCIA: 'NEQUI GERENCIA',
       DAVIPLATA: 'DAVIPLATA',
+      BRE_B: 'BRE-B',
       TRANSFERENCIA_BANCARIA: 'TRANSFERENCIA',
       TARJETA_DEBITO: 'TARJETA DÉBITO',
       TARJETA_CREDITO: 'TARJETA CRÉDITO',
@@ -256,7 +267,10 @@ export const Caja = () => {
       ['Ingresos por método'],
       ['Efectivo', cajaActual.total_ingresos_efectivo],
       ['Nequi', cajaActual.total_nequi],
+      ['Nequi Escuela', cajaActual.total_nequi_escuela || 0],
+      ['Nequi Gerencia', cajaActual.total_nequi_gerencia || 0],
       ['Daviplata', cajaActual.total_daviplata],
+      ['Bre-B', cajaActual.total_bre_b || 0],
       ['Transferencia', cajaActual.total_transferencia_bancaria],
       ['Tarjeta Débito', cajaActual.total_tarjeta_debito],
       ['Tarjeta Crédito', cajaActual.total_tarjeta_credito],
@@ -286,6 +300,22 @@ export const Caja = () => {
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch {
       showToast('No se pudo abrir el PDF', 'error');
+    }
+  };
+
+  const promptAndPrintTermico = async (message: string, getData: () => Promise<any>) => {
+    const printThermal = await confirm({
+      title: 'Imprimir recibo POS',
+      message,
+      confirmText: 'Imprimir',
+      cancelText: 'Ahora no',
+    });
+    if (!printThermal) return;
+    try {
+      const data = await getData();
+      printReciboTermico(data);
+    } catch {
+      showToast('No se pudo imprimir el recibo termico', 'error');
     }
   };
   
@@ -449,6 +479,7 @@ export const Caja = () => {
         showToast('Pago registrado exitosamente', 'success');
         if (pagoResponse?.id) {
           await promptAndOpenPdf('¿Desea abrir el recibo PDF del pago?', () => cajaAPI.getPagoReciboPdf(pagoResponse.id));
+          await promptAndPrintTermico('¿Desea imprimir recibo termico POS del pago?', () => cajaAPI.getPagoReciboTermico(pagoResponse.id));
         }
         setMontoPago('');
         setEsPagoMixto(false);
@@ -501,6 +532,7 @@ export const Caja = () => {
         showToast('Egreso registrado exitosamente', 'success');
         if (egresoResponse?.id) {
           await promptAndOpenPdf('¿Desea abrir el recibo PDF del egreso?', () => cajaAPI.getEgresoReciboPdf(egresoResponse.id));
+          await promptAndPrintTermico('¿Desea imprimir recibo termico POS del egreso?', () => cajaAPI.getEgresoReciboTermico(egresoResponse.id));
         }
         setShowEgreso(false);
         setConceptoEgreso('');
@@ -565,6 +597,7 @@ export const Caja = () => {
         showToast('Ingreso registrado exitosamente', 'success');
         if (movimientoResponse?.id) {
           await promptAndOpenPdf('¿Desea abrir el recibo PDF del ingreso?', () => cajaAPI.getMovimientoReciboPdf(movimientoResponse.id));
+          await promptAndPrintTermico('¿Desea imprimir recibo termico POS del ingreso?', () => cajaAPI.getMovimientoReciboTermico(movimientoResponse.id));
         }
         setShowMovimientoGeneral(false);
         setConceptoMovimiento('');
@@ -808,11 +841,35 @@ export const Caja = () => {
             <div className="metodo-card transferencia">
               <div className="metodo-header">
                 <span className="metodo-icon">📱</span>
-                <span className="metodo-nombre">Nequi</span>
+                <span className="metodo-nombre">Nequi Escuela</span>
+              </div>
+              <p className="metodo-monto">{formatCurrency(cajaActual?.total_nequi_escuela || 0)}</p>
+            </div>
+            
+            <div className="metodo-card transferencia">
+              <div className="metodo-header">
+                <span className="metodo-icon">📱</span>
+                <span className="metodo-nombre">Nequi Gerencia</span>
+              </div>
+              <p className="metodo-monto">{formatCurrency(cajaActual?.total_nequi_gerencia || 0)}</p>
+            </div>
+
+            <div className="metodo-card transferencia">
+              <div className="metodo-header">
+                <span className="metodo-icon">📲</span>
+                <span className="metodo-nombre">Bre-B</span>
+              </div>
+              <p className="metodo-monto">{formatCurrency(cajaActual?.total_bre_b || 0)}</p>
+            </div>
+
+            <div className="metodo-card transferencia">
+              <div className="metodo-header">
+                <span className="metodo-icon">📱</span>
+                <span className="metodo-nombre">Nequi (Legado)</span>
               </div>
               <p className="metodo-monto">{formatCurrency(cajaActual?.total_nequi || 0)}</p>
             </div>
-            
+
             <div className="metodo-card transferencia">
               <div className="metodo-header">
                 <span className="metodo-icon">📱</span>
@@ -1144,7 +1201,7 @@ export const Caja = () => {
                       onChange={(e) => {
                         setEsPagoMixto(e.target.checked);
                         if (e.target.checked) {
-                          setDetallesPago([{metodo: 'EFECTIVO', monto: ''}, {metodo: 'NEQUI', monto: ''}]);
+                          setDetallesPago([{metodo: 'EFECTIVO', monto: ''}, {metodo: 'NEQUI_ESCUELA', monto: ''}]);
                         } else {
                           setDetallesPago([{metodo: 'EFECTIVO', monto: montoPago}]);
                         }
@@ -1294,6 +1351,8 @@ export const Caja = () => {
                 <label>Categoría</label>
                 <select value={categoriaEgreso} onChange={(e) => setCategoriaEgreso(e.target.value)} className="form-select">
                   <option value="COMBUSTIBLE">Combustible</option>
+                  <option value="DERECHOS_TRANSITO">Derechos de tránsito</option>
+                  <option value="EXAMENES_MEDICOS">Exámenes médicos</option>
                   <option value="MANTENIMIENTO_VEHICULO">Mantenimiento Vehículo</option>
                   <option value="SERVICIOS_PUBLICOS">Servicios Públicos</option>
                   <option value="NOMINA">Nómina</option>
@@ -1416,7 +1475,7 @@ export const Caja = () => {
                     onChange={(e) => {
                       setEsPagoMixtoMovimiento(e.target.checked);
                       if (e.target.checked) {
-                        setDetallesMovimiento([{metodo: 'EFECTIVO', monto: ''}, {metodo: 'NEQUI', monto: ''}]);
+                        setDetallesMovimiento([{metodo: 'EFECTIVO', monto: ''}, {metodo: 'NEQUI_ESCUELA', monto: ''}]);
                       } else {
                         setDetallesMovimiento([{metodo: 'EFECTIVO', monto: montoMovimiento}]);
                       }
@@ -1560,7 +1619,19 @@ export const Caja = () => {
                       <strong className="success">{formatCurrency(cajaActual.total_ingresos_efectivo)}</strong>
                     </div>
                     <div className="transaccion-detalle">
-                      <span>Nequi:</span>
+                      <span>Nequi Escuela:</span>
+                      <strong className="success">{formatCurrency(cajaActual.total_nequi_escuela || 0)}</strong>
+                    </div>
+                    <div className="transaccion-detalle">
+                      <span>Nequi Gerencia:</span>
+                      <strong className="success">{formatCurrency(cajaActual.total_nequi_gerencia || 0)}</strong>
+                    </div>
+                    <div className="transaccion-detalle">
+                      <span>Bre-B:</span>
+                      <strong className="success">{formatCurrency(cajaActual.total_bre_b || 0)}</strong>
+                    </div>
+                    <div className="transaccion-detalle">
+                      <span>Nequi (Legado):</span>
                       <strong className="success">{formatCurrency(cajaActual.total_nequi || 0)}</strong>
                     </div>
                     <div className="transaccion-detalle">

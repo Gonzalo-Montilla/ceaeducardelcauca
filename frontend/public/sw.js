@@ -1,4 +1,4 @@
-const CACHE_VERSION = "cea-educar-pwa-v4";
+const CACHE_VERSION = "cea-educar-pwa-v5";
 const APP_SHELL_CACHE = `app-shell-${CACHE_VERSION}`;
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 

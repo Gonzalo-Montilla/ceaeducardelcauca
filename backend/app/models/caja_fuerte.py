@@ -14,7 +14,10 @@ class CajaFuerte(Base):
 
     saldo_efectivo = Column(Numeric(12, 2), default=0, nullable=False)
     saldo_nequi = Column(Numeric(12, 2), default=0, nullable=False)
+    saldo_nequi_escuela = Column(Numeric(12, 2), default=0, nullable=False)
+    saldo_nequi_gerencia = Column(Numeric(12, 2), default=0, nullable=False)
     saldo_daviplata = Column(Numeric(12, 2), default=0, nullable=False)
+    saldo_bre_b = Column(Numeric(12, 2), default=0, nullable=False)
     saldo_transferencia_bancaria = Column(Numeric(12, 2), default=0, nullable=False)
     saldo_tarjeta_debito = Column(Numeric(12, 2), default=0, nullable=False)
     saldo_tarjeta_credito = Column(Numeric(12, 2), default=0, nullable=False)
@@ -32,7 +35,10 @@ class CajaFuerte(Base):
         return (
             (self.saldo_efectivo or Decimal("0")) +
             (self.saldo_nequi or Decimal("0")) +
+            (self.saldo_nequi_escuela or Decimal("0")) +
+            (self.saldo_nequi_gerencia or Decimal("0")) +
             (self.saldo_daviplata or Decimal("0")) +
+            (self.saldo_bre_b or Decimal("0")) +
             (self.saldo_transferencia_bancaria or Decimal("0")) +
             (self.saldo_tarjeta_debito or Decimal("0")) +
             (self.saldo_tarjeta_credito or Decimal("0")) +

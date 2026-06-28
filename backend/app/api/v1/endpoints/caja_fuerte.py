@@ -51,8 +51,14 @@ def _apply_delta(caja_fuerte: CajaFuerte, metodo, delta: Decimal):
         caja_fuerte.saldo_efectivo = Decimal(str(caja_fuerte.saldo_efectivo)) + delta
     elif metodo.value == "NEQUI":
         caja_fuerte.saldo_nequi = Decimal(str(caja_fuerte.saldo_nequi)) + delta
+    elif metodo.value == "NEQUI_ESCUELA":
+        caja_fuerte.saldo_nequi_escuela = Decimal(str(caja_fuerte.saldo_nequi_escuela)) + delta
+    elif metodo.value == "NEQUI_GERENCIA":
+        caja_fuerte.saldo_nequi_gerencia = Decimal(str(caja_fuerte.saldo_nequi_gerencia)) + delta
     elif metodo.value == "DAVIPLATA":
         caja_fuerte.saldo_daviplata = Decimal(str(caja_fuerte.saldo_daviplata)) + delta
+    elif metodo.value == "BRE_B":
+        caja_fuerte.saldo_bre_b = Decimal(str(caja_fuerte.saldo_bre_b)) + delta
     elif metodo.value == "TRANSFERENCIA_BANCARIA":
         caja_fuerte.saldo_transferencia_bancaria = Decimal(str(caja_fuerte.saldo_transferencia_bancaria)) + delta
     elif metodo.value == "TARJETA_DEBITO":
@@ -75,8 +81,14 @@ def _get_saldo_por_metodo(caja_fuerte: CajaFuerte, metodo: MetodoPago) -> Decima
         return Decimal(str(caja_fuerte.saldo_efectivo or 0))
     if metodo == MetodoPago.NEQUI:
         return Decimal(str(caja_fuerte.saldo_nequi or 0))
+    if metodo == MetodoPago.NEQUI_ESCUELA:
+        return Decimal(str(caja_fuerte.saldo_nequi_escuela or 0))
+    if metodo == MetodoPago.NEQUI_GERENCIA:
+        return Decimal(str(caja_fuerte.saldo_nequi_gerencia or 0))
     if metodo == MetodoPago.DAVIPLATA:
         return Decimal(str(caja_fuerte.saldo_daviplata or 0))
+    if metodo == MetodoPago.BRE_B:
+        return Decimal(str(caja_fuerte.saldo_bre_b or 0))
     if metodo == MetodoPago.TRANSFERENCIA_BANCARIA:
         return Decimal(str(caja_fuerte.saldo_transferencia_bancaria or 0))
     if metodo == MetodoPago.TARJETA_DEBITO:
@@ -234,7 +246,10 @@ def get_resumen(
         id=caja_fuerte.id,
         saldo_efectivo=caja_fuerte.saldo_efectivo,
         saldo_nequi=caja_fuerte.saldo_nequi,
+        saldo_nequi_escuela=caja_fuerte.saldo_nequi_escuela,
+        saldo_nequi_gerencia=caja_fuerte.saldo_nequi_gerencia,
         saldo_daviplata=caja_fuerte.saldo_daviplata,
+        saldo_bre_b=caja_fuerte.saldo_bre_b,
         saldo_transferencia_bancaria=caja_fuerte.saldo_transferencia_bancaria,
         saldo_tarjeta_debito=caja_fuerte.saldo_tarjeta_debito,
         saldo_tarjeta_credito=caja_fuerte.saldo_tarjeta_credito,

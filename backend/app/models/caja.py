@@ -37,7 +37,10 @@ class Caja(Base):
     
     # Transferencias (separadas)
     total_nequi = Column(Numeric(12, 2), default=0, nullable=False)
+    total_nequi_escuela = Column(Numeric(12, 2), default=0, nullable=False)
+    total_nequi_gerencia = Column(Numeric(12, 2), default=0, nullable=False)
     total_daviplata = Column(Numeric(12, 2), default=0, nullable=False)
+    total_bre_b = Column(Numeric(12, 2), default=0, nullable=False)
     total_transferencia_bancaria = Column(Numeric(12, 2), default=0, nullable=False)
     
     # Tarjetas (separadas)
@@ -118,6 +121,8 @@ class Caja(Base):
 class ConceptoMovimientoCaja(str, enum.Enum):
     """Conceptos comunes de movimientos en caja"""
     COMBUSTIBLE = "COMBUSTIBLE"
+    DERECHOS_TRANSITO = "DERECHOS_TRANSITO"
+    EXAMENES_MEDICOS = "EXAMENES_MEDICOS"
     MANTENIMIENTO_VEHICULO = "MANTENIMIENTO_VEHICULO"
     SERVICIOS_PUBLICOS = "SERVICIOS_PUBLICOS"
     NOMINA = "NOMINA"

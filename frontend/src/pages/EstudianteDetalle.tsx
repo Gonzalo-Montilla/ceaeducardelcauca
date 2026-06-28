@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { estudiantesAPI, tarifasAPI } from '../services/api';
+import { estudiantesAPI } from '../services/api';
 import { useUIFeedback } from '../contexts/UIFeedbackContext';
 import { 
   ArrowLeft, 
@@ -336,6 +336,9 @@ export const EstudianteDetalle = () => {
       LICENCIA_A2: 'Licencia A2 (Moto)',
       LICENCIA_B1: 'Licencia B1 (Automóvil)',
       LICENCIA_C1: 'Licencia C1 (Camioneta)',
+      LICENCIA_A2_REFRENDACION: 'Licencia A2 + Refrendación',
+      LICENCIA_B1_REFRENDACION: 'Licencia B1 + Refrendación',
+      LICENCIA_C1_REFRENDACION: 'Licencia C1 + Refrendación',
       COMBO_A2_B1: 'Combo A2 + B1',
       COMBO_A2_C1: 'Combo A2 + C1',
       CERTIFICADO_MOTO: 'Certificado Moto',
@@ -351,28 +354,53 @@ export const EstudianteDetalle = () => {
     return map[tipo || ''] || (tipo || 'N/A');
   };
 
-  const tiposServicio = [
-    { value: 'LICENCIA_A2', label: 'Licencia A2 (Moto)' },
-    { value: 'LICENCIA_B1', label: 'Licencia B1 (Automóvil)' },
-    { value: 'LICENCIA_C1', label: 'Licencia C1 (Camioneta)' },
-    { value: 'COMBO_A2_B1', label: 'Combo A2 + B1' },
-    { value: 'COMBO_A2_C1', label: 'Combo A2 + C1' },
-    { value: 'CERTIFICADO_MOTO', label: 'Certificado Moto' },
-    { value: 'CERTIFICADO_B1', label: 'Certificado B1' },
-    { value: 'CERTIFICADO_C1', label: 'Certificado C1' },
-    { value: 'CERTIFICADO_B1_SIN_PRACTICA', label: 'Certificado B1 sin práctica' },
-    { value: 'CERTIFICADO_C1_SIN_PRACTICA', label: 'Certificado C1 sin práctica' },
-    { value: 'CERTIFICADO_A2_B1_SIN_PRACTICA', label: 'Certificado A2 + B1 sin práctica' },
-    { value: 'CERTIFICADO_A2_C1_SIN_PRACTICA', label: 'Certificado A2 + C1 sin práctica' },
-    { value: 'CERTIFICADO_A2_B1_CON_PRACTICA', label: 'Certificado A2 + B1 con práctica' },
-    { value: 'CERTIFICADO_A2_C1_CON_PRACTICA', label: 'Certificado A2 + C1 con práctica' },
-  ];
+  const tiposServicio = useMemo(() => {
+    const tiposTarifaActivos = tarifas
+      .filter((t) => t?.activo && t?.tipo_servicio)
+      .map((t) => String(t.tipo_servicio));
+
+    if (!tiposTarifaActivos.length) {
+      return [
+        { value: 'LICENCIA_A2', label: 'Licencia A2 (Moto)' },
+        { value: 'LICENCIA_B1', label: 'Licencia B1 (Automóvil)' },
+        { value: 'LICENCIA_C1', label: 'Licencia C1 (Camioneta)' },
+        { value: 'LICENCIA_A2_REFRENDACION', label: 'Licencia A2 + Refrendación' },
+        { value: 'LICENCIA_B1_REFRENDACION', label: 'Licencia B1 + Refrendación' },
+        { value: 'LICENCIA_C1_REFRENDACION', label: 'Licencia C1 + Refrendación' },
+        { value: 'COMBO_A2_B1', label: 'Combo A2 + B1' },
+        { value: 'COMBO_A2_C1', label: 'Combo A2 + C1' },
+        { value: 'CERTIFICADO_MOTO', label: 'Certificado Moto' },
+        { value: 'CERTIFICADO_B1', label: 'Certificado B1' },
+        { value: 'CERTIFICADO_C1', label: 'Certificado C1' },
+        { value: 'CERTIFICADO_B1_SIN_PRACTICA', label: 'Certificado B1 sin práctica' },
+        { value: 'CERTIFICADO_C1_SIN_PRACTICA', label: 'Certificado C1 sin práctica' },
+        { value: 'CERTIFICADO_A2_B1_SIN_PRACTICA', label: 'Certificado A2 + B1 sin práctica' },
+        { value: 'CERTIFICADO_A2_C1_SIN_PRACTICA', label: 'Certificado A2 + C1 sin práctica' },
+        { value: 'CERTIFICADO_A2_B1_CON_PRACTICA', label: 'Certificado A2 + B1 con práctica' },
+        { value: 'CERTIFICADO_A2_C1_CON_PRACTICA', label: 'Certificado A2 + C1 con práctica' },
+      ];
+    }
+
+    const tiposUnicos = [...new Set(tiposTarifaActivos)];
+    return tiposUnicos.map((tipo) => ({
+      value: tipo,
+      label: getServicioLabel(tipo),
+    }));
+  }, [tarifas]);
 
   const getServicioActualLabel = () => getServicioLabel(estudiante?.tipo_servicio);
 
-  const abrirCorregirServicio = () => {
+  const abrirCorregirServicio = async () => {
     if (!estudiante?.tipo_servicio) return;
     setCorregirTipoServicio(estudiante.tipo_servicio);
+    if (!tarifas.length) {
+      try {
+        const data = await estudiantesAPI.getCatalogoServicios({ solo_activos: true });
+        setTarifas(data || []);
+      } catch (err) {
+        console.error('Error al cargar catálogo de servicios:', err);
+      }
+    }
     if (estudiante.origen_cliente === 'DIRECTO') {
       const minimo = calcularPrecioMinimo(estudiante.tipo_servicio);
       setCorregirValor(minimo ? minimo.toString() : '');
@@ -425,16 +453,21 @@ export const EstudianteDetalle = () => {
 
   const getOpcionesAdicional = () => {
     const actual = estudiante?.tipo_servicio;
-    if (actual === 'LICENCIA_A2') {
+    const servicioBase =
+      actual === 'LICENCIA_A2_REFRENDACION' ? 'LICENCIA_A2' :
+      actual === 'LICENCIA_B1_REFRENDACION' ? 'LICENCIA_B1' :
+      actual === 'LICENCIA_C1_REFRENDACION' ? 'LICENCIA_C1' :
+      actual;
+    if (servicioBase === 'LICENCIA_A2') {
       return [
         { value: 'B1', label: 'B1' },
         { value: 'C1', label: 'C1' }
       ];
     }
-    if (actual === 'LICENCIA_B1') {
+    if (servicioBase === 'LICENCIA_B1') {
       return [{ value: 'A2', label: 'A2' }];
     }
-    if (actual === 'LICENCIA_C1') {
+    if (servicioBase === 'LICENCIA_C1') {
       return [{ value: 'A2', label: 'A2' }];
     }
     return [];
@@ -442,10 +475,15 @@ export const EstudianteDetalle = () => {
 
   const calcularComboTipo = (adicional: string) => {
     const actual = estudiante?.tipo_servicio;
-    if (actual === 'LICENCIA_A2' && adicional === 'B1') return 'COMBO_A2_B1';
-    if (actual === 'LICENCIA_A2' && adicional === 'C1') return 'COMBO_A2_C1';
-    if (actual === 'LICENCIA_B1' && adicional === 'A2') return 'COMBO_A2_B1';
-    if (actual === 'LICENCIA_C1' && adicional === 'A2') return 'COMBO_A2_C1';
+    const servicioBase =
+      actual === 'LICENCIA_A2_REFRENDACION' ? 'LICENCIA_A2' :
+      actual === 'LICENCIA_B1_REFRENDACION' ? 'LICENCIA_B1' :
+      actual === 'LICENCIA_C1_REFRENDACION' ? 'LICENCIA_C1' :
+      actual;
+    if (servicioBase === 'LICENCIA_A2' && adicional === 'B1') return 'COMBO_A2_B1';
+    if (servicioBase === 'LICENCIA_A2' && adicional === 'C1') return 'COMBO_A2_C1';
+    if (servicioBase === 'LICENCIA_B1' && adicional === 'A2') return 'COMBO_A2_B1';
+    if (servicioBase === 'LICENCIA_C1' && adicional === 'A2') return 'COMBO_A2_C1';
     return '';
   };
 
@@ -507,10 +545,10 @@ export const EstudianteDetalle = () => {
     setShowAmpliarModal(true);
     if (!tarifas.length) {
       try {
-        const data = await tarifasAPI.getAll();
+        const data = await estudiantesAPI.getCatalogoServicios({ solo_activos: true });
         setTarifas(data || []);
       } catch (err) {
-        console.error('Error al cargar tarifas:', err);
+        console.error('Error al cargar catálogo de servicios:', err);
       }
     }
   };
@@ -1356,7 +1394,14 @@ export const EstudianteDetalle = () => {
               </div>
             </div>
             <div className="acciones-academicas acciones-academicas-row">
-              {['LICENCIA_A2', 'LICENCIA_B1', 'LICENCIA_C1'].includes(estudiante.tipo_servicio || '') && (
+              {[
+                'LICENCIA_A2',
+                'LICENCIA_B1',
+                'LICENCIA_C1',
+                'LICENCIA_A2_REFRENDACION',
+                'LICENCIA_B1_REFRENDACION',
+                'LICENCIA_C1_REFRENDACION',
+              ].includes(estudiante.tipo_servicio || '') && (
                 <button className="btn-ampliar btn-ampliar-primary" onClick={abrirAmpliarServicio}>
                   <PlusCircle size={18} /> Ampliar servicio a combo
                 </button>

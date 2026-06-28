@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.core.email import send_email
 from app.models.usuario import Usuario, RolUsuario
 from app.models.estudiante import Estudiante, EstadoEstudiante, CategoriaLicencia, OrigenCliente, TipoServicio
+from app.models.tarifa import Tarifa
 from app.models.clase import Instructor, Vehiculo, EstadoInstructor
 from app.models.compromiso_pago import CompromisoPago, CuotaPago, FrecuenciaPago, EstadoCuota
 from app.schemas.estudiante import (
@@ -27,6 +28,7 @@ from app.schemas.estudiante import (
     EstudianteResponse,
     EstudianteListItem,
     EstudiantesListResponse,
+    ServicioCatalogoItem,
     DefinirServicioRequest,
     AmpliarServicioRequest,
     AcreditarHorasRequest,
@@ -44,6 +46,9 @@ def _get_horas_requeridas(tipo_servicio: Optional[TipoServicio], categoria: Opti
         TipoServicio.LICENCIA_A2: (28, 15),
         TipoServicio.LICENCIA_B1: (30, 20),
         TipoServicio.LICENCIA_C1: (36, 30),
+        TipoServicio.LICENCIA_A2_REFRENDACION: (28, 15),
+        TipoServicio.LICENCIA_B1_REFRENDACION: (30, 20),
+        TipoServicio.LICENCIA_C1_REFRENDACION: (36, 30),
         TipoServicio.COMBO_A2_C1: (36, 45),
         TipoServicio.COMBO_A2_B1: (30, 36),
         TipoServicio.CERTIFICADO_B1: (30, 20),
@@ -80,6 +85,30 @@ def _set_saldo_a_favor(datos: dict, saldo: Decimal) -> None:
     datos["saldo_a_favor"] = float(saldo_seguro)
 
 
+def _label_tipo_servicio(tipo: TipoServicio) -> str:
+    labels = {
+        TipoServicio.LICENCIA_A2: "Licencia A2 (Moto)",
+        TipoServicio.LICENCIA_B1: "Licencia B1 (Automóvil)",
+        TipoServicio.LICENCIA_C1: "Licencia C1 (Camioneta)",
+        TipoServicio.LICENCIA_A2_REFRENDACION: "Licencia A2 + Refrendación",
+        TipoServicio.LICENCIA_B1_REFRENDACION: "Licencia B1 + Refrendación",
+        TipoServicio.LICENCIA_C1_REFRENDACION: "Licencia C1 + Refrendación",
+        TipoServicio.RECATEGORIZACION_C1: "Recategorización C1",
+        TipoServicio.COMBO_A2_B1: "Combo A2 + B1",
+        TipoServicio.COMBO_A2_C1: "Combo A2 + C1",
+        TipoServicio.CERTIFICADO_MOTO: "Certificado Moto",
+        TipoServicio.CERTIFICADO_B1: "Certificado B1",
+        TipoServicio.CERTIFICADO_C1: "Certificado C1",
+        TipoServicio.CERTIFICADO_B1_SIN_PRACTICA: "Certificado B1 sin práctica",
+        TipoServicio.CERTIFICADO_C1_SIN_PRACTICA: "Certificado C1 sin práctica",
+        TipoServicio.CERTIFICADO_A2_B1_SIN_PRACTICA: "Certificado A2 + B1 sin práctica",
+        TipoServicio.CERTIFICADO_A2_C1_SIN_PRACTICA: "Certificado A2 + C1 sin práctica",
+        TipoServicio.CERTIFICADO_A2_B1_CON_PRACTICA: "Certificado A2 + B1 con práctica",
+        TipoServicio.CERTIFICADO_A2_C1_CON_PRACTICA: "Certificado A2 + C1 con práctica",
+    }
+    return labels.get(tipo, str(tipo.value).replace("_", " ").title())
+
+
 def _aplicar_saldo_a_favor(datos: dict, saldo_pendiente: Decimal) -> tuple[Decimal, Decimal, Decimal]:
     saldo_favor_actual = _get_saldo_a_favor(datos)
     saldo_pendiente_seguro = saldo_pendiente if saldo_pendiente > 0 else Decimal("0")
@@ -91,6 +120,57 @@ def _aplicar_saldo_a_favor(datos: dict, saldo_pendiente: Decimal) -> tuple[Decim
     saldo_favor_restante = saldo_favor_actual - saldo_aplicado
     _set_saldo_a_favor(datos, saldo_favor_restante)
     return saldo_restante, saldo_aplicado, saldo_favor_restante
+
+
+@router.get("/catalogo-servicios", response_model=List[ServicioCatalogoItem])
+def listar_catalogo_servicios(
+    solo_activos: bool = True,
+    incluir_sin_tarifa: bool = False,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_admin_or_coordinador_or_cajero)
+):
+    tarifas = db.query(Tarifa).all()
+    tarifas_map = {
+        str(t.tipo_servicio.value if hasattr(t.tipo_servicio, "value") else t.tipo_servicio): t
+        for t in tarifas
+    }
+
+    catalogo: List[ServicioCatalogoItem] = []
+    ampliables = {
+        TipoServicio.LICENCIA_A2,
+        TipoServicio.LICENCIA_B1,
+        TipoServicio.LICENCIA_C1,
+        TipoServicio.LICENCIA_A2_REFRENDACION,
+        TipoServicio.LICENCIA_B1_REFRENDACION,
+        TipoServicio.LICENCIA_C1_REFRENDACION,
+    }
+
+    for tipo in TipoServicio:
+        tarifa = tarifas_map.get(tipo.value)
+        if not tarifa and not incluir_sin_tarifa:
+            continue
+
+        activo = bool(tarifa.activo) if tarifa else False
+        if solo_activos and not activo:
+            continue
+
+        categoria = obtener_categoria_licencia(tipo)
+        if categoria not in {"A2", "B1", "C1"}:
+            continue
+
+        catalogo.append(
+            ServicioCatalogoItem(
+                tipo_servicio=tipo,
+                label=_label_tipo_servicio(tipo),
+                categoria=categoria,
+                permite_ampliar_combo=tipo in ampliables,
+                activo=activo,
+                precio_base=Decimal(str(tarifa.precio_base)) if tarifa else None,
+                costo_practica=Decimal(str(tarifa.costo_practica or 0)) if tarifa else None,
+            )
+        )
+
+    return sorted(catalogo, key=lambda x: x.label)
 
 
 @router.post("", response_model=EstudianteResponse, status_code=status.HTTP_201_CREATED)
@@ -893,11 +973,11 @@ def ampliar_servicio(
         )
 
     allowed = []
-    if estudiante.tipo_servicio == TipoServicio.LICENCIA_A2:
+    if estudiante.tipo_servicio in [TipoServicio.LICENCIA_A2, TipoServicio.LICENCIA_A2_REFRENDACION]:
         allowed = [TipoServicio.COMBO_A2_B1, TipoServicio.COMBO_A2_C1]
-    elif estudiante.tipo_servicio == TipoServicio.LICENCIA_B1:
+    elif estudiante.tipo_servicio in [TipoServicio.LICENCIA_B1, TipoServicio.LICENCIA_B1_REFRENDACION]:
         allowed = [TipoServicio.COMBO_A2_B1]
-    elif estudiante.tipo_servicio == TipoServicio.LICENCIA_C1:
+    elif estudiante.tipo_servicio in [TipoServicio.LICENCIA_C1, TipoServicio.LICENCIA_C1_REFRENDACION]:
         allowed = [TipoServicio.COMBO_A2_C1]
 
     if servicio_data.tipo_servicio_nuevo not in allowed:

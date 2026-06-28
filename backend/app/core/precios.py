@@ -12,6 +12,9 @@ PRECIOS_BASE = {
     TipoServicio.LICENCIA_A2: Decimal("950000"),
     TipoServicio.LICENCIA_B1: Decimal("1200000"),
     TipoServicio.LICENCIA_C1: Decimal("1300000"),
+    TipoServicio.LICENCIA_A2_REFRENDACION: Decimal("950000"),
+    TipoServicio.LICENCIA_B1_REFRENDACION: Decimal("1200000"),
+    TipoServicio.LICENCIA_C1_REFRENDACION: Decimal("1300000"),
     TipoServicio.RECATEGORIZACION_C1: Decimal("1300000"),
     TipoServicio.COMBO_A2_B1: Decimal("2000000"),
     TipoServicio.COMBO_A2_C1: Decimal("2200000"),
@@ -92,6 +95,9 @@ def obtener_categoria_licencia(tipo_servicio: TipoServicio) -> str:
         TipoServicio.LICENCIA_A2: "A2",
         TipoServicio.LICENCIA_B1: "B1",
         TipoServicio.LICENCIA_C1: "C1",
+        TipoServicio.LICENCIA_A2_REFRENDACION: "A2",
+        TipoServicio.LICENCIA_B1_REFRENDACION: "B1",
+        TipoServicio.LICENCIA_C1_REFRENDACION: "C1",
         TipoServicio.RECATEGORIZACION_C1: "C1",
         TipoServicio.COMBO_A2_B1: "B1",  # Se maneja como B1
         TipoServicio.COMBO_A2_C1: "C1",  # Se maneja como C1
@@ -105,4 +111,16 @@ def obtener_categoria_licencia(tipo_servicio: TipoServicio) -> str:
         TipoServicio.CERTIFICADO_A2_B1_CON_PRACTICA: "B1",
         TipoServicio.CERTIFICADO_A2_C1_CON_PRACTICA: "C1",
     }
-    return mapeo.get(tipo_servicio, "B1")
+    categoria = mapeo.get(tipo_servicio)
+    if categoria:
+        return categoria
+
+    # Fallback defensivo para nuevos tipos no mapeados aún.
+    tipo_valor = str(getattr(tipo_servicio, "value", tipo_servicio) or "")
+    if "A2" in tipo_valor:
+        return "A2"
+    if "C1" in tipo_valor:
+        return "C1"
+    if "B1" in tipo_valor:
+        return "B1"
+    return "B1"
