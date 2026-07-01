@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { CircleOff } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
@@ -22,6 +23,12 @@ import { Clases } from './pages/Clases';
 import { RolUsuario } from './types';
 
 const logo = '/logo-real.png';
+const ACCOUNT_DISABLED = ['true', '1', 'yes', 'on'].includes(
+  String(import.meta.env.VITE_ACCOUNT_DISABLED || '').trim().toLowerCase()
+);
+const ACCOUNT_DISABLED_MESSAGE =
+  import.meta.env.VITE_ACCOUNT_DISABLED_MESSAGE ||
+  'Cuenta deshabilitada temporalmente. Comuníquese con el proveedor.';
 
 const MODULE_PATHS: Record<string, string> = {
   dashboard: '/dashboard',
@@ -291,6 +298,15 @@ function AppRoutes() {
 }
 
 function App() {
+  if (ACCOUNT_DISABLED) {
+    return (
+      <div className="account-disabled-screen" role="alert" aria-live="assertive">
+        <CircleOff size={64} className="account-disabled-icon" />
+        <p className="account-disabled-message">{ACCOUNT_DISABLED_MESSAGE}</p>
+      </div>
+    );
+  }
+
   return (
     <BrowserRouter>
       <AuthProvider>
