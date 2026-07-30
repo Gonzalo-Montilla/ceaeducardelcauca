@@ -18,9 +18,10 @@ interface PagoConcepto {
 
 interface TablaConceptosPagosProps {
   pagos: PagoConcepto[];
+  onExportCSV?: () => void;
 }
 
-export const TablaConceptosPagos = ({ pagos }: TablaConceptosPagosProps) => {
+export const TablaConceptosPagos = ({ pagos, onExportCSV }: TablaConceptosPagosProps) => {
   const { showToast } = useUIFeedback();
   const [reciboUrl, setReciboUrl] = useState<string | null>(null);
   const [reciboNombre, setReciboNombre] = useState<string>('');
@@ -121,7 +122,15 @@ export const TablaConceptosPagos = ({ pagos }: TablaConceptosPagosProps) => {
           <FileText size={20} />
           <h3>Conceptos de Pagos</h3>
         </div>
-        <span className="tabla-count">{pagos.length} pago{pagos.length !== 1 ? 's' : ''}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="tabla-count">{pagos.length} pago{pagos.length !== 1 ? 's' : ''}</span>
+          {onExportCSV && (
+            <button className="btn-ver-detalle secondary" onClick={onExportCSV}>
+              <Download size={14} />
+              Exportar CSV
+            </button>
+          )}
+        </div>
       </div>
 
       {pagos.length === 0 ? (

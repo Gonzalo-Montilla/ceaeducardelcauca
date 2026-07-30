@@ -1,4 +1,4 @@
-import { UserPlus } from 'lucide-react';
+import { Download, UserPlus } from 'lucide-react';
 
 interface EstudianteRegistrado {
   id: number;
@@ -14,9 +14,10 @@ interface EstudianteRegistrado {
 
 interface TablaEstudiantesRegistradosProps {
   estudiantes: EstudianteRegistrado[];
+  onExportCSV?: () => void;
 }
 
-export const TablaEstudiantesRegistrados = ({ estudiantes }: TablaEstudiantesRegistradosProps) => {
+export const TablaEstudiantesRegistrados = ({ estudiantes, onExportCSV }: TablaEstudiantesRegistradosProps) => {
   const formatearMoneda = (valor: string | null) => {
     if (!valor) return 'N/A';
     return new Intl.NumberFormat('es-CO', {
@@ -61,7 +62,15 @@ export const TablaEstudiantesRegistrados = ({ estudiantes }: TablaEstudiantesReg
           <UserPlus size={20} />
           <h3>Estudiantes Registrados</h3>
         </div>
-        <span className="tabla-count">{estudiantes.length} estudiante{estudiantes.length !== 1 ? 's' : ''}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="tabla-count">{estudiantes.length} estudiante{estudiantes.length !== 1 ? 's' : ''}</span>
+          {onExportCSV && (
+            <button className="btn-ver-detalle secondary" onClick={onExportCSV}>
+              <Download size={14} />
+              Exportar CSV
+            </button>
+          )}
+        </div>
       </div>
 
       {estudiantes.length === 0 ? (

@@ -1,4 +1,4 @@
-import { DollarSign } from 'lucide-react';
+import { DollarSign, Download } from 'lucide-react';
 
 interface EstudiantePago {
   estudiante_id: number;
@@ -15,9 +15,10 @@ interface EstudiantePago {
 
 interface TablaEstudiantesPagosProps {
   pagos: EstudiantePago[];
+  onExportCSV?: () => void;
 }
 
-export const TablaEstudiantesPagos = ({ pagos }: TablaEstudiantesPagosProps) => {
+export const TablaEstudiantesPagos = ({ pagos, onExportCSV }: TablaEstudiantesPagosProps) => {
   const formatearMoneda = (valor: string | null) => {
     if (!valor) return 'N/A';
     return new Intl.NumberFormat('es-CO', {
@@ -86,7 +87,15 @@ export const TablaEstudiantesPagos = ({ pagos }: TablaEstudiantesPagosProps) => 
           <DollarSign size={20} />
           <h3>Estudiantes que Realizaron Pagos</h3>
         </div>
-        <span className="tabla-count">{pagos.length} pago{pagos.length !== 1 ? 's' : ''}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="tabla-count">{pagos.length} pago{pagos.length !== 1 ? 's' : ''}</span>
+          {onExportCSV && (
+            <button className="btn-ver-detalle secondary" onClick={onExportCSV}>
+              <Download size={14} />
+              Exportar CSV
+            </button>
+          )}
+        </div>
       </div>
 
       {pagos.length === 0 ? (

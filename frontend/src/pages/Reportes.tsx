@@ -35,6 +35,15 @@ export const Reportes = () => {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [filtrosAplicados, setFiltrosAplicados] = useState<{
+    fechaInicio: string;
+    fechaFin: string;
+    comparar: boolean;
+  }>({
+    fechaInicio: '',
+    fechaFin: '',
+    comparar: false
+  });
 
   // El componente FiltrosPeriodo cargará automáticamente con "hoy"
 
@@ -42,6 +51,7 @@ export const Reportes = () => {
     try {
       setLoading(true);
       setError(null);
+      setFiltrosAplicados({ fechaInicio, fechaFin, comparar });
       
       const params: any = { comparar_periodo_anterior: comparar };
       if (fechaInicio) {
@@ -75,6 +85,26 @@ export const Reportes = () => {
 
   const formatearPorcentaje = (valor: number) => {
     return `${valor.toFixed(1)}%`;
+  };
+
+  const formatearFechaCsv = (valor: string | undefined | null) => {
+    if (!valor) return '';
+    const dt = new Date(valor);
+    if (Number.isNaN(dt.getTime())) return String(valor);
+    return dt.toLocaleString('es-CO');
+  };
+
+  const formatearPeriodoCsv = (valor: string) => {
+    if (!valor) return '';
+    if (valor.includes('T')) return formatearFechaCsv(valor);
+    const dt = new Date(`${valor}T00:00:00`);
+    if (Number.isNaN(dt.getTime())) return valor;
+    return dt.toLocaleDateString('es-CO');
+  };
+
+  const safeNumber = (value: any) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
   };
 
   if (error) {
@@ -167,7 +197,7 @@ export const Reportes = () => {
       return str;
     };
     const csv = rows.map((row) => row.map(escape).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -178,21 +208,52 @@ export const Reportes = () => {
     window.URL.revokeObjectURL(url);
   };
 
+  const buildFilename = (base: string) => {
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    return `${base}_${stamp}.csv`;
+  };
+
+  const getMetodoPagoLabel = (metodo?: string | null, esMixto?: boolean) => {
+    if (esMixto) return 'MIXTO';
+    if (!metodo) return 'N/A';
+    const labels: Record<string, string> = {
+      EFECTIVO: 'Efectivo',
+      NEQUI: 'Nequi (Legado)',
+      NEQUI_ESCUELA: 'Nequi Escuela',
+      NEQUI_GERENCIA: 'Nequi Gerencia',
+      BRE_B: 'Bre-B',
+      DAVIPLATA: 'Daviplata',
+      TRANSFERENCIA_BANCARIA: 'Transferencia Bancaria',
+      TARJETA_DEBITO: 'Tarjeta Débito',
+      TARJETA_CREDITO: 'Tarjeta Crédito',
+      CREDISMART: 'CrediSmart',
+      SISTECREDITO: 'Sistecredito'
+    };
+    return labels[metodo] || metodo;
+  };
+
   const exportarCSV = () => {
     if (!dashboard) return;
     const rows: (string | number)[][] = [
       ['Reportes Gerenciales'],
       ['Generado', new Date().toLocaleString('es-CO')],
+      ['Período inicio', formatearPeriodoCsv(filtrosAplicados.fechaInicio)],
+      ['Período fin', formatearPeriodoCsv(filtrosAplicados.fechaFin)],
+      ['Comparar período anterior', filtrosAplicados.comparar ? 'Sí' : 'No'],
       [],
       ['KPI', 'Valor'],
-      ['Ingresos Totales', kpis.ingresos_totales.valor_actual],
-      ['Egresos Totales', kpis.egresos_totales.valor_actual],
-      ['Saldo Pendiente', kpis.saldo_pendiente],
-      ['Margen Operativo', kpis.margen_operativo],
-      ['Ticket Promedio', kpis.ticket_promedio],
-      ['Tasa de Cobranza', kpis.tasa_cobranza],
-      ['Estudiantes Activos', kpis.estudiantes_activos],
-      ['Nuevas Matrículas', kpis.nuevas_matriculas],
+      ['Ingresos Totales', safeNumber(kpis.ingresos_totales?.valor_actual)],
+      ['Egresos Totales', safeNumber(kpis.egresos_totales?.valor_actual)],
+      ['Ingreso Neto', safeNumber(kpis.ingreso_neto)],
+      ['Saldo Pendiente', safeNumber(kpis.saldo_pendiente)],
+      ['Margen Operativo (%)', safeNumber(kpis.margen_operativo)],
+      ['Ticket Promedio', safeNumber(kpis.ticket_promedio)],
+      ['Tasa de Cobranza (%)', safeNumber(kpis.tasa_cobranza)],
+      ['Días Promedio de Pago', safeNumber(kpis.dias_promedio_pago)],
+      ['% Pagos Vencidos', safeNumber(kpis.porcentaje_pagos_vencidos)],
+      ['Estudiantes Activos', safeNumber(kpis.total_estudiantes_activos)],
+      ['Estudiantes Inactivos', safeNumber(kpis.total_estudiantes_inactivos)],
+      ['Nuevas Matrículas', safeNumber(kpis.nuevas_matriculas_mes)],
       [],
       ['Ingresos por periodo'],
       ['Periodo', 'Ingresos']
@@ -204,7 +265,150 @@ export const Reportes = () => {
     rows.push([]);
     rows.push(['Egresos por categoría', 'Monto']);
     datosEgresos.forEach((d: { categoria: string; monto: number }) => rows.push([d.categoria, d.monto]));
+
+    rows.push([]);
+    rows.push(['Ranking de referidos']);
+    rows.push(['Nombre', 'Teléfono', 'Referidos', 'Ingresos Generados', 'Activos', 'Graduados', 'Última Referencia']);
+    (ranking_referidos || []).forEach((item: any) =>
+      rows.push([
+        item.referido_nombre || '',
+        item.telefono || '',
+        safeNumber(item.total_estudiantes_referidos),
+        safeNumber(item.total_ingresos_generados),
+        safeNumber(item.estudiantes_activos),
+        safeNumber(item.estudiantes_graduados),
+        formatearFechaCsv(item.ultima_referencia_fecha)
+      ])
+    );
+
+    rows.push([]);
+    rows.push(['Resumen - Estudiantes Registrados', safeNumber(lista_estudiantes_registrados?.length || 0)]);
+    rows.push(['Resumen - Estudiantes con Pagos', safeNumber(lista_estudiantes_pagos?.length || 0)]);
+    rows.push(['Resumen - Egresos Registrados', safeNumber(lista_egresos_caja?.length || 0)]);
+    rows.push(['Resumen - Otros Ingresos', safeNumber(lista_otros_movimientos?.length || 0)]);
+    rows.push(['Resumen - Conceptos de Pagos', safeNumber(lista_estudiantes_pagos?.length || 0)]);
+
     downloadCSV(`reportes_${new Date().toISOString().slice(0, 10)}.csv`, rows);
+  };
+
+  const exportarEstudiantesRegistradosCSV = () => {
+    const rows: (string | number)[][] = [
+      ['Estudiantes Registrados - Detallado'],
+      ['Generado', new Date().toLocaleString('es-CO')],
+      ['Período inicio', formatearPeriodoCsv(filtrosAplicados.fechaInicio)],
+      ['Período fin', formatearPeriodoCsv(filtrosAplicados.fechaFin)],
+      ['Nombre', 'Documento', 'Categoría', 'Fecha Inscripción', 'Origen', 'Referido Por', 'Valor Curso', 'Estado']
+    ];
+    (lista_estudiantes_registrados || []).forEach((est: any) => {
+      rows.push([
+        est.nombre_completo || '',
+        est.documento || '',
+        est.categoria || '',
+        formatearFechaCsv(est.fecha_inscripcion),
+        est.origen_cliente || '',
+        est.referido_por || '',
+        safeNumber(est.valor_total_curso),
+        est.estado || ''
+      ]);
+    });
+    downloadCSV(buildFilename('estudiantes_registrados_detallado'), rows);
+  };
+
+  const exportarEstudiantesPagosCSV = () => {
+    const rows: (string | number)[][] = [
+      ['Estudiantes que Realizaron Pagos - Detallado'],
+      ['Generado', new Date().toLocaleString('es-CO')],
+      ['Período inicio', formatearPeriodoCsv(filtrosAplicados.fechaInicio)],
+      ['Período fin', formatearPeriodoCsv(filtrosAplicados.fechaFin)],
+      ['Pago ID', 'Nombre', 'Documento', 'Categoría', 'Fecha Pago', 'Concepto', 'Monto', 'Método Pago', 'Saldo Pendiente', 'Pago Mixto']
+    ];
+    (lista_estudiantes_pagos || []).forEach((pago: any) => {
+      rows.push([
+        pago.pago_id || '',
+        pago.nombre_completo || '',
+        pago.documento || '',
+        pago.categoria || '',
+        formatearFechaCsv(pago.fecha_pago),
+        pago.concepto || '',
+        safeNumber(pago.monto),
+        getMetodoPagoLabel(pago.metodo_pago, pago.es_pago_mixto),
+        safeNumber(pago.saldo_pendiente),
+        pago.es_pago_mixto ? 'Sí' : 'No'
+      ]);
+    });
+    downloadCSV(buildFilename('estudiantes_pagos_detallado'), rows);
+  };
+
+  const exportarEgresosCSV = () => {
+    const rows: (string | number)[][] = [
+      ['Egresos Registrados - Detallado'],
+      ['Generado', new Date().toLocaleString('es-CO')],
+      ['Período inicio', formatearPeriodoCsv(filtrosAplicados.fechaInicio)],
+      ['Período fin', formatearPeriodoCsv(filtrosAplicados.fechaFin)],
+      ['Egreso ID', 'Fecha', 'Concepto', 'Categoría', 'Método', 'Monto', 'Usuario', 'Factura', 'Observaciones']
+    ];
+    (lista_egresos_caja || []).forEach((eg: any) => {
+      rows.push([
+        eg.egreso_id || '',
+        formatearFechaCsv(eg.fecha),
+        eg.concepto || '',
+        eg.categoria || '',
+        getMetodoPagoLabel(eg.metodo_pago, eg.metodo_pago === 'MIXTO'),
+        safeNumber(eg.monto),
+        eg.usuario || '',
+        eg.numero_factura || '',
+        eg.observaciones || ''
+      ]);
+    });
+    downloadCSV(buildFilename('egresos_registrados_detallado'), rows);
+  };
+
+  const exportarOtrosIngresosCSV = () => {
+    const rows: (string | number)[][] = [
+      ['Otros Ingresos - Detallado'],
+      ['Generado', new Date().toLocaleString('es-CO')],
+      ['Período inicio', formatearPeriodoCsv(filtrosAplicados.fechaInicio)],
+      ['Período fin', formatearPeriodoCsv(filtrosAplicados.fechaFin)],
+      ['Movimiento ID', 'Tipo', 'Fecha', 'Concepto', 'Categoría', 'Método', 'Monto', 'Tercero', 'Documento Tercero', 'Usuario']
+    ];
+    (lista_otros_movimientos || []).forEach((mov: any) => {
+      rows.push([
+        mov.movimiento_id || '',
+        mov.tipo || '',
+        formatearFechaCsv(mov.fecha),
+        mov.concepto || '',
+        mov.categoria || '',
+        getMetodoPagoLabel(mov.metodo_pago, mov.metodo_pago === 'MIXTO'),
+        safeNumber(mov.monto),
+        mov.tercero_nombre || '',
+        mov.tercero_documento || '',
+        mov.usuario || ''
+      ]);
+    });
+    downloadCSV(buildFilename('otros_ingresos_detallado'), rows);
+  };
+
+  const exportarConceptosPagosCSV = () => {
+    const rows: (string | number)[][] = [
+      ['Conceptos de Pagos - Detallado'],
+      ['Generado', new Date().toLocaleString('es-CO')],
+      ['Período inicio', formatearPeriodoCsv(filtrosAplicados.fechaInicio)],
+      ['Período fin', formatearPeriodoCsv(filtrosAplicados.fechaFin)],
+      ['Pago ID', 'Fecha', 'Concepto', 'Estudiante', 'Documento', 'Categoría', 'Método', 'Monto']
+    ];
+    (lista_estudiantes_pagos || []).forEach((pago: any) => {
+      rows.push([
+        pago.pago_id || '',
+        formatearFechaCsv(pago.fecha_pago),
+        pago.concepto || '',
+        pago.nombre_completo || '',
+        pago.documento || '',
+        pago.categoria || '',
+        getMetodoPagoLabel(pago.metodo_pago, pago.es_pago_mixto),
+        safeNumber(pago.monto)
+      ]);
+    });
+    downloadCSV(buildFilename('conceptos_pagos_detallado'), rows);
   };
 
   return (
@@ -409,11 +613,26 @@ export const Reportes = () => {
 
       {/* Tablas de Estudiantes */}
       <div className="tablas-estudiantes-grid">
-        <TablaEstudiantesRegistrados estudiantes={lista_estudiantes_registrados || []} />
-        <TablaEstudiantesPagos pagos={lista_estudiantes_pagos || []} />
-        <TablaEgresosCaja egresos={lista_egresos_caja || []} />
-        <TablaOtrosIngresos ingresos={lista_otros_movimientos || []} />
-        <TablaConceptosPagos pagos={lista_estudiantes_pagos || []} />
+        <TablaEstudiantesRegistrados
+          estudiantes={lista_estudiantes_registrados || []}
+          onExportCSV={exportarEstudiantesRegistradosCSV}
+        />
+        <TablaEstudiantesPagos
+          pagos={lista_estudiantes_pagos || []}
+          onExportCSV={exportarEstudiantesPagosCSV}
+        />
+        <TablaEgresosCaja
+          egresos={lista_egresos_caja || []}
+          onExportCSV={exportarEgresosCSV}
+        />
+        <TablaOtrosIngresos
+          ingresos={lista_otros_movimientos || []}
+          onExportCSV={exportarOtrosIngresosCSV}
+        />
+        <TablaConceptosPagos
+          pagos={lista_estudiantes_pagos || []}
+          onExportCSV={exportarConceptosPagosCSV}
+        />
       </div>
     </div>
   );

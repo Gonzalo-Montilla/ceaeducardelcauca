@@ -18,9 +18,10 @@ interface OtrosIngresoItem {
 
 interface TablaOtrosIngresosProps {
   ingresos: OtrosIngresoItem[];
+  onExportCSV?: () => void;
 }
 
-export const TablaOtrosIngresos = ({ ingresos }: TablaOtrosIngresosProps) => {
+export const TablaOtrosIngresos = ({ ingresos, onExportCSV }: TablaOtrosIngresosProps) => {
   const { showToast } = useUIFeedback();
   const [reciboUrl, setReciboUrl] = useState<string | null>(null);
   const [reciboId, setReciboId] = useState<number | null>(null);
@@ -91,7 +92,15 @@ export const TablaOtrosIngresos = ({ ingresos }: TablaOtrosIngresosProps) => {
           <FilePlus size={20} />
           <h3>Otros ingresos</h3>
         </div>
-        <span className="tabla-count">{ingresos.length} ingreso{ingresos.length !== 1 ? 's' : ''}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="tabla-count">{ingresos.length} ingreso{ingresos.length !== 1 ? 's' : ''}</span>
+          {onExportCSV && (
+            <button className="btn-ver-detalle secondary" onClick={onExportCSV}>
+              <Download size={14} />
+              Exportar CSV
+            </button>
+          )}
+        </div>
       </div>
       {ingresos.length === 0 ? (
         <div className="tabla-empty">

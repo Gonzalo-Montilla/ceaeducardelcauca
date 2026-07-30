@@ -15,9 +15,10 @@ interface EgresoItem {
 
 interface TablaEgresosCajaProps {
   egresos: EgresoItem[];
+  onExportCSV?: () => void;
 }
 
-export const TablaEgresosCaja = ({ egresos }: TablaEgresosCajaProps) => {
+export const TablaEgresosCaja = ({ egresos, onExportCSV }: TablaEgresosCajaProps) => {
   const { showToast } = useUIFeedback();
   const [reciboUrl, setReciboUrl] = useState<string | null>(null);
   const [reciboId, setReciboId] = useState<number | null>(null);
@@ -89,7 +90,15 @@ export const TablaEgresosCaja = ({ egresos }: TablaEgresosCajaProps) => {
           <FileMinus size={20} />
           <h3>Egresos Registrados</h3>
         </div>
-        <span className="tabla-count">{egresos.length} egreso{egresos.length !== 1 ? 's' : ''}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="tabla-count">{egresos.length} egreso{egresos.length !== 1 ? 's' : ''}</span>
+          {onExportCSV && (
+            <button className="btn-ver-detalle secondary" onClick={onExportCSV}>
+              <Download size={14} />
+              Exportar CSV
+            </button>
+          )}
+        </div>
       </div>
 
       {egresos.length === 0 ? (
